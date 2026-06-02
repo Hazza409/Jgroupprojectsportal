@@ -27,10 +27,10 @@ const config: Config = {
         },
       },
       fontFamily: {
-        // Ginto if licensed files are present (see globals.css @font-face), else the
-        // brand book's own Helvetica Neue fallback. Neo-grotesque throughout.
-        sans: ['"Ginto"', '"Helvetica Neue"', "Helvetica", "Arial", "sans-serif"],
-        display: ['"Ginto Nord"', '"Ginto"', '"Helvetica Neue"', "Arial", "sans-serif"],
+        // Ginto Nord is the J Group brand type — used app-wide (see globals.css
+        // @font-face). Helvetica Neue is the fallback while the font loads.
+        sans: ['"Ginto Nord"', '"Helvetica Neue"', "Helvetica", "Arial", "sans-serif"],
+        display: ['"Ginto Nord"', '"Helvetica Neue"', "Arial", "sans-serif"],
       },
       letterSpacing: {
         tightest: "-0.04em",

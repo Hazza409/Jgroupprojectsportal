@@ -2,27 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Ginto (licensed, Dinamo) ──────────────────────────────────
-   Drop the licensed font files into /public/fonts and uncomment to
-   activate the true brand type. Until then the stack falls back to
-   Helvetica Neue (used by the brand book itself). */
-/*
+/* ── Ginto Nord (J Group brand type, licensed — Dinamo) ────────
+   The brand display family, used app-wide. Only Thin + Light are
+   licensed here; Light covers the 251–900 range so headings render
+   in true Ginto Nord Light rather than a faux-bold synthetic weight. */
 @font-face {
-  font-family: "Ginto";
-  src: url("/fonts/Ginto-Light.woff2") format("woff2");
-  font-weight: 300; font-style: normal; font-display: swap;
-}
-@font-face {
-  font-family: "Ginto";
-  src: url("/fonts/Ginto-Regular.woff2") format("woff2");
-  font-weight: 400; font-style: normal; font-display: swap;
+  font-family: "Ginto Nord";
+  src: url("/fonts/GintoNord-Thin.ttf") format("truetype");
+  font-weight: 100 250;
+  font-style: normal;
+  font-display: swap;
 }
 @font-face {
   font-family: "Ginto Nord";
-  src: url("/fonts/GintoNord-Light.woff2") format("woff2");
-  font-weight: 300; font-style: normal; font-display: swap;
+  src: url("/fonts/GintoNord-Light.ttf") format("truetype");
+  font-weight: 251 900;
+  font-style: normal;
+  font-display: swap;
 }
-*/
 
 :root {
   color-scheme: dark;
