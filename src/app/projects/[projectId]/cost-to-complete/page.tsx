@@ -4,6 +4,7 @@ import { formatCents, sumCents } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { isConnected } from "@/lib/xero/tokens";
 import { XeroControls } from "./XeroControls";
+import { CurrentCostsImport } from "./CurrentCostsImport";
 
 // Australian residential build assumptions (mirrors the J Group CTC workbook).
 const BUILDERS_MARGIN = 0.125; // 12.5%
@@ -84,6 +85,12 @@ export default async function CostToCompletePage({
           ) : null
         }
       />
+
+      {isBuilder && (
+        <div className="mb-4">
+          <CurrentCostsImport projectId={projectId} />
+        </div>
+      )}
 
       {/* Three headline figures, as per the CTC workbook. */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
