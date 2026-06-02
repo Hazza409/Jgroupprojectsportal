@@ -1,7 +1,7 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
-import { formatCents } from "@/lib/money";
+import { formatCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -35,6 +35,11 @@ export default async function VariationsPage({ params }: { params: { projectId: 
         title="Variation Register"
         description="Each variation carries line items and a total for client approval."
       />
+
+      <div className="mb-6 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
+        Variation prices include builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) and GST ({(GST * 100).toFixed(0)}%).
+        Subcontractor quotes are the underlying supplier cost.
+      </div>
 
       {isBuilder && (
         <form action={createVariation.bind(null, projectId)} className="card mb-6 grid gap-3 sm:grid-cols-2">
@@ -84,7 +89,7 @@ export default async function VariationsPage({ params }: { params: { projectId: 
                   {v.description && <p className="text-sm text-stone-500">{v.description}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-semibold">{formatCents(v.totalCents)}</span>
+                  <span className="font-semibold">{formatCents(inclMarginGst(v.totalCents))}</span>
                   <StatusBadge status={v.status} />
                 </div>
               </div>
@@ -94,7 +99,7 @@ export default async function VariationsPage({ params }: { params: { projectId: 
                   {v.lines.map((l) => (
                     <li key={l.id} className="flex justify-between py-1.5">
                       <span>{l.description} · {l.quantity}{l.unit ? ` ${l.unit}` : ""}</span>
-                      <span>{formatCents(l.totalCents)}</span>
+                      <span>{formatCents(inclMarginGst(l.totalCents))}</span>
                     </li>
                   ))}
                 </ul>

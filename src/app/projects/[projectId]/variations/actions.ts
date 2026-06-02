@@ -5,7 +5,7 @@ import { VariationStatus, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
-import { dollarsToCents, lineTotalCents, formatCents } from "@/lib/money";
+import { dollarsToCents, lineTotalCents, formatCents, inclMarginGst } from "@/lib/money";
 import { notifyBuilders } from "@/lib/email";
 
 function refresh(projectId: string) {
@@ -87,7 +87,7 @@ export async function decideVariation(projectId: string, variationId: string, ap
         [
           `${user.name} (${user.role.toLowerCase()}) approved a variation on ${v.project.name}.`,
           `VO #${v.variationNumber}: ${v.title}`,
-          `Approved amount: ${formatCents(v.totalCents)}`,
+          `Approved amount: ${formatCents(inclMarginGst(v.totalCents))} (incl margin & GST)`,
           `Open the J Group dashboard to action it.`,
         ],
       );
