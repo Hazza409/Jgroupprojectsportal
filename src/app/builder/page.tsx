@@ -26,10 +26,13 @@ export default async function BuilderHome() {
             <h1 className="text-2xl font-semibold">All projects</h1>
             <p className="text-sm text-stone-500">{projects.length} project(s) · J Group staff view</p>
           </div>
+          <Link href="/builder/new" className="btn-primary">New job</Link>
         </div>
 
         {projects.length === 0 ? (
-          <div className="card text-stone-500">No projects yet. Seed the database (see README).</div>
+          <div className="card text-stone-500">
+            No jobs yet. <Link href="/builder/new" className="underline">Create your first job</Link>.
+          </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((p) => (
