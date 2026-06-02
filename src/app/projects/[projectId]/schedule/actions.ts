@@ -43,9 +43,11 @@ export async function importSchedule(projectId: string, formData: FormData): Pro
       data: parsed.items.map((i) => ({
         projectId,
         importId: imp.id,
+        group: i.group,
         taskName: i.taskName,
         startDate: i.startDate,
         endDate: i.endDate,
+        durationDays: i.durationDays,
         percentComplete: i.percentComplete,
         sortOrder: i.sortOrder,
       })),
@@ -54,4 +56,52 @@ export async function importSchedule(projectId: string, formData: FormData): Pro
 
   revalidatePath(`/projects/${projectId}/schedule`);
   return { ok: true, message: `Imported ${parsed.items.length} schedule item(s).`, warnings: parsed.warnings };
+}
+
+// Manually add a single schedule task (no Excel needed).
+export async function addScheduleTask(projectId: string, formData: FormData): Promise<ImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit the schedule");
+
+  const taskName = String(formData.get("taskName") ?? "").trim();
+  if (!taskName) return { ok: false, message: "Task name is required." };
+
+  const group = String(formData.get("group") ?? "").trim() || null;
+  const startRaw = String(formData.get("startDate") ?? "");
+  const endRaw = String(formData.get("endDate") ?? "");
+  const startDate = startRaw ? new Date(startRaw) : null;
+  const endDate = endRaw ? new Date(endRaw) : null;
+  let pct = Number(formData.get("percentComplete") ?? 0) || 0;
+  pct = Math.max(0, Math.min(100, pct));
+  const durationDays =
+    startDate && endDate ? Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000)) : 0;
+
+  const last = await db.scheduleItem.findFirst({
+    where: { projectId },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true },
+  });
+
+  await db.scheduleItem.create({
+    data: {
+      projectId,
+      group,
+      taskName,
+      startDate,
+      endDate,
+      durationDays,
+      percentComplete: pct,
+      sortOrder: (last?.sortOrder ?? 0) + 1,
+    },
+  });
+
+  revalidatePath(`/projects/${projectId}/schedule`);
+  return { ok: true, message: `Added "${taskName}".` };
+}
+
+export async function deleteScheduleTask(projectId: string, taskId: string) {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit the schedule");
+  await db.scheduleItem.deleteMany({ where: { id: taskId, projectId } });
+  revalidatePath(`/projects/${projectId}/schedule`);
 }

@@ -1,0 +1,363 @@
+{
+ "codes": [
+  {
+   "code": "1000",
+   "name": "Labour",
+   "current": 940635.0,
+   "estimate": 1828000.0
+  },
+  {
+   "code": "1002",
+   "name": "Contract Works Insurance",
+   "current": 16940.56,
+   "estimate": 0.0
+  },
+  {
+   "code": "1003",
+   "name": "Council or other building related fees",
+   "current": 11181.33,
+   "estimate": 0.0
+  },
+  {
+   "code": "1004",
+   "name": "Site Fence",
+   "current": 4331.0,
+   "estimate": 4500.0
+  },
+  {
+   "code": "1006",
+   "name": "Site toilet",
+   "current": 0.0,
+   "estimate": 9350.0
+  },
+  {
+   "code": "1007",
+   "name": "Traffic Control",
+   "current": 0.0,
+   "estimate": 22500.0
+  },
+  {
+   "code": "1014",
+   "name": "Excavation",
+   "current": 519080.13,
+   "estimate": 400659.2
+  },
+  {
+   "code": "1015",
+   "name": "Concreting",
+   "current": 887396.49,
+   "estimate": 877239.56
+  },
+  {
+   "code": "1019",
+   "name": "Concrete Stairs",
+   "current": 0.0,
+   "estimate": 21582.0
+  },
+  {
+   "code": "1021",
+   "name": "Blockwork",
+   "current": 0.0,
+   "estimate": 6750.0
+  },
+  {
+   "code": "1022",
+   "name": "Brickwork",
+   "current": 35927.46,
+   "estimate": 56397.75
+  },
+  {
+   "code": "1024",
+   "name": "Plumbing",
+   "current": 169824.6,
+   "estimate": 271900.0
+  },
+  {
+   "code": "1025",
+   "name": "General Electrical",
+   "current": 51094.0,
+   "estimate": 192693.8
+  },
+  {
+   "code": "1027",
+   "name": "Home security",
+   "current": 0.0,
+   "estimate": 15000.0
+  },
+  {
+   "code": "1028",
+   "name": "Home Integration",
+   "current": 0.0,
+   "estimate": 35000.0
+  },
+  {
+   "code": "1029",
+   "name": "Mechanical Ventilation and A/C",
+   "current": 7068.0,
+   "estimate": 84000.0
+  },
+  {
+   "code": "1030",
+   "name": "Window and door glazing",
+   "current": 86363.64,
+   "estimate": 406469.5
+  },
+  {
+   "code": "1031",
+   "name": "Glass Balustrade",
+   "current": 0.0,
+   "estimate": 98800.0
+  },
+  {
+   "code": "1032",
+   "name": "Floor and wall tiling",
+   "current": 49168.4,
+   "estimate": 388130.95
+  },
+  {
+   "code": "1033",
+   "name": "Timber Flooring",
+   "current": 2978.53,
+   "estimate": 170000.0
+  },
+  {
+   "code": "1035",
+   "name": "Rendering",
+   "current": 0.0,
+   "estimate": 58774.5
+  },
+  {
+   "code": "1036",
+   "name": "Waterproofing",
+   "current": 0.0,
+   "estimate": 45717.45
+  },
+  {
+   "code": "1038",
+   "name": "Gyprock",
+   "current": 0.0,
+   "estimate": 135000.0
+  },
+  {
+   "code": "1039",
+   "name": "Demolition",
+   "current": 22050.35,
+   "estimate": 60600.0
+  },
+  {
+   "code": "1040",
+   "name": "Joinery",
+   "current": 0.0,
+   "estimate": 367286.0
+  },
+  {
+   "code": "1042",
+   "name": "Carpet",
+   "current": 0.0,
+   "estimate": 28461.4
+  },
+  {
+   "code": "1043",
+   "name": "Carpentry",
+   "current": 0.0,
+   "estimate": 0.0
+  },
+  {
+   "code": "1044",
+   "name": "Materials",
+   "current": 157408.8,
+   "estimate": 313961.71
+  },
+  {
+   "code": "1045",
+   "name": "P.C. Items",
+   "current": 0.0,
+   "estimate": 4000.0
+  },
+  {
+   "code": "1046",
+   "name": "Cranes",
+   "current": 40802.75,
+   "estimate": 51200.0
+  },
+  {
+   "code": "1047",
+   "name": "Site survey",
+   "current": 14700.0,
+   "estimate": 9400.0
+  },
+  {
+   "code": "1051",
+   "name": "Termite protection",
+   "current": 2926.0,
+   "estimate": 5000.0
+  },
+  {
+   "code": "1052",
+   "name": "Structural steel",
+   "current": 101187.87,
+   "estimate": 145000.0
+  },
+  {
+   "code": "1053",
+   "name": "Scaffold",
+   "current": 21770.14,
+   "estimate": 58000.0
+  },
+  {
+   "code": "1055",
+   "name": "Paint",
+   "current": 0.0,
+   "estimate": 130000.0
+  },
+  {
+   "code": "1056",
+   "name": "Rubbish Removal",
+   "current": 16816.23,
+   "estimate": 70400.0
+  },
+  {
+   "code": "1059",
+   "name": "Tool and Plant Hire",
+   "current": 11488.26,
+   "estimate": 15000.0
+  },
+  {
+   "code": "1063",
+   "name": "Garage Doors",
+   "current": 0.0,
+   "estimate": 24000.0
+  },
+  {
+   "code": "1064",
+   "name": "Pools",
+   "current": 18181.82,
+   "estimate": 90080.0
+  },
+  {
+   "code": "1065",
+   "name": "Fireplaces",
+   "current": 0.0,
+   "estimate": 15000.0
+  },
+  {
+   "code": "1066",
+   "name": "Appliances",
+   "current": 106727.55,
+   "estimate": 155222.0
+  },
+  {
+   "code": "1067",
+   "name": "Lighting supply",
+   "current": 0.0,
+   "estimate": 0.0
+  },
+  {
+   "code": "1069",
+   "name": "Sanitary items",
+   "current": 76604.55,
+   "estimate": 85157.0
+  },
+  {
+   "code": "1070",
+   "name": "External Labour Hire",
+   "current": 26669.0,
+   "estimate": 0.0
+  },
+  {
+   "code": "1071",
+   "name": "Roofing",
+   "current": 95.7,
+   "estimate": 0.0
+  },
+  {
+   "code": "1072",
+   "name": "Landscaping",
+   "current": 5360.0,
+   "estimate": 0.0
+  },
+  {
+   "code": "1073",
+   "name": "Builder's Margin (12.5%)",
+   "current": 425597.27,
+   "estimate": 890659.1
+  }
+ ],
+ "variations": [
+  {
+   "title": "A And G Door and Windows (V-01006)",
+   "amount": 125510.63,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Joinery Variation (V-01007)",
+   "amount": 85000.0,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Car Stacker and Structure (V-01008) ()",
+   "amount": null,
+   "status": "DRAFT"
+  },
+  {
+   "title": "Additional Skylights (Placeholder) (V-01025)",
+   "amount": 56250.0,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Stone Wall on Pool Room Floor (V-01026)",
+   "amount": 27000.0,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Reconfigure Mudroom / Powder Room (V-01036)",
+   "amount": 29925.0,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Planter Box to Level 3 (V-01050)",
+   "amount": 16875.0,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Joinery - Wine Storage, Murphy Bed, Sliding Door (V-01057) (",
+   "amount": null,
+   "status": "DRAFT"
+  },
+  {
+   "title": "Pool Extension With Balance Tank (V-01077)",
+   "amount": 55567.16,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Solar Panels and Battery (V-01079) ($39827.44)",
+   "amount": null,
+   "status": "DRAFT"
+  },
+  {
+   "title": "L3 Fireplace (V-01080)",
+   "amount": 11250.0,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Glass Balustrade (V-01081)",
+   "amount": 33750.0,
+   "status": "APPROVED"
+  },
+  {
+   "title": "Golf Simulator (Placeholder) (V-01082) ($112500)",
+   "amount": null,
+   "status": "DRAFT"
+  },
+  {
+   "title": "Additional Cost for Air Conditioning (V-01083)",
+   "amount": 31826.25,
+   "status": "APPROVED"
+  }
+ ],
+ "summary": {
+  "current_to_date": 4213412.97,
+  "revised_estimate": 8817525.11,
+  "cost_to_complete": 5124361.59
+ }
+}

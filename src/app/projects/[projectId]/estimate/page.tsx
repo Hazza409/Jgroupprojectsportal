@@ -1,8 +1,10 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents } from "@/lib/money";
+import Link from "next/link";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { UploadForm } from "./UploadForm";
+import { AddLineForm } from "./AddLineForm";
 
 export default async function EstimatePage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -26,14 +28,20 @@ export default async function EstimatePage({ params }: { params: { projectId: st
         description={
           lastImport
             ? `Imported from ${lastImport.originalName} · ${lines.length} line items`
-            : "No estimate imported yet."
+            : "Import from Excel or add line items manually."
+        }
+        action={
+          user.role === "BUILDER" ? (
+            <Link href={`/api/templates/estimate`} className="btn-ghost">Blank template</Link>
+          ) : null
         }
       />
 
-      {/* Only builders import; clients view the result. */}
+      {/* Only builders import / add; clients view the result. */}
       {user.role === "BUILDER" && (
-        <div className="mb-6">
+        <div className="mb-6 space-y-3">
           <UploadForm projectId={projectId} />
+          <AddLineForm projectId={projectId} />
         </div>
       )}
 

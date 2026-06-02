@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { assertProjectAccess } from "@/lib/scope";
+import { Role } from "@prisma/client";
+import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
+import { dollarsToCents, lineTotalCents } from "@/lib/money";
 import { parseEstimateBuffer } from "@/lib/excel/parseEstimate";
 
 export interface ImportResult {
@@ -97,4 +99,51 @@ export async function importEstimate(
     rowCount: parsed.lines.length,
     warnings: parsed.warnings,
   };
+}
+
+// Manually add a single estimate line (no Excel needed). Upserts the cost code.
+export async function addEstimateLine(projectId: string, formData: FormData): Promise<ImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit the estimate");
+
+  const description = String(formData.get("description") ?? "").trim();
+  if (!description) return { ok: false, message: "Description is required." };
+
+  const code = String(formData.get("code") ?? "").trim();
+  const unit = String(formData.get("unit") ?? "").trim() || null;
+  const quantity = Number(formData.get("quantity") ?? 1) || 1;
+  const unitCostCents = dollarsToCents(String(formData.get("unitCost") ?? "0"));
+  const totalCents = lineTotalCents(quantity, unitCostCents);
+
+  let costCodeId: string | null = null;
+  if (code) {
+    const cc = await db.costCode.upsert({
+      where: { projectId_code: { projectId, code } },
+      create: { projectId, code, name: code },
+      update: {},
+    });
+    costCodeId = cc.id;
+  }
+
+  const last = await db.estimateLineItem.findFirst({
+    where: { projectId },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true },
+  });
+
+  await db.estimateLineItem.create({
+    data: {
+      projectId,
+      costCodeId,
+      description,
+      quantity,
+      unit,
+      unitCostCents,
+      totalCents,
+      sortOrder: (last?.sortOrder ?? 0) + 1,
+    },
+  });
+
+  revalidatePath(`/projects/${projectId}/estimate`);
+  return { ok: true, message: `Added "${description}".` };
 }

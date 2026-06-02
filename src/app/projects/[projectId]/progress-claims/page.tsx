@@ -1,9 +1,10 @@
+import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { createClaim, submitClaim, decideClaim } from "./actions";
+import { createClaim } from "./actions";
 
 export default async function ProgressClaimsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -20,7 +21,7 @@ export default async function ProgressClaimsPage({ params }: { params: { project
     <div>
       <ModuleHeader
         title="Progress Claims"
-        description="Builder submits, client approves. Approved claims are flagged for a separate Xero push."
+        description="Builder builds a claim from cost codes + reconciliation sheet, submits; client approves."
         action={
           isBuilder ? (
             <form action={createClaim.bind(null, projectId)}>
@@ -37,43 +38,28 @@ export default async function ProgressClaimsPage({ params }: { params: { project
           {claims.map((c) => {
             const total = sumCents(c.lines.map((l) => l.claimedAmountCents));
             return (
-              <div key={c.id} className="card flex items-center justify-between">
+              <Link
+                key={c.id}
+                href={`/projects/${projectId}/progress-claims/${c.id}`}
+                className="card flex items-center justify-between hover:shadow-md"
+              >
                 <div>
-                  <p className="font-medium">
-                    Claim #{c.claimNumber} · {formatCents(total)}
-                  </p>
+                  <p className="font-medium">Claim #{c.claimNumber} · {formatCents(total)}</p>
                   <p className="text-xs text-stone-400">
                     {c.lines.length} line item(s)
+                    {c.reconSheetKey ? " · recon attached" : ""}
                     {c.xeroInvoiceId ? " · pushed to Xero" : ""}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={c.status} />
-                  {isBuilder && c.status === "DRAFT" && (
-                    <form action={submitClaim.bind(null, projectId, c.id)}>
-                      <button className="btn-ghost" type="submit">Submit</button>
-                    </form>
-                  )}
-                  {c.status === "SUBMITTED" && (
-                    <>
-                      <form action={decideClaim.bind(null, projectId, c.id, true)}>
-                        <button className="btn-primary" type="submit">Approve</button>
-                      </form>
-                      <form action={decideClaim.bind(null, projectId, c.id, false)}>
-                        <button className="btn-ghost" type="submit">Reject</button>
-                      </form>
-                    </>
-                  )}
-                </div>
-              </div>
+                <StatusBadge status={c.status} />
+              </Link>
             );
           })}
         </div>
       )}
 
       <p className="mt-4 text-xs text-stone-400">
-        Reconciliation-sheet attachment and Xero invoice push are wired as interfaces
-        (see <code>src/lib/xero/invoicePush.ts</code>) — money movement never auto-fires.
+        Open a claim to add line items, attach the reconciliation sheet, and submit for approval.
       </p>
     </div>
   );

@@ -305,9 +305,12 @@ model ScheduleItem {
   id          String    @id @default(cuid())
   projectId   String
   importId    String?
+  // Trade / phase grouping (e.g. "Framing", "Electrical") for the Gantt view.
+  group       String?
   taskName    String
   startDate   DateTime?
   endDate     DateTime?
+  durationDays Int      @default(0)
   percentComplete Float @default(0)
   sortOrder   Int       @default(0)
 

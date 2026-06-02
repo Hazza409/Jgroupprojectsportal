@@ -3,15 +3,17 @@ import * as XLSX from "xlsx";
 // ── Expected schedule spreadsheet format ─────────────────────
 // First worksheet. Recognised headers (case-insensitive):
 //
-//   Task | Start | Finish | % Complete
+//   Phase | Task | Start | Finish | Duration | % Complete
 //
-// See examples/sample-schedule.xlsx. Dates are read as Excel date serials or
-// strings; % complete is clamped to 0–100. Same parser pattern as the estimate.
+// Phase/Duration are optional. See examples/sample-schedule.xlsx. Dates are read
+// as Excel date serials or strings; % complete is clamped to 0–100.
 
 export interface ParsedScheduleItem {
+  group: string | null;
   taskName: string;
   startDate: Date | null;
   endDate: Date | null;
+  durationDays: number;
   percentComplete: number;
   sortOrder: number;
 }
@@ -22,11 +24,18 @@ export interface ParsedSchedule {
 }
 
 const ALIASES = {
+  group: ["phase", "group", "trade", "stage", "section"],
   task: ["task", "task name", "activity", "description", "item"],
   start: ["start", "start date", "begin"],
   finish: ["finish", "end", "end date", "finish date", "complete by"],
+  duration: ["duration", "duration (days)", "days", "dur"],
   percent: ["% complete", "percent complete", "progress", "% done", "complete"],
 };
+
+function daysBetween(a: Date | null, b: Date | null): number {
+  if (!a || !b) return 0;
+  return Math.max(0, Math.round((b.getTime() - a.getTime()) / 86_400_000));
+}
 
 function normalise(s: unknown): string {
   return String(s ?? "").trim().toLowerCase();
@@ -53,14 +62,16 @@ export function parseScheduleBuffer(buf: Buffer): ParsedSchedule {
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false });
 
   let headerRow = -1;
-  const map: { task?: number; start?: number; finish?: number; percent?: number } = {};
+  const map: { group?: number; task?: number; start?: number; finish?: number; duration?: number; percent?: number } = {};
   for (let r = 0; r < Math.min(rows.length, 10); r++) {
     const cells = rows[r].map(normalise);
     const task = cells.findIndex((c) => ALIASES.task.includes(c));
     if (task >= 0) {
       map.task = task;
+      map.group = cells.findIndex((c) => ALIASES.group.includes(c));
       map.start = cells.findIndex((c) => ALIASES.start.includes(c));
       map.finish = cells.findIndex((c) => ALIASES.finish.includes(c));
+      map.duration = cells.findIndex((c) => ALIASES.duration.includes(c));
       map.percent = cells.findIndex((c) => ALIASES.percent.includes(c));
       headerRow = r;
       break;
@@ -72,6 +83,7 @@ export function parseScheduleBuffer(buf: Buffer): ParsedSchedule {
   }
 
   const items: ParsedScheduleItem[] = [];
+  let lastGroup: string | null = null;
   for (let r = headerRow + 1; r < rows.length; r++) {
     const row = rows[r];
     const taskName = String(row[map.task!] ?? "").trim();
@@ -81,10 +93,21 @@ export function parseScheduleBuffer(buf: Buffer): ParsedSchedule {
     if (pct > 0 && pct <= 1) pct = pct * 100; // accept 0.5 meaning 50%
     pct = Math.max(0, Math.min(100, pct));
 
+    // Carry the last non-empty phase down (grouped sheets leave it blank on sub-rows).
+    const groupCell = map.group! >= 0 ? String(row[map.group!] ?? "").trim() : "";
+    if (groupCell) lastGroup = groupCell;
+
+    const startDate = map.start! >= 0 ? toDate(row[map.start!]) : null;
+    const endDate = map.finish! >= 0 ? toDate(row[map.finish!]) : null;
+    const durCell = map.duration! >= 0 ? Number(row[map.duration!]) : 0;
+    const durationDays = Number.isFinite(durCell) && durCell > 0 ? Math.round(durCell) : daysBetween(startDate, endDate);
+
     items.push({
+      group: lastGroup,
       taskName,
-      startDate: map.start! >= 0 ? toDate(row[map.start!]) : null,
-      endDate: map.finish! >= 0 ? toDate(row[map.finish!]) : null,
+      startDate,
+      endDate,
+      durationDays,
       percentComplete: pct,
       sortOrder: items.length,
     });

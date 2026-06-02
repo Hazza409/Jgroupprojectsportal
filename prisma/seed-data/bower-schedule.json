@@ -1,0 +1,500 @@
+[
+ {
+  "group": "Framing",
+  "name": "Install Framing",
+  "duration": 42,
+  "progress": 100
+ },
+ {
+  "group": "Framing",
+  "name": "Roof Height Increase Approval",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Pour Remaining Slabs (Subject To Approval)",
+  "name": "Formwork",
+  "duration": 18,
+  "progress": 100
+ },
+ {
+  "group": "Pour Remaining Slabs (Subject To Approval)",
+  "name": "Concrete Pour",
+  "duration": 3,
+  "progress": 100
+ },
+ {
+  "group": "Pour Remaining Slabs (Subject To Approval)",
+  "name": "Strip Formwork",
+  "duration": 3,
+  "progress": 0
+ },
+ {
+  "group": "Carpentry",
+  "name": "Box out pelments",
+  "duration": 8,
+  "progress": 0
+ },
+ {
+  "group": "Carpentry",
+  "name": "Box out pergola systems",
+  "duration": 12,
+  "progress": 0
+ },
+ {
+  "group": "Windows",
+  "name": "Site Measure",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Windows",
+  "name": "Install Windows Lvl 1 - 2",
+  "duration": 16,
+  "progress": 0
+ },
+ {
+  "group": "Windows",
+  "name": "Install Windows Lvl 3",
+  "duration": 13,
+  "progress": 0
+ },
+ {
+  "group": "Windows",
+  "name": "Install Windows Lvl 4",
+  "duration": 16,
+  "progress": 0
+ },
+ {
+  "group": "Skylights",
+  "name": "Install Skylights",
+  "duration": 16,
+  "progress": 0
+ },
+ {
+  "group": "Lift",
+  "name": "Order Lift",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Lift",
+  "name": "Install Lift",
+  "duration": 13,
+  "progress": 0
+ },
+ {
+  "group": "Electrical",
+  "name": "Rough ins Lvl 1 & 2",
+  "duration": 21,
+  "progress": 100
+ },
+ {
+  "group": "Electrical",
+  "name": "Rough ins Lvl 3",
+  "duration": 20,
+  "progress": 100
+ },
+ {
+  "group": "Electrical",
+  "name": "Rough ins Lvl 4",
+  "duration": 21,
+  "progress": 0
+ },
+ {
+  "group": "Electrical",
+  "name": "Light Installation",
+  "duration": 30,
+  "progress": 0
+ },
+ {
+  "group": "Electrical",
+  "name": "Electrical fit off",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Plumbing",
+  "name": "Rough in Lvl 1 & 2",
+  "duration": 21,
+  "progress": 80
+ },
+ {
+  "group": "Plumbing",
+  "name": "Rough ins Lvl 3",
+  "duration": 25,
+  "progress": 40
+ },
+ {
+  "group": "Plumbing",
+  "name": "Rough ins Lvl 4",
+  "duration": 21,
+  "progress": 0
+ },
+ {
+  "group": "Plumbing",
+  "name": "Fit Off",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Mechanical",
+  "name": "Install Coils Lvl 1 - 2",
+  "duration": 5,
+  "progress": 0
+ },
+ {
+  "group": "Mechanical",
+  "name": "Install Coils Lvl 3 - 4",
+  "duration": 11,
+  "progress": 0
+ },
+ {
+  "group": "Mechanical",
+  "name": "Install Units Lvl 1 - 2",
+  "duration": 10,
+  "progress": 0
+ },
+ {
+  "group": "Mechanical",
+  "name": "Install Units Lvl 3 - 4",
+  "duration": 10,
+  "progress": 0
+ },
+ {
+  "group": "Mechanical",
+  "name": "Fit off",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Plastering",
+  "name": "Install Plaster Lvl 1",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Plastering",
+  "name": "Install Plaster Lvl 2",
+  "duration": 26,
+  "progress": 0
+ },
+ {
+  "group": "Plastering",
+  "name": "Install Plaster Lvl 3 - Lvl 4",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Joinery",
+  "name": "Shop Drawings Approved",
+  "duration": 1,
+  "progress": 0
+ },
+ {
+  "group": "Joinery",
+  "name": "Manufacture Joinery",
+  "duration": 39,
+  "progress": 0
+ },
+ {
+  "group": "Joinery",
+  "name": "Install Joinery",
+  "duration": 52,
+  "progress": 0
+ },
+ {
+  "group": "Joinery",
+  "name": "Install Benchtops",
+  "duration": 24,
+  "progress": 0
+ },
+ {
+  "group": "Flooring (Tiling)",
+  "name": "Install External Stone (Screed, waterproof)",
+  "duration": 29,
+  "progress": 0
+ },
+ {
+  "group": "Flooring (Tiling)",
+  "name": "Install Stone Lvl 1 & 2",
+  "duration": 22,
+  "progress": 0
+ },
+ {
+  "group": "Flooring (Tiling)",
+  "name": "Install Stone Lvl 3 & 4",
+  "duration": 21,
+  "progress": 0
+ },
+ {
+  "group": "Flooring (Timber)",
+  "name": "Sign off on flooring change",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Flooring (Timber)",
+  "name": "Install Timber Floor Lvl 2",
+  "duration": 21,
+  "progress": 0
+ },
+ {
+  "group": "Flooring (Timber)",
+  "name": "Install Timber Floor Lvl 3 & 4",
+  "duration": 23,
+  "progress": 0
+ },
+ {
+  "group": "Flooring (Carpet)",
+  "name": "Install Carpet",
+  "duration": 15,
+  "progress": 0
+ },
+ {
+  "group": "Wet Areas",
+  "name": "Install Aqua check",
+  "duration": 10,
+  "progress": 0
+ },
+ {
+  "group": "Wet Areas",
+  "name": "Below Screed waterproofing",
+  "duration": 16,
+  "progress": 0
+ },
+ {
+  "group": "Wet Areas",
+  "name": "Screeding",
+  "duration": 11,
+  "progress": 0
+ },
+ {
+  "group": "Wet Areas",
+  "name": "Above Screed Waterproofing",
+  "duration": 1,
+  "progress": 0
+ },
+ {
+  "group": "Wet Areas",
+  "name": "Install Tiling Lvl 1 - 2",
+  "duration": 22,
+  "progress": 0
+ },
+ {
+  "group": "Wet Areas",
+  "name": "Install Tiling Lvl 3 - 4",
+  "duration": 29,
+  "progress": 0
+ },
+ {
+  "group": "Wet Areas",
+  "name": "Install Hardware",
+  "duration": 12,
+  "progress": 0
+ },
+ {
+  "group": "Render",
+  "name": "Install Render",
+  "duration": 28,
+  "progress": 0
+ },
+ {
+  "group": "Glazing And Balustrade",
+  "name": "Manufacturing",
+  "duration": 9,
+  "progress": 0
+ },
+ {
+  "group": "Glazing And Balustrade",
+  "name": "Install Balustrade",
+  "duration": 30,
+  "progress": 0
+ },
+ {
+  "group": "Glazing And Balustrade",
+  "name": "Install Handrails",
+  "duration": 10,
+  "progress": 0
+ },
+ {
+  "group": "Home Automation",
+  "name": "Install Home Automation and security",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Blinds",
+  "name": "Install Blinds",
+  "duration": 9,
+  "progress": 0
+ },
+ {
+  "group": "Painting",
+  "name": "Painting",
+  "duration": 92,
+  "progress": 0
+ },
+ {
+  "group": "Solar",
+  "name": "Install Solar",
+  "duration": 11,
+  "progress": 0
+ },
+ {
+  "group": "Landscaping",
+  "name": "Engage a landscaper",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Landscaping",
+  "name": "Install Landscaping Rear of property",
+  "duration": 60,
+  "progress": 0
+ },
+ {
+  "group": "Landscaping",
+  "name": "Install Landscaping front of property",
+  "duration": 30,
+  "progress": 0
+ },
+ {
+  "group": "Landscaping",
+  "name": "Approval For Pool Cabana",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Cabana",
+  "name": "Form, steel, pour concrete",
+  "duration": 30,
+  "progress": 100
+ },
+ {
+  "group": "Cabana",
+  "name": "Remove Formwork",
+  "duration": 5,
+  "progress": 0
+ },
+ {
+  "group": "Cabana",
+  "name": "Internal fitout (interior finishes & Joinery)",
+  "duration": 90,
+  "progress": 0
+ },
+ {
+  "group": "Cabana",
+  "name": "Landscaping on roof",
+  "duration": 10,
+  "progress": 0
+ },
+ {
+  "group": "Cabana",
+  "name": "Completion (OC Sign Off)",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Post Oc",
+  "name": "Powder Room and laundry finish",
+  "duration": 52,
+  "progress": 0
+ },
+ {
+  "group": "Post Oc",
+  "name": "Rumpus finish",
+  "duration": 52,
+  "progress": 0
+ },
+ {
+  "group": "Post Oc",
+  "name": "Golf Simulator",
+  "duration": 52,
+  "progress": 0
+ },
+ {
+  "group": "Car Stacker (Depending On Approval)",
+  "name": "Sign on contractor",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Car Stacker (Depending On Approval)",
+  "name": "Install Pit (INCLUSIVE)",
+  "duration": 53,
+  "progress": 0
+ },
+ {
+  "group": "Car Stacker (Depending On Approval)",
+  "name": "Install Car stacker",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Pool",
+  "name": "Form Pool",
+  "duration": 10,
+  "progress": 100
+ },
+ {
+  "group": "Pool",
+  "name": "Pour Pool",
+  "duration": 2,
+  "progress": 100
+ },
+ {
+  "group": "Pool",
+  "name": "Render",
+  "duration": 5,
+  "progress": 0
+ },
+ {
+  "group": "Pool",
+  "name": "Waterproof pool",
+  "duration": 5,
+  "progress": 0
+ },
+ {
+  "group": "Pool",
+  "name": "Tile Pool",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Pool",
+  "name": "Balustrading",
+  "duration": 20,
+  "progress": 0
+ },
+ {
+  "group": "Today \u00b7 28 May",
+  "name": "Complete",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Today \u00b7 28 May",
+  "name": "Remaining",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Today \u00b7 28 May",
+  "name": "Milestone",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Today \u00b7 28 May",
+  "name": "Today",
+  "duration": 0,
+  "progress": 0
+ },
+ {
+  "group": "Today \u00b7 28 May",
+  "name": "J Group Projects   \u00b7   Wunderbuild Schedule   \u00b7   79 line items",
+  "duration": 0,
+  "progress": 0
+ }
+]
