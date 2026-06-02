@@ -20,7 +20,11 @@ export default async function SchedulePage({ params }: { params: { projectId: st
     <div>
       <ModuleHeader
         title="Schedule"
-        description="Construction programme — fortnightly updated. Import from Excel or add tasks manually."
+        description={
+          isBuilder
+            ? "Construction programme — fortnightly updated. Import from Excel or add tasks manually."
+            : "Construction programme — updated fortnightly by J Group."
+        }
         action={
           isBuilder ? (
             <Link href={`/api/templates/schedule`} className="btn-ghost">Blank template</Link>

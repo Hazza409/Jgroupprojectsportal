@@ -26,9 +26,11 @@ export default async function EstimatePage({ params }: { params: { projectId: st
       <ModuleHeader
         title="Original Estimate"
         description={
-          lastImport
-            ? `Imported from ${lastImport.originalName} · ${lines.length} line items`
-            : "Import from Excel or add line items manually."
+          user.role === "BUILDER"
+            ? lastImport
+              ? `Imported from ${lastImport.originalName} · ${lines.length} line items`
+              : "Import from Excel or add line items manually."
+            : `The project's original estimate · ${lines.length} line items`
         }
         action={
           user.role === "BUILDER" ? (
