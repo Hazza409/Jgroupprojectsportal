@@ -24,7 +24,7 @@ export function CurrentCostsImport({ projectId }: { projectId: string }) {
   if (!open) {
     return (
       <button className="btn-ghost" onClick={() => setOpen(true)}>
-        Import current costs (Excel)
+        Import / update from Excel
       </button>
     );
   }
@@ -32,8 +32,9 @@ export function CurrentCostsImport({ projectId }: { projectId: string }) {
   return (
     <form onSubmit={onSubmit} className="card">
       <p className="mb-3 text-sm text-stone-500">
-        Import current costs to date from Excel (columns: <code>Cost Code</code>, <code>Cost Item</code>,{" "}
-        <code>Amount</code>). Re-importing updates each code.{" "}
+        Update the Cost to Complete from Excel — columns: <code>Cost Code</code>, <code>Cost Item</code>,{" "}
+        <code>Estimate</code>, <code>Current Cost to Date</code> (enter base ex-margin / ex-GST amounts;
+        leave a column blank to leave it unchanged). Re-importing updates each code.{" "}
         <Link href="/api/templates/current-costs" className="underline">Blank template</Link>
       </p>
       <div className="flex flex-wrap items-center gap-3">

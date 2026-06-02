@@ -204,6 +204,24 @@ export async function updateNarrative(projectId: string, claimId: string, formDa
   refresh(projectId, claimId);
 }
 
+// Builder uploads the Xero-generated tax invoice (PDF) with J Group payment
+// details — the document the client pays from. Allowed at any status.
+export async function uploadXeroInvoice(projectId: string, claimId: string, formData: FormData) {
+  await builderOnly(projectId);
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("No file uploaded");
+
+  const buf = Buffer.from(await file.arrayBuffer());
+  const store = await storage();
+  const key = buildKey({ projectId, category: "invoices", originalName: `${Date.now()}-${file.name}` });
+  await store.put({ key, body: buf, contentType: file.type || "application/pdf" });
+  await db.progressClaim.updateMany({
+    where: { id: claimId, projectId },
+    data: { xeroInvoiceKey: key, xeroInvoiceName: file.name },
+  });
+  refresh(projectId, claimId);
+}
+
 // Builder submits a draft for client approval (must have at least one line).
 export async function submitClaim(projectId: string, claimId: string) {
   const user = await builderOnly(projectId);

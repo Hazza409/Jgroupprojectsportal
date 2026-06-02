@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ClaimLineForm } from "./ClaimLineForm";
 import { ReconUploadForm } from "./ReconUploadForm";
 import { NarrativeForm } from "./NarrativeForm";
+import { InvoiceUploadForm } from "./InvoiceUploadForm";
 import { generateClaimLines, deleteClaimLine, submitClaim, decideClaim } from "../actions";
 
 const fmtDate = (d: Date | null) =>
@@ -41,7 +42,9 @@ export default async function ClaimDetailPage({
   const fromSheet = claim.totalCents > 0 || claim.reconLines.length > 0;
   const lineSum = sumCents(claim.lines.map((l) => l.claimedAmountCents));
   const headline = fromSheet ? claim.totalCents : lineSum;
-  const reconUrl = claim.reconSheetKey ? await (await storage()).url(claim.reconSheetKey) : null;
+  const store = await storage();
+  const reconUrl = claim.reconSheetKey ? await store.url(claim.reconSheetKey) : null;
+  const invoiceUrl = claim.xeroInvoiceKey ? await store.url(claim.xeroInvoiceKey) : null;
 
   const summary = [
     { label: "Labour this period", value: claim.labourCents },
@@ -158,6 +161,29 @@ export default async function ClaimDetailPage({
           </div>
         </div>
       )}
+
+      {/* Tax invoice (Xero) with payment details — what the client pays from */}
+      <div className="card">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">
+          Tax invoice &amp; payment details
+        </h3>
+        {invoiceUrl ? (
+          <a href={invoiceUrl} target="_blank" rel="noreferrer" className="btn-ghost inline-flex">
+            Download tax invoice{claim.xeroInvoiceName ? ` (${claim.xeroInvoiceName})` : ""}
+          </a>
+        ) : (
+          <p className="text-sm text-stone-500">
+            {isBuilder
+              ? "Upload the Xero-generated tax invoice (with J Group payment details)."
+              : "The tax invoice will appear here once issued."}
+          </p>
+        )}
+        {isBuilder && (
+          <div className="mt-3">
+            <InvoiceUploadForm projectId={projectId} claimId={claimId} hasInvoice={!!claim.xeroInvoiceKey} />
+          </div>
+        )}
+      </div>
 
       {/* Last two weeks */}
       <div className="card">

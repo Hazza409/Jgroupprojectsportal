@@ -16,9 +16,9 @@ const TEMPLATES: Record<string, { file: string; headers: string[]; example: (str
     example: ["Framing", "Install Framing", "2025-10-01", "2025-11-12", 42, 100],
   },
   "current-costs": {
-    file: "jgroup-current-costs-template.xlsx",
-    headers: ["Cost Code", "Cost Item", "Amount"],
-    example: ["1015", "Concreting", 887396.49],
+    file: "jgroup-cost-to-complete-template.xlsx",
+    headers: ["Cost Code", "Cost Item", "Estimate", "Current Cost to Date"],
+    example: ["1015", "Concreting", 877239.56, 887396.49],
   },
 };
 

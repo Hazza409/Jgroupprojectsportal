@@ -5,7 +5,7 @@ import { Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { syncProjectActuals } from "@/lib/xero/sync";
-import { parseCurrentCostsBuffer } from "@/lib/excel/parseCurrentCosts";
+import { parseCostRowsBuffer } from "@/lib/excel/parseCurrentCosts";
 
 export interface SyncResult {
   ok: boolean;
@@ -30,8 +30,10 @@ export async function syncXero(projectId: string): Promise<SyncResult> {
   }
 }
 
-// Import current costs to date from Excel (alternative to Xero). Upserts one
-// CostActual per cost code, keyed import:<code>, so re-importing replaces.
+// Import / update cost codes from Excel: estimate (budget) and/or current cost
+// to date per code. Upserts one CostActual per code (keyed import:<code>) and,
+// when an estimate is given, replaces that code's estimate line. Either column
+// may be blank to leave that side unchanged.
 export async function importCurrentCosts(projectId: string, formData: FormData): Promise<SyncResult> {
   const user = await assertProjectAccess(projectId);
   if (user.role !== Role.BUILDER) throw new AccessError("Only builders import costs");
@@ -40,30 +42,59 @@ export async function importCurrentCosts(projectId: string, formData: FormData):
   if (!(file instanceof File) || file.size === 0) return { ok: false, message: "No file uploaded." };
   if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload an .xlsx or .xls file." };
 
-  const { rows, warnings } = parseCurrentCostsBuffer(Buffer.from(await file.arrayBuffer()));
+  const { rows, warnings } = parseCostRowsBuffer(Buffer.from(await file.arrayBuffer()));
   if (rows.length === 0) return { ok: false, message: warnings[0] ?? "No rows parsed." };
+
+  let estimateUpdates = 0;
+  let currentUpdates = 0;
 
   for (const row of rows) {
     const cc = await db.costCode.upsert({
       where: { projectId_code: { projectId, code: row.code } },
       create: { projectId, code: row.code, name: row.name },
-      update: {},
+      update: { name: row.name },
     });
-    await db.costActual.upsert({
-      where: { projectId_xeroSourceId: { projectId, xeroSourceId: `import:${row.code}` } },
-      create: {
-        projectId,
-        costCodeId: cc.id,
-        xeroAccountCode: row.code,
-        xeroSourceId: `import:${row.code}`,
-        description: "Current cost (imported)",
-        amountCents: row.amountCents,
-        occurredAt: new Date(),
-      },
-      update: { amountCents: row.amountCents, costCodeId: cc.id, syncedAt: new Date() },
-    });
+
+    // Estimate: replace this code's estimate line(s) with a single line.
+    if (row.estimateCents !== null) {
+      await db.estimateLineItem.deleteMany({ where: { projectId, costCodeId: cc.id } });
+      await db.estimateLineItem.create({
+        data: {
+          projectId,
+          costCodeId: cc.id,
+          description: row.name,
+          quantity: 1,
+          unit: "item",
+          unitCostCents: row.estimateCents,
+          totalCents: row.estimateCents,
+        },
+      });
+      estimateUpdates++;
+    }
+
+    // Current cost to date: upsert the imported actual for this code.
+    if (row.currentCents !== null) {
+      await db.costActual.upsert({
+        where: { projectId_xeroSourceId: { projectId, xeroSourceId: `import:${row.code}` } },
+        create: {
+          projectId,
+          costCodeId: cc.id,
+          xeroAccountCode: row.code,
+          xeroSourceId: `import:${row.code}`,
+          description: "Current cost (imported)",
+          amountCents: row.currentCents,
+          occurredAt: new Date(),
+        },
+        update: { amountCents: row.currentCents, costCodeId: cc.id, syncedAt: new Date() },
+      });
+      currentUpdates++;
+    }
   }
 
   revalidatePath(`/projects/${projectId}/cost-to-complete`);
-  return { ok: true, message: `Imported current costs for ${rows.length} cost code(s).` };
+  revalidatePath(`/projects/${projectId}/estimate`);
+  return {
+    ok: true,
+    message: `Updated ${rows.length} cost code(s) — ${estimateUpdates} estimate, ${currentUpdates} current cost.`,
+  };
 }

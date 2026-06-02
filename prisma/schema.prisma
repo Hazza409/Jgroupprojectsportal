@@ -101,6 +101,7 @@ model Project {
   scheduleImports ScheduleImport[]
   calendarEvents  CalendarEvent[]
   photos          Photo[]
+  photoFolders    PhotoFolder[]
   designDocuments DesignDocument[]
   xeroConnection  XeroConnection?
 
@@ -220,6 +221,10 @@ model ProgressClaim {
   approvedAt     DateTime?
   // Set when pushed to Xero. Push itself is a flagged TODO (never auto-fires).
   xeroInvoiceId  String?
+  // Uploaded Xero-generated tax invoice (PDF) with J Group payment details —
+  // the document the client pays from.
+  xeroInvoiceKey  String?
+  xeroInvoiceName String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -380,6 +385,8 @@ model CalendarEvent {
 model Photo {
   id           String   @id @default(cuid())
   projectId    String
+  // Optional album/folder for grouping photos for the client.
+  folderId     String?
   fileKey      String
   originalName String
   caption      String?
@@ -388,8 +395,24 @@ model Photo {
   uploadedById String?
   createdAt    DateTime @default(now())
 
-  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploadedBy User?   @relation("PhotoUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder     PhotoFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadedBy User?        @relation("PhotoUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([folderId])
+}
+
+// Named album for grouping a project's photos (e.g. "Level 3 framing", "Kitchen").
+model PhotoFolder {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  photos  Photo[]
 
   @@index([projectId])
 }
