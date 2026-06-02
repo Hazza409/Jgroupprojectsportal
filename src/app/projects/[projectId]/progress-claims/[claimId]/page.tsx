@@ -74,7 +74,7 @@ export default async function ClaimDetailPage({
           </div>
           <div className="flex items-center gap-3">
             <StatusBadge status={claim.status} />
-            <Link href={`/projects/${projectId}/progress-claims/${claimId}/print`} target="_blank" className="btn-ghost">
+            <Link href={`/claims/${claimId}/print`} target="_blank" className="btn-ghost">
               View / PDF
             </Link>
             {isBuilder && isDraft && (
