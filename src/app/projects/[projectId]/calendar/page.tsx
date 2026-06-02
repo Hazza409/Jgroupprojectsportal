@@ -7,6 +7,12 @@ function fmt(d: Date) {
   return new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(d);
 }
 
+const KIND: Record<string, { label: string; cls: string }> = {
+  SITE_MEETING: { label: "Meeting", cls: "bg-stone-100 text-stone-600 ring-1 ring-stone-200" },
+  MAINTENANCE: { label: "Maintenance", cls: "bg-amber-400/15 text-amber-200 ring-1 ring-amber-400/30" },
+  BOOKING: { label: "Booking", cls: "bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/30" },
+};
+
 export default async function CalendarPage({ params }: { params: { projectId: string } }) {
   await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
@@ -66,7 +72,12 @@ export default async function CalendarPage({ params }: { params: { projectId: st
                     {group.list.map((e) => (
                       <div key={e.id} className="card flex items-center justify-between">
                         <div>
-                          <p className="font-medium">{e.title}</p>
+                          <p className="flex items-center gap-2 font-medium">
+                            {e.title}
+                            <span className={`badge ${KIND[e.kind]?.cls ?? KIND.SITE_MEETING.cls}`}>
+                              {KIND[e.kind]?.label ?? e.kind}
+                            </span>
+                          </p>
                           <p className="text-sm text-stone-500">
                             {fmt(e.startsAt)} → {fmt(e.endsAt)}
                             {e.location ? ` · ${e.location}` : ""}
@@ -75,7 +86,7 @@ export default async function CalendarPage({ params }: { params: { projectId: st
                           <p className="mt-1 text-xs text-stone-400">Added by {e.createdBy?.name ?? "—"}</p>
                         </div>
                         <form action={deleteEvent.bind(null, projectId, e.id)}>
-                          <button className="text-sm text-red-600 hover:underline" type="submit">
+                          <button className="text-sm text-red-300 hover:text-red-200" type="submit">
                             Remove
                           </button>
                         </form>

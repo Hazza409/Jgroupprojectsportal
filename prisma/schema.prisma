@@ -39,6 +39,42 @@ enum DesignDocKind {
   OTHER
 }
 
+// Project lifecycle. Modules surface by phase; all data stays accessible.
+enum ProjectPhase {
+  BUILD
+  HANDOVER
+  MAINTENANCE
+}
+
+// One calendar, typed events (site meetings, maintenance, service bookings).
+enum CalendarEventKind {
+  SITE_MEETING
+  MAINTENANCE
+  BOOKING
+}
+
+// Handover document repositories.
+enum HandoverDocKind {
+  REGISTER // master document register
+  OM_MANUAL // operation & maintenance manuals
+  WARRANTY // warranty docs (structured records live in Warranty)
+  JGROUP // J Group company-issued handover docs
+}
+
+enum ServiceBookingStatus {
+  REQUESTED
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum QuoteRequestStatus {
+  OPEN
+  QUOTED
+  ACCEPTED
+  DECLINED
+}
+
 // ─────────────────────────── Identity ────────────────────────
 
 model User {
@@ -87,6 +123,8 @@ model Project {
   // Headline contract value in cents (excludes approved variations).
   contractValueCents Int  @default(0)
   status        String   @default("ACTIVE") // ACTIVE | ON_HOLD | COMPLETE
+  // Lifecycle phase — drives which module suite is primary.
+  phase         ProjectPhase @default(BUILD)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -104,6 +142,12 @@ model Project {
   photoFolders    PhotoFolder[]
   designDocuments DesignDocument[]
   xeroConnection  XeroConnection?
+  // Handover + Maintenance
+  handoverDocuments HandoverDocument[]
+  warranties        Warranty[]
+  maintenanceItems  MaintenanceScheduleItem[]
+  serviceBookings   ServiceBooking[]
+  quoteRequests     QuoteRequest[]
 
   @@index([status])
 }
@@ -365,6 +409,7 @@ model ScheduleItem {
 model CalendarEvent {
   id          String   @id @default(cuid())
   projectId   String
+  kind        CalendarEventKind @default(SITE_MEETING)
   title       String
   location    String?
   notes       String?
@@ -449,4 +494,93 @@ model XeroConnection {
   lastSyncedAt  DateTime?
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ════════════════════ HANDOVER PHASE ════════════════════════
+
+// Reusable per-project document store (Register, O&M manuals, J Group docs,
+// and warranty files). Structured warranty records live in Warranty.
+model HandoverDocument {
+  id           String          @id @default(cuid())
+  projectId    String
+  kind         HandoverDocKind
+  title        String
+  fileKey      String
+  originalName String
+  uploadedById String? // loose user ref
+  createdAt    DateTime        @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([projectId, kind])
+}
+
+// Warranty register — structured fields, optional certificate file.
+model Warranty {
+  id           String    @id @default(cuid())
+  projectId    String
+  item         String // what is covered (e.g. "Roof membrane")
+  issuer       String // who issued it (e.g. manufacturer / trade)
+  expiryDate   DateTime?
+  notes        String?
+  fileKey      String?
+  originalName String?
+  createdAt    DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// ════════════════════ MAINTENANCE PHASE ═════════════════════
+
+model MaintenanceScheduleItem {
+  id              String    @id @default(cuid())
+  projectId       String
+  title           String
+  description     String?
+  frequency       String? // free text e.g. "Every 6 months"
+  nextDueDate     DateTime?
+  calendarEventId String? // linked CalendarEvent(MAINTENANCE) when a due date is set
+  createdAt       DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// Client requests/books a service; builder schedules + manages. When scheduled,
+// a typed CalendarEvent(BOOKING) is created so it appears on the shared calendar.
+model ServiceBooking {
+  id              String               @id @default(cuid())
+  projectId       String
+  requestedById   String? // loose user ref (client)
+  title           String
+  description     String?
+  status          ServiceBookingStatus @default(REQUESTED)
+  scheduledAt     DateTime?
+  calendarEventId String? // linked CalendarEvent when scheduled
+  createdAt       DateTime             @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// Client raises a quote request off a maintenance/service need; builder responds.
+model QuoteRequest {
+  id              String             @id @default(cuid())
+  projectId       String
+  requestedById   String? // loose user ref (client)
+  title           String
+  description     String?
+  status          QuoteRequestStatus @default(OPEN)
+  quoteAmountCents Int? // builder's quoted price (cents)
+  response        String? // builder's written response
+  createdAt       DateTime           @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }

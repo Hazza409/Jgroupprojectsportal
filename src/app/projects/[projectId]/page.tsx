@@ -3,10 +3,11 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
 import { StatusBadge } from "@/components/StatusBadge";
+import { PhaseControl } from "@/components/PhaseControl";
 
 // Project overview — headline numbers pulled live from the schema.
 export default async function ProjectOverview({ params }: { params: { projectId: string } }) {
-  await assertProjectAccess(params.projectId);
+  const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
 
   const [project, estimateLines, actuals, claims, approvedVars, pendingVars, schedule, events, photos] =
@@ -50,10 +51,14 @@ export default async function ProjectOverview({ params }: { params: { projectId:
     { href: "schedule", label: `Schedule (${schedule})` },
     { href: "calendar", label: `Calendar (${events})` },
     { href: "photos", label: `Photos (${photos})` },
+    { href: "handover", label: "Handover" },
+    { href: "maintenance", label: "Maintenance" },
   ];
 
   return (
     <div className="space-y-6">
+      {user.role === "BUILDER" && <PhaseControl projectId={projectId} phase={project.phase} />}
+
       <p className="text-xs text-stone-400">
         All amounts include builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) and GST ({(GST * 100).toFixed(0)}%).
       </p>

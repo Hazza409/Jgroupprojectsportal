@@ -3,7 +3,7 @@
  * builder→client flow can be verified end-to-end. Idempotent (wipes + recreates).
  *   npm run seed:demo
  */
-import { PrismaClient, Role, VariationStatus, ClaimStatus, DesignDocKind } from "@prisma/client";
+import { PrismaClient, Role, VariationStatus, ClaimStatus, DesignDocKind, HandoverDocKind, ProjectPhase, CalendarEventKind, ServiceBookingStatus, QuoteRequestStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { storage, buildKey } from "../src/lib/storage";
 import { inclMarginGst } from "../src/lib/money";
@@ -184,6 +184,50 @@ async function main() {
     const key = await putFile(pid, "docs", file, PDF, "application/pdf");
     await db.designDocument.create({ data: { projectId: pid, kind, title, fileKey: key, originalName: file, uploadedById: builder.id } });
   }
+
+  // ── Handover documents (Register / O&M / J Group) ──
+  const handoverDocs: [HandoverDocKind, string, string][] = [
+    [HandoverDocKind.REGISTER, "Handover Document Register", "register-index.pdf"],
+    [HandoverDocKind.OM_MANUAL, "HVAC Operation Manual", "hvac-om.pdf"],
+    [HandoverDocKind.OM_MANUAL, "Pool Pump O&M", "pool-pump-om.pdf"],
+    [HandoverDocKind.JGROUP, "J Group Handover Certificate", "jg-handover-cert.pdf"],
+    [HandoverDocKind.JGROUP, "Practical Completion Notice", "practical-completion.pdf"],
+  ];
+  for (const [kind, title, file] of handoverDocs) {
+    const key = await putFile(pid, "handover", file, PDF, "application/pdf");
+    await db.handoverDocument.create({ data: { projectId: pid, kind, title, fileKey: key, originalName: file, uploadedById: builder.id } });
+  }
+
+  // ── Warranties (structured) ──
+  const warranties: [string, string, string][] = [
+    ["Roof membrane", "Apex Roofing Systems", "2036-08-01"],
+    ["Waterproofing (wet areas)", "SealTech", "2033-06-15"],
+    ["Appliances package", "Miele Australia", "2028-05-01"],
+    ["Pool shell", "AquaBuild", "2046-04-01"],
+  ];
+  for (const [item, issuer, exp] of warranties) {
+    const key = await putFile(pid, "handover", `${item}-warranty.pdf`, PDF, "application/pdf");
+    await db.warranty.create({ data: { projectId: pid, item, issuer, expiryDate: new Date(exp), fileKey: key, originalName: `${item}-warranty.pdf` } });
+  }
+
+  // ── Maintenance schedule (items with due dates feed the shared calendar) ──
+  const maint: [string, string, string][] = [
+    ["Service HVAC system", "Every 6 months", "2026-11-01"],
+    ["Pool filter & chemical check", "Quarterly", "2026-09-01"],
+    ["Gutter clean", "Annually", "2027-03-01"],
+  ];
+  for (const [title, frequency, due] of maint) {
+    const at = new Date(`${due}T23:00:00Z`);
+    const ev = await db.calendarEvent.create({ data: { projectId: pid, kind: CalendarEventKind.MAINTENANCE, title: `Maintenance: ${title}`, startsAt: at, endsAt: new Date(at.getTime() + 3_600_000), createdById: builder.id } });
+    await db.maintenanceScheduleItem.create({ data: { projectId: pid, title, frequency, nextDueDate: at, calendarEventId: ev.id } });
+  }
+
+  // ── A client service booking + quote request ──
+  await db.serviceBooking.create({ data: { projectId: pid, requestedById: client.id, title: "Squeaky door hinge — master bedroom", description: "Door creaks when opening.", status: ServiceBookingStatus.REQUESTED } });
+  await db.quoteRequest.create({ data: { projectId: pid, requestedById: client.id, title: "Re-stain rear deck", description: "Deck looking weathered after summer.", status: QuoteRequestStatus.OPEN } });
+
+  // Land the demo in the HANDOVER phase to showcase the lifecycle.
+  await db.project.update({ where: { id: pid }, data: { phase: ProjectPhase.HANDOVER } });
 
   console.log(`Demo project ready: ${PROJECT} (${pid})`);
   console.log(`  Client: whitfield@example.test / client123`);
