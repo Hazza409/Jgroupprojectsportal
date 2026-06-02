@@ -42,7 +42,7 @@ export default async function ProjectLayout({
         </div>
         <div className="grid gap-6 md:grid-cols-[220px_1fr]">
           <aside className="md:sticky md:top-6 md:self-start">
-            <ProjectNav projectId={project.id} phase={project.phase} />
+            <ProjectNav projectId={project.id} phase={project.phase} isBuilder={user.role === "BUILDER"} />
           </aside>
           <section className="min-w-0">{children}</section>
         </div>

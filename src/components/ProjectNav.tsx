@@ -27,13 +27,26 @@ const SECTIONS: Section[] = [
   { key: "maintenance", label: "Maintenance", phase: "MAINTENANCE", items: [{ slug: "maintenance", label: "Maintenance" }] },
 ];
 
-export function ProjectNav({ projectId, phase }: { projectId: string; phase: "BUILD" | "HANDOVER" | "MAINTENANCE" }) {
+export function ProjectNav({
+  projectId,
+  phase,
+  isBuilder = false,
+}: {
+  projectId: string;
+  phase: "BUILD" | "HANDOVER" | "MAINTENANCE";
+  isBuilder?: boolean;
+}) {
   const pathname = usePathname();
   const base = `/projects/${projectId}`;
 
+  // Builder-only admin section appended at the end.
+  const sections = isBuilder
+    ? [...SECTIONS, { key: "admin", label: "Admin", items: [{ slug: "settings", label: "Settings" }] }]
+    : SECTIONS;
+
   return (
     <nav className="space-y-4">
-      {SECTIONS.map((section) => (
+      {sections.map((section) => (
         <div key={section.key} className="space-y-1">
           {section.label && (
             <p className="flex items-center gap-2 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400">
