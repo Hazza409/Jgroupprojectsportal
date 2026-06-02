@@ -5,7 +5,8 @@ import { VariationStatus, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
-import { dollarsToCents, lineTotalCents } from "@/lib/money";
+import { dollarsToCents, lineTotalCents, formatCents } from "@/lib/money";
+import { notifyBuilders } from "@/lib/email";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/variations`);
@@ -66,13 +67,33 @@ export async function submitVariation(projectId: string, variationId: string) {
 
 // Client approves/rejects a submitted variation.
 export async function decideVariation(projectId: string, variationId: string, approve: boolean) {
-  await assertProjectAccess(projectId);
+  const user = await assertProjectAccess(projectId);
   await db.variation.update({
     where: { id: variationId, projectId, status: VariationStatus.SUBMITTED },
     data: approve
       ? { status: VariationStatus.APPROVED, approvedAt: new Date() }
       : { status: VariationStatus.REJECTED },
   });
+
+  // Notify the J Group team when a variation is approved.
+  if (approve) {
+    const v = await db.variation.findUnique({
+      where: { id: variationId },
+      include: { project: { select: { name: true } } },
+    });
+    if (v) {
+      await notifyBuilders(
+        `Variation approved — ${v.project.name}`,
+        [
+          `${user.name} (${user.role.toLowerCase()}) approved a variation on ${v.project.name}.`,
+          `VO #${v.variationNumber}: ${v.title}`,
+          `Approved amount: ${formatCents(v.totalCents)}`,
+          `Open the J Group dashboard to action it.`,
+        ],
+      );
+    }
+  }
+
   refresh(projectId);
 }
 

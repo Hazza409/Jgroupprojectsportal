@@ -26,7 +26,10 @@ export default async function BuilderHome() {
             <h1 className="text-2xl font-semibold">All projects</h1>
             <p className="text-sm text-stone-500">{projects.length} project(s) · J Group staff view</p>
           </div>
-          <Link href="/builder/new" className="btn-primary">New job</Link>
+          <div className="flex items-center gap-3">
+            <Link href="/builder/team" className="btn-ghost">Team</Link>
+            <Link href="/builder/new" className="btn-primary">New job</Link>
+          </div>
         </div>
 
         {projects.length === 0 ? (
