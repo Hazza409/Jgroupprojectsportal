@@ -1,0 +1,29 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# next
+/.next/
+/out/
+next-env.d.ts
+
+# production
+/build
+
+# env — never commit real secrets
+.env
+.env*.local
+
+# local file-storage driver output (dev uploads)
+/storage-data/
+
+# prisma
+/prisma/*.db
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+.vercel
+*.tsbuildinfo

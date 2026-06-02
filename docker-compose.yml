@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: jgroup-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jgroup
+      POSTGRES_PASSWORD: jgroup
+      POSTGRES_DB: jgroup
+    ports:
+      - "5432:5432"
+    volumes:
+      - jgroup_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jgroup -d jgroup"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  jgroup_pgdata:

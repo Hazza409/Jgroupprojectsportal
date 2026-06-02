@@ -1,0 +1,392 @@
+// J Group Projects — client + builder dashboard.
+// Currency rule: every monetary value is an Int of CENTS. Never Float for money.
+// Project scoping: every project-bound row carries projectId; access is enforced
+// at the query layer via src/lib/scope.ts (assertProjectAccess), not just the UI.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Enums ───────────────────────────
+
+enum Role {
+  BUILDER // J Group staff — sees ALL projects
+  CLIENT // sees only projects they're a member of
+}
+
+enum ClaimStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum VariationStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum DesignDocKind {
+  ARCHITECTURAL
+  INTERIOR
+  OTHER
+}
+
+// ─────────────────────────── Identity ────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  // bcrypt hash. Never store plaintext.
+  passwordHash String
+  role         Role     @default(CLIENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships     ProjectMembership[]
+  uploadedPhotos  Photo[]             @relation("PhotoUploader")
+  uploadedDocs    DesignDocument[]    @relation("DocUploader")
+  authoredEvents  CalendarEvent[]     @relation("EventAuthor")
+  submittedClaims ProgressClaim[]     @relation("ClaimSubmitter")
+}
+
+// Join between User and Project. This is the row-level scoping anchor:
+// a CLIENT can only reach a project they have a membership for.
+model ProjectMembership {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId String
+  // Role on THIS project (a builder is implicitly on all; clients are scoped here).
+  role      Role     @default(CLIENT)
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ─────────────────────────── Project ─────────────────────────
+
+model Project {
+  id            String   @id @default(cuid())
+  name          String
+  // Free-text site address; high-end residential = one home per project.
+  address       String?
+  clientName    String?
+  // Headline contract value in cents (excludes approved variations).
+  contractValueCents Int  @default(0)
+  status        String   @default("ACTIVE") // ACTIVE | ON_HOLD | COMPLETE
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  memberships     ProjectMembership[]
+  costCodes       CostCode[]
+  estimateImports EstimateImport[]
+  estimateLines   EstimateLineItem[]
+  costActuals     CostActual[]
+  progressClaims  ProgressClaim[]
+  variations      Variation[]
+  scheduleItems   ScheduleItem[]
+  scheduleImports ScheduleImport[]
+  calendarEvents  CalendarEvent[]
+  photos          Photo[]
+  designDocuments DesignDocument[]
+  xeroConnection  XeroConnection?
+
+  @@index([status])
+}
+
+// ─────────────────────────── Cost codes ──────────────────────
+// The shared key that ties Estimate ↔ Xero actuals ↔ Cost-to-Complete ↔ claims.
+
+model CostCode {
+  id          String  @id @default(cuid())
+  projectId   String
+  code        String // e.g. "1.10", "CARP", "ELEC-01"
+  name        String
+  createdAt   DateTime @default(now())
+
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  estimateLines EstimateLineItem[]
+  costActuals   CostActual[]
+  claimLines    ClaimLineItem[]
+
+  @@unique([projectId, code])
+  @@index([projectId])
+}
+
+// ─────────────────────────── Estimate ────────────────────────
+
+// Keep the source Excel file + parse metadata for audit.
+model EstimateImport {
+  id           String   @id @default(cuid())
+  projectId    String
+  // Storage key from src/lib/storage (NOT a public URL).
+  sourceKey    String
+  originalName String
+  rowCount     Int      @default(0)
+  importedById String?
+  createdAt    DateTime @default(now())
+
+  project Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lines   EstimateLineItem[]
+
+  @@index([projectId])
+}
+
+model EstimateLineItem {
+  id            String  @id @default(cuid())
+  projectId     String
+  importId      String?
+  costCodeId    String?
+  description   String
+  quantity      Float   @default(1) // quantities CAN be fractional (m³, hrs); money cannot.
+  unit          String? // "m2", "ea", "hrs", "item"
+  unitCostCents Int     @default(0)
+  totalCents    Int     @default(0) // stored, validated against qty * unitCost on import
+  sortOrder     Int     @default(0)
+
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  import   EstimateImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+  costCode CostCode?       @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([costCodeId])
+}
+
+// ─────────────── Cost actuals (Xero sync target) ─────────────
+// One-directional: Xero → dashboard. Populated by src/lib/xero/sync.ts (TODO).
+
+model CostActual {
+  id            String   @id @default(cuid())
+  projectId     String
+  costCodeId    String?
+  // Xero source identifiers for idempotent upserts.
+  xeroAccountCode String?
+  xeroSourceId    String? // invoice/bill/transaction id
+  description   String?
+  amountCents   Int      @default(0)
+  occurredAt    DateTime
+  syncedAt      DateTime @default(now())
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costCode CostCode? @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, xeroSourceId])
+  @@index([projectId])
+  @@index([costCodeId])
+}
+
+// ─────────────────────────── Progress claims ─────────────────
+
+model ProgressClaim {
+  id             String      @id @default(cuid())
+  projectId      String
+  claimNumber    Int
+  status         ClaimStatus @default(DRAFT)
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  // Reconciliation sheet (uploaded or generated PDF/xlsx) storage key.
+  reconSheetKey  String?
+  submittedById  String?
+  submittedAt    DateTime?
+  approvedAt     DateTime?
+  // Set when pushed to Xero. Push itself is a flagged TODO (never auto-fires).
+  xeroInvoiceId  String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submittedBy User?           @relation("ClaimSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  lines       ClaimLineItem[]
+
+  @@unique([projectId, claimNumber])
+  @@index([projectId])
+}
+
+model ClaimLineItem {
+  id                  String  @id @default(cuid())
+  claimId             String
+  costCodeId          String?
+  description         String
+  // Percent complete this claim asserts for the cost code (0–100).
+  percentComplete     Float   @default(0)
+  // Value claimed this period, in cents.
+  claimedAmountCents  Int     @default(0)
+
+  claim    ProgressClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  costCode CostCode?     @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+
+  @@index([claimId])
+}
+
+// ─────────────────────────── Variations ──────────────────────
+
+model Variation {
+  id             String          @id @default(cuid())
+  projectId      String
+  variationNumber Int
+  title          String
+  description    String?
+  status         VariationStatus @default(DRAFT)
+  // Cached sum of line items, in cents. Recomputed on line write.
+  totalCents     Int             @default(0)
+  approvedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lines   VariationLineItem[]
+  quotes  SubcontractorQuote[]
+
+  @@unique([projectId, variationNumber])
+  @@index([projectId])
+}
+
+model VariationLineItem {
+  id            String @id @default(cuid())
+  variationId   String
+  description   String
+  quantity      Float  @default(1)
+  unit          String?
+  unitCostCents Int    @default(0)
+  totalCents    Int    @default(0)
+
+  variation Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+
+  @@index([variationId])
+}
+
+model SubcontractorQuote {
+  id           String   @id @default(cuid())
+  variationId  String
+  vendorName   String
+  amountCents  Int      @default(0)
+  // Uploaded quote file (PDF/image) storage key.
+  fileKey      String
+  originalName String
+  createdAt    DateTime @default(now())
+
+  variation Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+
+  @@index([variationId])
+}
+
+// ─────────────────────────── Schedule ────────────────────────
+// Same Excel-import pattern as the estimate; updated fortnightly.
+
+model ScheduleImport {
+  id           String   @id @default(cuid())
+  projectId    String
+  sourceKey    String
+  originalName String
+  rowCount     Int      @default(0)
+  importedById String?
+  createdAt    DateTime @default(now())
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items   ScheduleItem[]
+
+  @@index([projectId])
+}
+
+model ScheduleItem {
+  id          String    @id @default(cuid())
+  projectId   String
+  importId    String?
+  taskName    String
+  startDate   DateTime?
+  endDate     DateTime?
+  percentComplete Float @default(0)
+  sortOrder   Int       @default(0)
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  import  ScheduleImport? @relation(fields: [importId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+// ─────────────────────────── Calendar ────────────────────────
+// Site meetings — visible + editable by both builder and client for the project.
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  location    String?
+  notes       String?
+  startsAt    DateTime
+  endsAt      DateTime
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("EventAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+// ─────────────────────────── Photos ──────────────────────────
+
+model Photo {
+  id           String   @id @default(cuid())
+  projectId    String
+  fileKey      String
+  originalName String
+  caption      String?
+  // Fortnightly batches — taggable for filtering.
+  takenAt      DateTime?
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy User?   @relation("PhotoUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+// ─────────────────── Architectural / interior docs ───────────
+
+model DesignDocument {
+  id           String        @id @default(cuid())
+  projectId    String
+  kind         DesignDocKind @default(ARCHITECTURAL)
+  title        String
+  fileKey      String
+  originalName String
+  uploadedById String?
+  createdAt    DateTime      @default(now())
+
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy User?   @relation("DocUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+}
+
+// ─────────────────── Xero OAuth2 token store ─────────────────
+// One connection per project (or tenant). Tokens written by the OAuth flow (TODO).
+
+model XeroConnection {
+  id            String   @id @default(cuid())
+  projectId     String   @unique
+  xeroTenantId  String?
+  accessToken   String? // encrypt at rest in prod (TODO)
+  refreshToken  String?
+  expiresAt     DateTime?
+  connectedAt   DateTime @default(now())
+  lastSyncedAt  DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
