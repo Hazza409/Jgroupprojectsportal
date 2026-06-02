@@ -9,6 +9,9 @@
 
 import { db } from "../db";
 import { dollarsToCents } from "../money";
+import { getValidAccessToken } from "./tokens";
+
+const XERO_API = "https://api.xero.com/api.xro/2.0";
 
 export interface XeroActualRow {
   xeroAccountCode: string; // maps to CostCode.code
@@ -18,11 +21,85 @@ export interface XeroActualRow {
   occurredAt: Date;
 }
 
-/** TODO: call the Xero Accounting API (bank txns / bills) for this tenant. */
-async function fetchActualsFromXero(_projectId: string): Promise<XeroActualRow[]> {
-  // TODO: use stored XeroConnection tokens (refresh as needed) and pull
-  // transactions since lastSyncedAt. Return them as XeroActualRow[].
-  throw new Error("Xero actuals fetch not implemented (TODO). See src/lib/xero/sync.ts.");
+// Shapes we read from the Xero Accounting API (only the fields we use).
+interface XeroLineItem {
+  AccountCode?: string;
+  Description?: string;
+  LineAmount?: number;
+}
+interface XeroDoc {
+  InvoiceID?: string;
+  BankTransactionID?: string;
+  Date?: string; // "/Date(1234567890000+0000)/" or ISO
+  LineItems?: XeroLineItem[];
+}
+
+/** Xero serialises dates as "/Date(ms+0000)/" for some endpoints; handle both. */
+function parseXeroDate(value?: string): Date {
+  if (!value) return new Date();
+  const m = /\/Date\((\d+)/.exec(value);
+  if (m) return new Date(Number(m[1]));
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? new Date() : d;
+}
+
+async function getJson(path: string, accessToken: string, tenantId: string, modifiedAfter?: Date | null) {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    "xero-tenant-id": tenantId,
+    Accept: "application/json",
+  };
+  // Xero filters by last-modified via this header — keeps syncs incremental.
+  if (modifiedAfter) headers["If-Modified-Since"] = modifiedAfter.toISOString().replace(/\.\d+Z$/, "Z");
+
+  const res = await fetch(`${XERO_API}/${path}`, { headers });
+  if (res.status === 304) return {} as { Invoices?: XeroDoc[]; BankTransactions?: XeroDoc[] }; // nothing modified since
+  if (!res.ok) throw new Error(`Xero API ${path} failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as { Invoices?: XeroDoc[]; BankTransactions?: XeroDoc[] };
+}
+
+function flatten(docs: XeroDoc[], idPrefix: string): XeroActualRow[] {
+  const rows: XeroActualRow[] = [];
+  for (const doc of docs) {
+    const docId = doc.InvoiceID ?? doc.BankTransactionID ?? "";
+    const occurredAt = parseXeroDate(doc.Date);
+    (doc.LineItems ?? []).forEach((li, i) => {
+      if (!li.AccountCode) return; // unmapped lines can't tie to a cost code
+      rows.push({
+        xeroAccountCode: li.AccountCode,
+        xeroSourceId: `${idPrefix}:${docId}:${i}`,
+        description: li.Description,
+        amount: li.LineAmount ?? 0,
+        occurredAt,
+      });
+    });
+  }
+  return rows;
+}
+
+/**
+ * Pull job-cost actuals for the project's Xero org: supplier bills (ACCPAY) and
+ * spend-money bank transactions. Incremental via lastSyncedAt. One-directional.
+ */
+async function fetchActualsFromXero(projectId: string): Promise<XeroActualRow[]> {
+  const conn = await getValidAccessToken(projectId);
+  if (!conn) throw new Error("Xero not connected for this project. Connect it first.");
+
+  const record = await db.xeroConnection.findUnique({
+    where: { projectId },
+    select: { lastSyncedAt: true },
+  });
+  const since = record?.lastSyncedAt ?? null;
+
+  const [bills, spend] = await Promise.all([
+    getJson('Invoices?where=Type=="ACCPAY"', conn.accessToken, conn.tenantId, since),
+    getJson('BankTransactions?where=Type=="SPEND"', conn.accessToken, conn.tenantId, since),
+  ]);
+
+  return [
+    ...flatten(bills.Invoices ?? [], "bill"),
+    ...flatten(spend.BankTransactions ?? [], "spend"),
+  ];
 }
 
 /**

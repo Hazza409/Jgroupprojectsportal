@@ -2,13 +2,27 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { isConnected } from "@/lib/xero/tokens";
+import { XeroControls } from "./XeroControls";
 
 // Cost to Complete = per cost code: estimate (budget) vs actuals (from Xero),
 // % complete, and remaining. Actuals are populated one-directionally by the
-// Xero sync service (src/lib/xero/sync.ts) — TODO until OAuth is wired.
-export default async function CostToCompletePage({ params }: { params: { projectId: string } }) {
-  await assertProjectAccess(params.projectId);
+// Xero sync service (src/lib/xero/sync.ts).
+export default async function CostToCompletePage({
+  params,
+  searchParams,
+}: {
+  params: { projectId: string };
+  searchParams: { xero?: string };
+}) {
+  const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
+  const isBuilder = user.role === "BUILDER";
+
+  const [xeroConnected, xeroConn] = await Promise.all([
+    isConnected(projectId),
+    db.xeroConnection.findUnique({ where: { projectId }, select: { lastSyncedAt: true } }),
+  ]);
 
   const costCodes = await db.costCode.findMany({
     where: { projectId },
@@ -35,12 +49,42 @@ export default async function CostToCompletePage({ params }: { params: { project
       <ModuleHeader
         title="Cost to Complete"
         description="Budget vs actuals per cost code. Actuals sync one-directionally from Xero."
+        action={
+          isBuilder ? (
+            <XeroControls
+              projectId={projectId}
+              connected={xeroConnected}
+              lastSyncedAt={
+                xeroConn?.lastSyncedAt
+                  ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(
+                      xeroConn.lastSyncedAt,
+                    )
+                  : null
+              }
+            />
+          ) : null
+        }
       />
+
+      {searchParams.xero === "connected" && (
+        <div className="card mb-4 border-green-200 bg-green-50 text-sm text-green-800">
+          Xero connected. Click <strong>Sync now</strong> to pull actuals.
+        </div>
+      )}
+      {searchParams.xero === "error" && (
+        <div className="card mb-4 border-red-200 bg-red-50 text-sm text-red-800">
+          Xero connection failed. Check your app credentials and try again.
+        </div>
+      )}
 
       {!hasActuals && (
         <div className="card mb-4 border-amber-200 bg-amber-50 text-sm text-amber-800">
-          No Xero actuals yet. Connect Xero and run the sync service to populate actual costs
-          against matching cost codes. <span className="font-mono text-xs">(src/lib/xero/sync.ts — TODO)</span>
+          No Xero actuals yet.{" "}
+          {isBuilder
+            ? xeroConnected
+              ? "Click Sync now to pull actuals against matching cost codes."
+              : "Connect Xero (top right) to pull actual costs against matching cost codes."
+            : "Actuals appear once J Group connects Xero and syncs."}
         </div>
       )}
 
