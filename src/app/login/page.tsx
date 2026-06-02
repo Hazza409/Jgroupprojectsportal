@@ -32,7 +32,7 @@ export default function LoginPage() {
         <div className="mb-8 text-center">
           <p className="wordmark text-xl text-ink">J Group Projects</p>
           <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-stone-500">
-            Design · Construction · Landscape
+            One Of One
           </p>
           <h1 className="mt-6 text-2xl font-semibold">Sign in</h1>
         </div>

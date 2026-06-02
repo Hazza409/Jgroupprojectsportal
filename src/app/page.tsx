@@ -34,7 +34,7 @@ export default async function HomePage() {
       </div>
 
       <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-stone-500">
-        <span>Design · Construction · Landscape</span>
+        <span>One Of One</span>
         <span className="hidden sm:inline">Sydney</span>
       </div>
     </main>

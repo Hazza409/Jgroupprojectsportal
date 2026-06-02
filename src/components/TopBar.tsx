@@ -12,7 +12,7 @@ export function TopBar({ user }: { user: SessionUser }) {
           <span className="flex flex-col leading-none">
             <span className="wordmark text-lg text-ink">J Group Projects</span>
             <span className="mt-0.5 text-[10px] uppercase tracking-[0.25em] text-stone-500">
-              Design · Construction · Landscape
+              One Of One
             </span>
           </span>
         </Link>
