@@ -1,18 +1,15 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents } from "@/lib/money";
+import { formatCents, sumCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { isConnected } from "@/lib/xero/tokens";
 import { XeroControls } from "./XeroControls";
 import { CurrentCostsImport } from "./CurrentCostsImport";
 
-// Australian residential build assumptions (mirrors the J Group CTC workbook).
-const BUILDERS_MARGIN = 0.125; // 12.5%
-const GST = 0.1; // 10%
-
-// Cost to Complete — laid out like the J Group CTC workbook:
-//   Current to Date · Revised Estimate · Cost to Complete (incl BM & GST),
-//   then Estimate vs Current vs Variance per cost code, plus Approved Variations.
+// Cost to Complete — laid out like the J Group CTC workbook. EVERY figure on this
+// page is shown INCLUSIVE of builder's margin (12.5%) then GST (10%) — no mixing
+// of ex/inc amounts. Underlying DB values are stored ex-margin/ex-GST; we gross
+// up once here via inclMarginGst().
 export default async function CostToCompletePage({
   params,
   searchParams,
@@ -42,26 +39,27 @@ export default async function CostToCompletePage({
     }),
   ]);
 
+  // Per-code rows grossed up for display.
   const rows = costCodes.map((cc) => {
-    const estimate = sumCents(cc.estimateLines.map((l) => l.totalCents));
-    const current = sumCents(cc.costActuals.map((a) => a.amountCents));
+    const estimate = inclMarginGst(sumCents(cc.estimateLines.map((l) => l.totalCents)));
+    const current = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)));
     return { id: cc.id, code: cc.code, name: cc.name, estimate, current, variance: estimate - current };
   });
 
-  const estimateTotal = sumCents(rows.map((r) => r.estimate));
-  const currentToDate = sumCents(rows.map((r) => r.current));
-  const approvedVarTotal = sumCents(approvedVars.map((v) => v.totalCents));
+  // Totals are grossed from the AGGREGATE base (not summed per-row) so they match
+  // the Overview to the cent — single, unambiguous rounding.
+  const estimateTotal = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.estimateLines.map((l) => l.totalCents))));
+  const currentToDate = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))));
+  const approvedVarTotal = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)));
 
-  // Revised estimate (incl builder's margin + GST), then cost remaining to complete.
-  const revisedBase = estimateTotal + approvedVarTotal;
-  const revisedInclBmGst = Math.round(revisedBase * (1 + BUILDERS_MARGIN) * (1 + GST));
-  const costToComplete = revisedInclBmGst - currentToDate;
+  const revisedEstimate = estimateTotal + approvedVarTotal;
+  const costToComplete = revisedEstimate - currentToDate;
   const hasActuals = currentToDate !== 0;
 
   const summary = [
     { label: "Current to Date", value: formatCents(currentToDate) },
-    { label: "Revised Estimate (incl BM & GST)", value: formatCents(revisedInclBmGst) },
-    { label: "Cost to Complete (incl BM & GST)", value: formatCents(costToComplete) },
+    { label: "Revised Estimate", value: formatCents(revisedEstimate) },
+    { label: "Cost to Complete", value: formatCents(costToComplete) },
   ];
 
   return (
@@ -91,6 +89,11 @@ export default async function CostToCompletePage({
           <CurrentCostsImport projectId={projectId} />
         </div>
       )}
+
+      {/* Unambiguous: every figure on this page is grossed up. */}
+      <div className="mb-4 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
+        All amounts include builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) and GST ({(GST * 100).toFixed(0)}%).
+      </div>
 
       {/* Three headline figures, as per the CTC workbook. */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
@@ -181,12 +184,12 @@ export default async function CostToCompletePage({
                 {approvedVars.map((v) => (
                   <li key={v.id} className="flex items-start justify-between gap-3 text-sm">
                     <span className="min-w-0 text-stone-300">{v.title}</span>
-                    <span className="shrink-0 tabular-nums">{formatCents(v.totalCents)}</span>
+                    <span className="shrink-0 tabular-nums">{formatCents(inclMarginGst(v.totalCents))}</span>
                   </li>
                 ))}
               </ul>
               <div className="mt-3 flex items-center justify-between border-t border-stone-200 pt-3 text-sm font-semibold">
-                <span>Total approved (ex-GST)</span>
+                <span>Total approved</span>
                 <span className="tabular-nums">{formatCents(approvedVarTotal)}</span>
               </div>
             </>

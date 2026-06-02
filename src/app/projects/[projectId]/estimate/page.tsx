@@ -1,6 +1,6 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents } from "@/lib/money";
+import { formatCents, sumCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
 import Link from "next/link";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { UploadForm } from "./UploadForm";
@@ -73,9 +73,21 @@ export default async function EstimatePage({ params }: { params: { projectId: st
               ))}
             </tbody>
             <tfoot className="border-t border-stone-200 bg-stone-50">
-              <tr>
-                <td colSpan={5} className="px-4 py-3 text-right font-medium">Total</td>
-                <td className="px-4 py-3 text-right font-semibold">{formatCents(total)}</td>
+              <tr className="text-stone-500">
+                <td colSpan={5} className="px-4 py-2 text-right">Subtotal (ex margin &amp; GST)</td>
+                <td className="px-4 py-2 text-right tabular-nums">{formatCents(total)}</td>
+              </tr>
+              <tr className="text-stone-500">
+                <td colSpan={5} className="px-4 py-2 text-right">
+                  + Builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) &amp; GST ({(GST * 100).toFixed(0)}%)
+                </td>
+                <td className="px-4 py-2 text-right tabular-nums">
+                  {formatCents(inclMarginGst(total) - total)}
+                </td>
+              </tr>
+              <tr className="border-t border-stone-200 font-semibold">
+                <td colSpan={5} className="px-4 py-3 text-right">Total (incl margin &amp; GST)</td>
+                <td className="px-4 py-3 text-right tabular-nums">{formatCents(inclMarginGst(total))}</td>
               </tr>
             </tfoot>
           </table>

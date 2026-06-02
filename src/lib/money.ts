@@ -1,6 +1,19 @@
 // Money is ALWAYS integer cents in the DB and across the app boundary.
 // These helpers are the only sanctioned place to cross between cents and display.
 
+// Australian residential build defaults (mirror the J Group CTC workbook).
+export const BUILDERS_MARGIN = 0.125; // 12.5%
+export const GST = 0.1; // 10%
+
+/**
+ * Gross a base (ex-margin, ex-GST) cents amount up to a client-facing figure
+ * INCLUSIVE of builder's margin then GST. Single source of truth so every
+ * costing across the app reads the same — no ambiguity.
+ */
+export function inclMarginGst(baseCents: number, marginPct = BUILDERS_MARGIN, gstPct = GST): number {
+  return Math.round(baseCents * (1 + marginPct) * (1 + gstPct));
+}
+
 /** Parse a user/Excel-entered dollar string or number into integer cents. */
 export function dollarsToCents(input: string | number | null | undefined): number {
   if (input === null || input === undefined || input === "") return 0;
