@@ -21,6 +21,9 @@ next-env.d.ts
 # prisma
 /prisma/*.db
 
+# embedded-postgres local data (npm run dev:db)
+/.pgdata/
+
 # misc
 .DS_Store
 *.pem

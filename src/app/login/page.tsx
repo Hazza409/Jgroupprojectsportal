@@ -29,9 +29,12 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <p className="text-xs font-semibold uppercase tracking-widest text-brand">J Group Projects</p>
-          <h1 className="mt-2 text-2xl font-semibold">Sign in</h1>
+        <div className="mb-8 text-center">
+          <p className="wordmark text-xl text-ink">J Group Projects</p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.25em] text-stone-500">
+            Design · Construction · Landscape
+          </p>
+          <h1 className="mt-6 text-2xl font-semibold">Sign in</h1>
         </div>
         <form onSubmit={onSubmit} className="card space-y-4">
           <div>

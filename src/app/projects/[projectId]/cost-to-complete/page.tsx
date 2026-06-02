@@ -67,18 +67,18 @@ export default async function CostToCompletePage({
       />
 
       {searchParams.xero === "connected" && (
-        <div className="card mb-4 border-green-200 bg-green-50 text-sm text-green-800">
+        <div className="card mb-4 border-emerald-400/30 bg-emerald-400/10 text-sm text-emerald-200">
           Xero connected. Click <strong>Sync now</strong> to pull actuals.
         </div>
       )}
       {searchParams.xero === "error" && (
-        <div className="card mb-4 border-red-200 bg-red-50 text-sm text-red-800">
+        <div className="card mb-4 border-red-400/30 bg-red-400/10 text-sm text-red-200">
           Xero connection failed. Check your app credentials and try again.
         </div>
       )}
 
       {!hasActuals && (
-        <div className="card mb-4 border-amber-200 bg-amber-50 text-sm text-amber-800">
+        <div className="card mb-4 border-amber-400/30 bg-amber-400/10 text-sm text-amber-200">
           No Xero actuals yet.{" "}
           {isBuilder
             ? xeroConnected

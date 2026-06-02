@@ -29,7 +29,7 @@ export function ProjectNav({ projectId }: { projectId: string }) {
             key={m.slug || "overview"}
             href={href}
             className={`block rounded-md px-3 py-2 text-sm ${
-              active ? "bg-brand text-white" : "text-stone-700 hover:bg-stone-100"
+              active ? "bg-brand text-ebony" : "text-stone-700 hover:bg-stone-100"
             }`}
           >
             {m.label}
