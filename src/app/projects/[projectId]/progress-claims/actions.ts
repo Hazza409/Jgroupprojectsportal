@@ -8,6 +8,13 @@ import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, formatCents, sumCents } from "@/lib/money";
 import { notifyBuilders } from "@/lib/email";
+import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
+
+export interface ReconImportResult {
+  ok: boolean;
+  message: string;
+  warnings?: string[];
+}
 
 function refresh(projectId: string, claimId?: string) {
   revalidatePath(`/projects/${projectId}/progress-claims`);
@@ -101,17 +108,99 @@ export async function deleteClaimLine(projectId: string, claimId: string, lineId
   refresh(projectId, claimId);
 }
 
-// Builder attaches/replaces the reconciliation sheet (xlsx/pdf).
-export async function uploadReconSheet(projectId: string, claimId: string, formData: FormData) {
+// Builder uploads the reconciliation sheet — the SOURCE OF TRUTH for the claim.
+// Parses it and (replace mode) rebuilds the claim's line items, supplier backup,
+// and summary (labour + costs + margin + GST) to match the sheet exactly.
+export async function importReconSheet(
+  projectId: string,
+  claimId: string,
+  formData: FormData,
+): Promise<ReconImportResult> {
   await builderOnly(projectId);
+  const claim = await db.progressClaim.findFirst({ where: { id: claimId, projectId } });
+  if (!claim) return { ok: false, message: "Claim not found." };
+  if (claim.status !== ClaimStatus.DRAFT) return { ok: false, message: "Only draft claims can be rebuilt from a sheet." };
+
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) throw new Error("No file uploaded");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, message: "No file uploaded." };
+  if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload the reconciliation .xlsx file." };
 
   const buf = Buffer.from(await file.arrayBuffer());
+  const parsed = parseReconciliationBuffer(buf);
+  if (parsed.budgetOverview.length === 0 && parsed.supplierLines.length === 0) {
+    return { ok: false, message: parsed.warnings[0] ?? "Could not read the reconciliation sheet." };
+  }
+
+  // Store the source file (audit trail).
   const store = await storage();
   const key = buildKey({ projectId, category: "claims", originalName: `${Date.now()}-${file.name}` });
   await store.put({ key, body: buf, contentType: file.type || "application/octet-stream" });
-  await db.progressClaim.update({ where: { id: claimId }, data: { reconSheetKey: key } });
+
+  // Match budget-overview rows to cost codes by name (best effort).
+  const codes = await db.costCode.findMany({ where: { projectId }, select: { id: true, name: true } });
+  const byName = new Map(codes.map((c) => [c.name.trim().toLowerCase(), c.id]));
+
+  await db.$transaction(async (tx) => {
+    // Replace mode — the sheet is the source of truth.
+    await tx.claimLineItem.deleteMany({ where: { claimId } });
+    await tx.claimReconLine.deleteMany({ where: { claimId } });
+
+    await tx.progressClaim.update({
+      where: { id: claimId },
+      data: {
+        reconSheetKey: key,
+        reconSheetName: file.name,
+        periodLabel: parsed.meta.periodLabel,
+        reconInvoiceRef: parsed.meta.invoiceRef,
+        periodEnd: parsed.meta.date ?? undefined,
+        labourCents: parsed.labourCents,
+        costsCents: parsed.costsCents,
+        marginPercent: parsed.marginPercent,
+        marginCents: parsed.marginCents,
+        subtotalCents: parsed.subtotalCents,
+        gstCents: parsed.gstCents,
+        totalCents: parsed.totalCents,
+      },
+    });
+
+    if (parsed.budgetOverview.length > 0) {
+      await tx.claimLineItem.createMany({
+        data: parsed.budgetOverview.map((b) => ({
+          claimId,
+          costCodeId: byName.get(b.name.trim().toLowerCase()) ?? null,
+          description: b.name,
+          claimedAmountCents: b.currentCents,
+          priorCents: b.priorCents,
+          toDateCents: b.toDateCents,
+        })),
+      });
+    }
+    if (parsed.supplierLines.length > 0) {
+      await tx.claimReconLine.createMany({
+        data: parsed.supplierLines.map((l) => ({
+          claimId,
+          supplier: l.supplier,
+          documentNumber: l.documentNumber,
+          allocation: l.allocation,
+          amountCents: l.amountCents,
+        })),
+      });
+    }
+  });
+
+  refresh(projectId, claimId);
+  return {
+    ok: true,
+    message: `Built claim from ${parsed.meta.invoiceRef ?? "sheet"}: ${parsed.budgetOverview.length} cost codes, ${parsed.supplierLines.length} supplier invoices.`,
+    warnings: parsed.warnings,
+  };
+}
+
+// Builder edits the "last two weeks" narrative shown to the client.
+export async function updateNarrative(projectId: string, claimId: string, formData: FormData) {
+  await builderOnly(projectId);
+  const narrative = String(formData.get("narrative") ?? "").trim() || null;
+  await db.progressClaim.updateMany({ where: { id: claimId, projectId }, data: { narrative } });
   refresh(projectId, claimId);
 }
 
@@ -141,7 +230,8 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
   });
 
   if (approve) {
-    const total = sumCents(claim.lines.map((l) => l.claimedAmountCents));
+    // Headline = recon total (inc GST) when built from a sheet, else line sum.
+    const total = claim.totalCents > 0 ? claim.totalCents : sumCents(claim.lines.map((l) => l.claimedAmountCents));
     await notifyBuilders(`Progress claim approved — ${claim.project.name}`, [
       `${user.name} (${user.role.toLowerCase()}) approved Claim #${claim.claimNumber} on ${claim.project.name}.`,
       `Approved amount: ${formatCents(total)}`,

@@ -14,7 +14,7 @@ export default async function ProgressClaimsPage({ params }: { params: { project
   const claims = await db.progressClaim.findMany({
     where: { projectId },
     orderBy: { claimNumber: "desc" },
-    include: { lines: { select: { claimedAmountCents: true } } },
+    include: { lines: { select: { claimedAmountCents: true } }, _count: { select: { reconLines: true } } },
   });
 
   return (
@@ -36,7 +36,7 @@ export default async function ProgressClaimsPage({ params }: { params: { project
       ) : (
         <div className="space-y-3">
           {claims.map((c) => {
-            const total = sumCents(c.lines.map((l) => l.claimedAmountCents));
+            const total = c.totalCents > 0 ? c.totalCents : sumCents(c.lines.map((l) => l.claimedAmountCents));
             return (
               <Link
                 key={c.id}
@@ -44,10 +44,11 @@ export default async function ProgressClaimsPage({ params }: { params: { project
                 className="card flex items-center justify-between hover:shadow-md"
               >
                 <div>
-                  <p className="font-medium">Claim #{c.claimNumber} · {formatCents(total)}</p>
+                  <p className="font-medium">
+                    Claim #{c.claimNumber}{c.periodLabel ? ` · ${c.periodLabel}` : ""} · {formatCents(total)}
+                  </p>
                   <p className="text-xs text-stone-400">
-                    {c.lines.length} line item(s)
-                    {c.reconSheetKey ? " · recon attached" : ""}
+                    {c._count.reconLines > 0 ? `from reconciliation sheet · ${c._count.reconLines} invoices` : `${c.lines.length} line item(s)`}
                     {c.xeroInvoiceId ? " · pushed to Xero" : ""}
                   </p>
                 </div>

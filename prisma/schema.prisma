@@ -199,6 +199,22 @@ model ProgressClaim {
   periodEnd      DateTime?
   // Reconciliation sheet (uploaded or generated PDF/xlsx) storage key.
   reconSheetKey  String?
+  // Original source filename of the uploaded reconciliation sheet.
+  reconSheetName String?
+  // Builder's "what happened in the last two weeks" note, shown to the client.
+  narrative      String?
+
+  // ── Recon-derived summary (set when a reconciliation sheet is parsed) ──
+  periodLabel     String? // e.g. "Apr-26"
+  reconInvoiceRef String? // e.g. "Xero Inv 736"
+  labourCents     Int     @default(0) // labour this period
+  costsCents      Int     @default(0) // supplier/subcontractor costs this period
+  marginPercent   Float   @default(12.5) // builder's margin %
+  marginCents     Int     @default(0)
+  subtotalCents   Int     @default(0) // labour + costs + margin (ex-GST)
+  gstCents        Int     @default(0)
+  totalCents      Int     @default(0) // inc GST — the headline claim amount
+
   submittedById  String?
   submittedAt    DateTime?
   approvedAt     DateTime?
@@ -207,9 +223,10 @@ model ProgressClaim {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  submittedBy User?           @relation("ClaimSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submittedBy User?            @relation("ClaimSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
   lines       ClaimLineItem[]
+  reconLines  ClaimReconLine[]
 
   @@unique([projectId, claimNumber])
   @@index([projectId])
@@ -222,11 +239,28 @@ model ClaimLineItem {
   description         String
   // Percent complete this claim asserts for the cost code (0–100).
   percentComplete     Float   @default(0)
-  // Value claimed this period, in cents.
+  // Value claimed THIS period, in cents (the recon "Current" column).
   claimedAmountCents  Int     @default(0)
+  // Budget Overview context from the recon sheet.
+  priorCents          Int     @default(0)
+  toDateCents         Int     @default(0)
 
   claim    ProgressClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
   costCode CostCode?     @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+
+  @@index([claimId])
+}
+
+// Supplier-invoice backup behind a claim (the recon sheet's top section).
+model ClaimReconLine {
+  id             String  @id @default(cuid())
+  claimId        String
+  supplier       String
+  documentNumber String?
+  allocation     String? // budget allocation / cost code name
+  amountCents    Int     @default(0) // ex-GST
+
+  claim ProgressClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
 
   @@index([claimId])
 }
