@@ -18,7 +18,7 @@ export default async function MaintenanceHub({ params }: { params: { projectId: 
     { href: "maintenance/schedule", label: "Maintenance Schedule", desc: "Recurring & scheduled maintenance.", count: items },
     { href: "maintenance/bookings", label: "Service & Bookings", desc: "Request and manage service visits.", count: openBookings },
     { href: "maintenance/quotes", label: "Quote Requests", desc: "Raise and respond to quote requests.", count: openQuotes },
-    { href: "calendar", label: "Calendar", desc: "Shared calendar — meetings, maintenance & bookings.", count: null as number | null },
+    { href: "maintenance/calendar", label: "Maintenance Calendar", desc: "Scheduled maintenance & service bookings.", count: null as number | null },
   ];
 
   return (

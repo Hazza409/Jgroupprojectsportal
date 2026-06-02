@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PhaseControl } from "@/components/PhaseControl";
+import { ClientAccessCard } from "@/components/ClientAccessCard";
 
 // Project overview — headline numbers pulled live from the schema.
 export default async function ProjectOverview({ params }: { params: { projectId: string } }) {
@@ -55,9 +56,20 @@ export default async function ProjectOverview({ params }: { params: { projectId:
     { href: "maintenance", label: "Maintenance" },
   ];
 
+  const clientMembers =
+    user.role === "BUILDER"
+      ? (
+          await db.projectMembership.findMany({
+            where: { projectId, user: { role: "CLIENT" } },
+            include: { user: { select: { id: true, email: true, name: true } } },
+          })
+        ).map((m) => m.user)
+      : [];
+
   return (
     <div className="space-y-6">
       {user.role === "BUILDER" && <PhaseControl projectId={projectId} phase={project.phase} />}
+      {user.role === "BUILDER" && <ClientAccessCard projectId={projectId} clients={clientMembers} />}
 
       <p className="text-xs text-stone-400">
         All amounts include builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) and GST ({(GST * 100).toFixed(0)}%).

@@ -1,9 +1,31 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { ProjectPhase } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { ProjectPhase, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
+
+export interface SimpleResult { ok: boolean; message: string }
+
+// Builder sets/resets a client's login password. Scoped: the target user must be
+// a CLIENT member of THIS project.
+export async function setClientPassword(projectId: string, userId: string, formData: FormData): Promise<SimpleResult> {
+  const actor = await assertProjectAccess(projectId);
+  if (actor.role !== Role.BUILDER) throw new AccessError("Only builders manage client access");
+
+  const password = String(formData.get("password") ?? "");
+  if (password.length < 8) return { ok: false, message: "Password must be at least 8 characters." };
+
+  const membership = await db.projectMembership.findFirst({
+    where: { projectId, userId, user: { role: Role.CLIENT } },
+    include: { user: { select: { email: true } } },
+  });
+  if (!membership) return { ok: false, message: "That client is not on this project." };
+
+  await db.user.update({ where: { id: userId }, data: { passwordHash: await bcrypt.hash(password, 10) } });
+  return { ok: true, message: `Password updated for ${membership.user.email}.` };
+}
 
 const ORDER: ProjectPhase[] = [ProjectPhase.BUILD, ProjectPhase.HANDOVER, ProjectPhase.MAINTENANCE];
 

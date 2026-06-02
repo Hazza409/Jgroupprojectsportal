@@ -17,8 +17,10 @@ export default async function CalendarPage({ params }: { params: { projectId: st
   await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
 
+  // Build calendar = site meetings only. Maintenance + bookings live on the
+  // separate maintenance calendar (/maintenance/calendar).
   const events = await db.calendarEvent.findMany({
-    where: { projectId },
+    where: { projectId, kind: "SITE_MEETING" },
     orderBy: { startsAt: "asc" },
     include: { createdBy: { select: { name: true } } },
   });

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { formatCents } from "@/lib/money";
 import { TopBar } from "@/components/TopBar";
+import { DeleteJobButton } from "./DeleteJobButton";
 
 // BUILDER index — every project. Clients never reach this (redirected away).
 export default async function BuilderHome() {
@@ -39,19 +40,24 @@ export default async function BuilderHome() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((p) => (
-              <Link key={p.id} href={`/projects/${p.id}`} className="card transition-shadow hover:shadow-md">
+              <div key={p.id} className="card transition-shadow hover:shadow-md">
                 <div className="flex items-start justify-between">
-                  <h2 className="font-semibold">{p.name}</h2>
+                  <Link href={`/projects/${p.id}`} className="font-semibold hover:underline">{p.name}</Link>
                   <span className="badge bg-stone-100 text-stone-600">{p.status}</span>
                 </div>
-                <p className="mt-1 text-sm text-stone-500">{p.address ?? "No address"}</p>
-                <p className="mt-3 text-sm">
-                  Contract <span className="font-medium">{formatCents(p.contractValueCents)}</span>
-                </p>
-                <p className="mt-1 text-xs text-stone-400">
-                  {p._count.variations} variations · {p._count.progressClaims} claims
-                </p>
-              </Link>
+                <Link href={`/projects/${p.id}`} className="block">
+                  <p className="mt-1 text-sm text-stone-500">{p.address ?? "No address"}</p>
+                  <p className="mt-3 text-sm">
+                    Contract <span className="font-medium">{formatCents(p.contractValueCents)}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-stone-400">
+                    {p._count.variations} variations · {p._count.progressClaims} claims
+                  </p>
+                </Link>
+                <div className="mt-3 flex justify-end border-t border-stone-100 pt-2">
+                  <DeleteJobButton projectId={p.id} name={p.name} />
+                </div>
+              </div>
             ))}
           </div>
         )}

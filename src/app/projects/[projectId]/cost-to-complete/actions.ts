@@ -6,6 +6,8 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { syncProjectActuals } from "@/lib/xero/sync";
 import { parseCostRowsBuffer } from "@/lib/excel/parseCurrentCosts";
+import { parseCtcWorkbookBuffer } from "@/lib/excel/parseCtcWorkbook";
+import { VariationStatus } from "@prisma/client";
 
 export interface SyncResult {
   ok: boolean;
@@ -42,7 +44,39 @@ export async function importCurrentCosts(projectId: string, formData: FormData):
   if (!(file instanceof File) || file.size === 0) return { ok: false, message: "No file uploaded." };
   if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload an .xlsx or .xls file." };
 
-  const { rows, warnings } = parseCostRowsBuffer(Buffer.from(await file.arrayBuffer()));
+  const buf = Buffer.from(await file.arrayBuffer());
+  // Accept either the simple template OR the full "Cost to Complete Workings" workbook.
+  let { rows, warnings } = parseCostRowsBuffer(buf);
+  let importedVariations = 0;
+  if (rows.length === 0) {
+    const wbk = parseCtcWorkbookBuffer(buf);
+    rows = wbk.rows;
+    warnings = wbk.warnings;
+    // Seed approved variations from the workbook ONLY if none exist yet (avoid dupes
+    // on re-import; variations are otherwise managed in the Variations module).
+    if (wbk.variations.length > 0 && (await db.variation.count({ where: { projectId } })) === 0) {
+      let n = 1;
+      for (const v of wbk.variations) {
+        const approved = v.amountCents !== null;
+        const variation = await db.variation.create({
+          data: {
+            projectId,
+            variationNumber: n++,
+            title: v.title,
+            status: approved ? VariationStatus.APPROVED : VariationStatus.DRAFT,
+            totalCents: v.amountCents ?? 0,
+            approvedAt: approved ? new Date() : null,
+          },
+        });
+        if (approved) {
+          await db.variationLineItem.create({
+            data: { variationId: variation.id, description: v.title, quantity: 1, unit: "item", unitCostCents: v.amountCents!, totalCents: v.amountCents! },
+          });
+        }
+        importedVariations++;
+      }
+    }
+  }
   if (rows.length === 0) return { ok: false, message: warnings[0] ?? "No rows parsed." };
 
   let estimateUpdates = 0;
@@ -93,8 +127,10 @@ export async function importCurrentCosts(projectId: string, formData: FormData):
 
   revalidatePath(`/projects/${projectId}/cost-to-complete`);
   revalidatePath(`/projects/${projectId}/estimate`);
+  revalidatePath(`/projects/${projectId}/variations`);
+  const varNote = importedVariations > 0 ? `, ${importedVariations} variation(s)` : "";
   return {
     ok: true,
-    message: `Updated ${rows.length} cost code(s) — ${estimateUpdates} estimate, ${currentUpdates} current cost.`,
+    message: `Updated ${rows.length} cost code(s) — ${estimateUpdates} estimate, ${currentUpdates} current cost${varNote}.`,
   };
 }

@@ -68,14 +68,22 @@ export default async function PhotosPage({ params }: { params: { projectId: stri
       ) : (
         groups.map((g) => (
           <section key={g.id ?? "unfiled"}>
-            <div className="mb-3 flex items-center justify-between">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">
                 {g.name} <span className="text-stone-400">· {g.photos.length}</span>
               </h3>
               {isBuilder && g.id && (
-                <form action={deletePhotoFolder.bind(null, projectId, g.id)}>
-                  <button className="text-xs text-stone-400 hover:text-red-300" type="submit">Delete album</button>
-                </form>
+                <div className="flex items-center gap-3">
+                  {/* Upload straight into THIS album (folder is fixed). */}
+                  <form action={uploadPhotos.bind(null, projectId)} className="flex items-center gap-2">
+                    <input type="hidden" name="folderId" value={g.id} />
+                    <input type="file" name="files" accept="image/*" multiple required className="text-xs" />
+                    <button className="btn-ghost !px-3 !py-1.5 text-xs" type="submit">Add photos</button>
+                  </form>
+                  <form action={deletePhotoFolder.bind(null, projectId, g.id)}>
+                    <button className="text-xs text-stone-400 hover:text-red-300" type="submit">Delete album</button>
+                  </form>
+                </div>
               )}
             </div>
             {g.photos.length === 0 ? (

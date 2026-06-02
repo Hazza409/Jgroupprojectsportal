@@ -7,6 +7,13 @@ import { assertBuilder } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { dollarsToCents } from "@/lib/money";
 
+// Builder deletes a job and all its data (cascades). Irreversible.
+export async function deleteJob(projectId: string): Promise<void> {
+  await assertBuilder();
+  await db.project.delete({ where: { id: projectId } });
+  revalidatePath("/builder");
+}
+
 export interface CreateJobResult {
   ok: boolean;
   message: string;
@@ -51,19 +58,24 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
       });
 
       if (clientEmailRaw) {
-        // Reuse an existing user with this email, else create one. Never downgrade
-        // an existing builder to client; just attach the membership.
         const existing = await tx.user.findUnique({ where: { email: clientEmailRaw } });
-        const clientUser =
-          existing ??
-          (await tx.user.create({
-            data: {
-              email: clientEmailRaw,
-              name: clientName || clientEmailRaw,
-              role: Role.CLIENT,
-              passwordHash: await bcrypt.hash(clientPassword, 10),
-            },
-          }));
+        const passwordHash = await bcrypt.hash(clientPassword, 10);
+        let clientUser;
+        if (!existing) {
+          clientUser = await tx.user.create({
+            data: { email: clientEmailRaw, name: clientName || clientEmailRaw, role: Role.CLIENT, passwordHash },
+          });
+        } else if (existing.role === Role.CLIENT) {
+          // Existing client login: apply the password the builder just typed so it
+          // actually works (previously it was silently ignored on reuse).
+          clientUser = await tx.user.update({
+            where: { id: existing.id },
+            data: { passwordHash, name: clientName || existing.name },
+          });
+        } else {
+          // Existing BUILDER — never reset a staff password; just grant access.
+          clientUser = existing;
+        }
 
         await tx.projectMembership.upsert({
           where: { userId_projectId: { userId: clientUser.id, projectId: project.id } },
