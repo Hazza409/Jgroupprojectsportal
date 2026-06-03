@@ -96,7 +96,7 @@ export default async function PhotosPage({ params }: { params: { projectId: stri
                     {p.caption && <figcaption className="p-2 text-xs text-stone-500">{p.caption}</figcaption>}
                     {isBuilder && (
                       <form action={deletePhoto.bind(null, projectId, p.id)} className="absolute right-1 top-1 opacity-0 group-hover:opacity-100">
-                        <button className="rounded bg-base/90 px-2 py-0.5 text-xs text-red-300 ring-1 ring-red-400/30" type="submit">Delete</button>
+                        <button className="rounded bg-base/90 px-2 py-0.5 text-xs text-red-700 dark:text-red-300 ring-1 ring-red-500/30 dark:ring-red-400/30" type="submit">Delete</button>
                       </form>
                     )}
                   </figure>

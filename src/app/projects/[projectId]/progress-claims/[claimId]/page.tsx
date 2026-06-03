@@ -245,7 +245,7 @@ export default async function ClaimDetailPage({
                     <td className="py-2 text-right tabular-nums">{formatCents(l.claimedAmountCents)}</td>
                     <td className="py-2 text-right">
                       <form action={deleteClaimLine.bind(null, projectId, claimId, l.id)}>
-                        <button className="text-xs text-red-300 hover:text-red-200" type="submit">Remove</button>
+                        <button className="text-xs text-red-700 dark:text-red-300 hover:text-red-200" type="submit">Remove</button>
                       </form>
                     </td>
                   </tr>

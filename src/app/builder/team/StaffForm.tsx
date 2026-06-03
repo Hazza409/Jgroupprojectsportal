@@ -46,7 +46,7 @@ export function StaffForm() {
           {pending ? "Creating…" : "Create login"}
         </button>
         {result && (
-          <span className={`text-sm ${result.ok ? "text-emerald-200" : "text-red-300"}`}>{result.message}</span>
+          <span className={`text-sm ${result.ok ? "text-emerald-700 dark:text-emerald-200" : "text-red-700 dark:text-red-300"}`}>{result.message}</span>
         )}
       </div>
     </form>

@@ -54,7 +54,7 @@ export function AddLineForm({ projectId }: { projectId: string }) {
         <button type="submit" className="btn-primary" disabled={pending}>{pending ? "…" : "Add"}</button>
         <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
       </div>
-      {result && <p className={`sm:col-span-6 text-sm ${result.ok ? "text-emerald-200" : "text-red-300"}`}>{result.message}</p>}
+      {result && <p className={`sm:col-span-6 text-sm ${result.ok ? "text-emerald-700 dark:text-emerald-200" : "text-red-700 dark:text-red-300"}`}>{result.message}</p>}
     </form>
   );
 }

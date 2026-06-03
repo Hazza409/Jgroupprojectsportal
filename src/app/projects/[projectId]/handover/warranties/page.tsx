@@ -78,7 +78,7 @@ export default async function WarrantiesPage({ params }: { params: { projectId: 
                       {w.notes && <span className="block text-xs text-stone-400">{w.notes}</span>}
                     </td>
                     <td className="px-4 py-2 text-stone-500">{w.issuer}</td>
-                    <td className={`px-4 py-2 ${expired ? "text-red-300" : ""}`}>
+                    <td className={`px-4 py-2 ${expired ? "text-red-700 dark:text-red-300" : ""}`}>
                       {fmtDate(w.expiryDate)}{expired ? " · expired" : ""}
                     </td>
                     <td className="px-4 py-2">
@@ -91,7 +91,7 @@ export default async function WarrantiesPage({ params }: { params: { projectId: 
                     {isBuilder && (
                       <td className="px-4 py-2 text-right">
                         <form action={deleteWarranty.bind(null, projectId, w.id)}>
-                          <button className="text-xs text-red-300 hover:text-red-200" type="submit">Delete</button>
+                          <button className="text-xs text-red-700 dark:text-red-300 hover:text-red-200" type="submit">Delete</button>
                         </form>
                       </td>
                     )}

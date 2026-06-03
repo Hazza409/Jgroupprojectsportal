@@ -33,7 +33,7 @@ export function ScheduleUploadForm({ projectId }: { projectId: string }) {
         </button>
       </div>
       {result && (
-        <p className={`mt-3 text-sm ${result.ok ? "text-brand" : "text-red-600"}`}>{result.message}</p>
+        <p className={`mt-3 text-sm ${result.ok ? "text-brand" : "text-red-600 dark:text-red-300"}`}>{result.message}</p>
       )}
     </form>
   );

@@ -21,8 +21,56 @@
   font-display: swap;
 }
 
+/* ── Theme palettes ───────────────────────────────────────────
+   Tokens are "R G B" triples consumed by the Tailwind colours.
+   .dark = night (default), .light = day. A class on <html> selects.
+   :root is declared FIRST as a fallback (equal specificity → source order
+   wins, so .dark/.light below override it). */
 :root {
   color-scheme: dark;
+  --c-base: 22 21 20; --c-panel: 31 29 27; --c-chrome: 45 43 41;
+  --c-ink: 244 242 238; --c-brand: 255 255 255; --c-onbrand: 22 21 20;
+  --c-stone-50: 31 29 27; --c-stone-100: 42 40 37; --c-stone-200: 57 54 51;
+  --c-stone-300: 74 70 66; --c-stone-400: 115 110 104; --c-stone-500: 147 141 133;
+  --c-stone-600: 196 189 179; --c-stone-700: 211 205 196; --c-stone-900: 241 238 233;
+}
+
+.dark {
+  color-scheme: dark;
+  --c-base: 22 21 20;
+  --c-panel: 31 29 27;
+  --c-chrome: 45 43 41;
+  --c-ink: 244 242 238;
+  --c-brand: 255 255 255;
+  --c-onbrand: 22 21 20;
+  --c-stone-50: 31 29 27;
+  --c-stone-100: 42 40 37;
+  --c-stone-200: 57 54 51;
+  --c-stone-300: 74 70 66;
+  --c-stone-400: 115 110 104;
+  --c-stone-500: 147 141 133;
+  --c-stone-600: 196 189 179;
+  --c-stone-700: 211 205 196;
+  --c-stone-900: 241 238 233;
+}
+
+.light {
+  color-scheme: light;
+  --c-base: 250 249 247;
+  --c-panel: 255 255 255;
+  --c-chrome: 255 255 255;
+  --c-ink: 26 26 26;
+  --c-brand: 26 26 26;
+  --c-onbrand: 255 255 255;
+  --c-stone-50: 245 244 242;
+  --c-stone-100: 236 235 231;
+  --c-stone-200: 225 222 216;
+  --c-stone-300: 207 203 195;
+  --c-stone-400: 168 163 154;
+  --c-stone-500: 131 125 114;
+  --c-stone-600: 95 90 81;
+  --c-stone-700: 70 66 59;
+  --c-stone-900: 31 29 24;
 }
 
 body {
@@ -30,7 +78,7 @@ body {
 }
 
 ::selection {
-  @apply bg-white text-ebony;
+  @apply bg-brand text-onbrand;
 }
 
 @layer components {
@@ -40,9 +88,9 @@ body {
   .btn {
     @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors;
   }
-  /* Primary = the signature white pill with dark text. */
+  /* Primary = the signature high-contrast pill (white-on-dark / dark-on-light). */
   .btn-primary {
-    @apply btn bg-brand text-ebony hover:bg-stone-700 disabled:opacity-50;
+    @apply btn bg-brand text-onbrand hover:opacity-90 disabled:opacity-50;
   }
   .btn-ghost {
     @apply btn border border-stone-200 bg-transparent text-ink hover:bg-stone-100;

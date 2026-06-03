@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { SignOutButton } from "./SignOutButton";
 import { BrandMark } from "./BrandMark";
+import { ThemeToggle } from "./ThemeToggle";
 import type { SessionUser } from "@/auth";
 
 export function TopBar({ user }: { user: SessionUser }) {
   return (
-    <header className="border-b border-stone-200 bg-ebony">
+    <header className="border-b border-stone-200 bg-chrome">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <Link href={user.role === "BUILDER" ? "/builder" : "/projects"} className="flex items-center gap-3">
           <BrandMark className="h-6 w-5 text-ink" />
@@ -17,6 +18,7 @@ export function TopBar({ user }: { user: SessionUser }) {
           </span>
         </Link>
         <div className="flex items-center gap-4">
+          <ThemeToggle />
           <span className="text-sm text-stone-500">
             {user.name} · <span className="font-medium text-stone-700">{user.role}</span>
           </span>

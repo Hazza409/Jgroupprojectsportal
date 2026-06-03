@@ -42,7 +42,7 @@ export function NarrativeForm({
         <button type="submit" className="btn-primary" disabled={pending}>
           {pending ? "Saving…" : "Save update"}
         </button>
-        {saved && <span className="text-sm text-emerald-200">Saved.</span>}
+        {saved && <span className="text-sm text-emerald-700 dark:text-emerald-200">Saved.</span>}
       </div>
     </form>
   );

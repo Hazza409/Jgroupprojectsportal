@@ -36,7 +36,7 @@ export function PhaseControl({ projectId, phase }: { projectId: string; phase: s
               onClick={() => go(p.key)}
               disabled={pending}
               className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                p.key === phase ? "bg-brand text-ebony" : "text-stone-600 hover:bg-stone-100"
+                p.key === phase ? "bg-brand text-onbrand" : "text-stone-600 hover:bg-stone-100"
               }`}
             >
               {p.label}

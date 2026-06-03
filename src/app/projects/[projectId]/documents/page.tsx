@@ -58,7 +58,7 @@ export default async function DocumentsPage({ params }: { params: { projectId: s
               </div>
               {isBuilder && (
                 <form action={deleteDocument.bind(null, projectId, d.id)}>
-                  <button className="text-sm text-red-600 hover:underline" type="submit">Delete</button>
+                  <button className="text-sm text-red-600 dark:text-red-300 hover:underline" type="submit">Delete</button>
                 </form>
               )}
             </div>

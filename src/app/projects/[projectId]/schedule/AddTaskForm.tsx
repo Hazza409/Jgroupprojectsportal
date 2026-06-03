@@ -61,7 +61,7 @@ export function AddTaskForm({ projectId }: { projectId: string }) {
           {pending ? "Adding…" : "Add task"}
         </button>
         <button type="button" className="btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-        {result && <span className={`text-sm ${result.ok ? "text-emerald-200" : "text-red-300"}`}>{result.message}</span>}
+        {result && <span className={`text-sm ${result.ok ? "text-emerald-700 dark:text-emerald-200" : "text-red-700 dark:text-red-300"}`}>{result.message}</span>}
       </div>
     </form>
   );

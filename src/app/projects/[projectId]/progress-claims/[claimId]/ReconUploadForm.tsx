@@ -44,7 +44,7 @@ export function ReconUploadForm({
         <button type="submit" className="btn-primary" disabled={pending}>
           {pending ? "Reading sheet…" : hasSheet ? "Replace from sheet" : "Build claim from sheet"}
         </button>
-        {result && <span className={`text-sm ${result.ok ? "text-emerald-200" : "text-red-300"}`}>{result.message}</span>}
+        {result && <span className={`text-sm ${result.ok ? "text-emerald-700 dark:text-emerald-200" : "text-red-700 dark:text-red-300"}`}>{result.message}</span>}
       </div>
       {result?.warnings && result.warnings.length > 0 && (
         <ul className="mt-2 list-disc pl-5 text-xs text-stone-400">

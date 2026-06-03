@@ -1,40 +1,40 @@
 import type { Config } from "tailwindcss";
 
+// Semantic colour tokens resolve to CSS variables (see globals.css), so the whole
+// UI flips between the dark ("night") and light ("day") palettes via a class on
+// <html>. Alpha works via the `<alpha-value>` placeholder.
+const v = (name: string) => `rgb(var(${name}) / <alpha-value>)`;
+
 const config: Config = {
+  darkMode: "class",
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // J Group Projects — monochrome luxury (brand: Colorplan Ebony Black).
-        // Full dark mode. There is intentionally no accent hue.
-        base: "#161514", // page background — warm near-black
-        panel: "#1f1d1b", // cards / raised surfaces — warm ebony
-        ebony: "#2d2b29", // chrome (top bar) — the brand's Ebony Black
-        ink: "#f4f2ee", // PRIMARY TEXT — warm near-white
-        brand: "#ffffff", // the signature white (buttons, links, active nav, focus)
-        // Inverted warm-grey ramp: low number = dark surface, high = light text.
-        // Lets existing `stone-*` usages read correctly on dark with no per-file churn.
+        base: v("--c-base"), // page background
+        panel: v("--c-panel"), // cards / surfaces
+        chrome: v("--c-chrome"), // top bar
+        ebony: v("--c-chrome"), // alias kept for existing bg-ebony usages
+        ink: v("--c-ink"), // primary text
+        brand: v("--c-brand"), // accent (buttons, active nav, focus)
+        onbrand: v("--c-onbrand"), // text/icon on a brand-coloured surface
         stone: {
-          50: "#1f1d1b", // subtle raised surface
-          100: "#2a2825", // subtle fill / hover
-          200: "#393633", // hairline borders
-          300: "#4a4642", // stronger borders
-          400: "#736e68", // dim text
-          500: "#938d85", // muted text
-          600: "#c4bdb3", // muted-strong
-          700: "#d3cdc4", // labels
-          900: "#f1eee9", // emphasis / headings
+          50: v("--c-stone-50"),
+          100: v("--c-stone-100"),
+          200: v("--c-stone-200"),
+          300: v("--c-stone-300"),
+          400: v("--c-stone-400"),
+          500: v("--c-stone-500"),
+          600: v("--c-stone-600"),
+          700: v("--c-stone-700"),
+          900: v("--c-stone-900"),
         },
       },
       fontFamily: {
-        // Ginto Nord is the J Group brand type — used app-wide (see globals.css
-        // @font-face). Helvetica Neue is the fallback while the font loads.
         sans: ['"Ginto Nord"', '"Helvetica Neue"', "Helvetica", "Arial", "sans-serif"],
         display: ['"Ginto Nord"', '"Helvetica Neue"', "Arial", "sans-serif"],
       },
-      letterSpacing: {
-        tightest: "-0.04em",
-      },
+      letterSpacing: { tightest: "-0.04em" },
     },
   },
   plugins: [],

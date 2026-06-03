@@ -68,7 +68,7 @@ export default async function BookingsPage({ params }: { params: { projectId: st
                     <button className="btn-ghost" type="submit">Mark complete</button>
                   </form>
                   <form action={setBookingStatus.bind(null, projectId, b.id, "CANCELLED")}>
-                    <button className="text-xs text-red-300 hover:text-red-200" type="submit">Cancel</button>
+                    <button className="text-xs text-red-700 dark:text-red-300 hover:text-red-200" type="submit">Cancel</button>
                   </form>
                 </div>
               )}

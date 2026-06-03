@@ -39,7 +39,7 @@ export function UploadForm({ projectId }: { projectId: string }) {
         </button>
       </div>
       {result && (
-        <div className={`mt-3 text-sm ${result.ok ? "text-brand" : "text-red-600"}`}>
+        <div className={`mt-3 text-sm ${result.ok ? "text-brand" : "text-red-600 dark:text-red-300"}`}>
           {result.message}
           {result.warnings && result.warnings.length > 0 && (
             <ul className="mt-1 list-disc pl-5 text-xs text-stone-500">

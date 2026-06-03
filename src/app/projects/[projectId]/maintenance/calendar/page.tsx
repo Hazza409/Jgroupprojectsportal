@@ -6,8 +6,8 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 const fmt = (d: Date) => new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(d);
 
 const KIND: Record<string, { label: string; cls: string }> = {
-  MAINTENANCE: { label: "Maintenance", cls: "bg-amber-400/15 text-amber-200 ring-1 ring-amber-400/30" },
-  BOOKING: { label: "Booking", cls: "bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/30" },
+  MAINTENANCE: { label: "Maintenance", cls: "bg-amber-500/12 dark:bg-amber-400/15 text-amber-700 dark:text-amber-200 ring-1 ring-amber-500/30 dark:ring-amber-400/30" },
+  BOOKING: { label: "Booking", cls: "bg-emerald-500/12 dark:bg-emerald-400/15 text-emerald-700 dark:text-emerald-200 ring-1 ring-emerald-500/30 dark:ring-emerald-400/30" },
 };
 
 // Maintenance calendar — fed by the maintenance schedule and service bookings.

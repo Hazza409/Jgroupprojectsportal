@@ -51,7 +51,7 @@ function ClientRow({ projectId, client }: { projectId: string; client: Client })
         Minimum 8 characters. The client signs in with <span className="font-medium text-stone-300">{client.email}</span> + this password (no spaces).
       </p>
       {result && (
-        <p className={`mt-2 rounded-md px-3 py-2 text-sm ${result.ok ? "bg-emerald-400/10 text-emerald-200 ring-1 ring-emerald-400/30" : "bg-red-400/10 text-red-200 ring-1 ring-red-400/30"}`}>
+        <p className={`mt-2 rounded-md px-3 py-2 text-sm ${result.ok ? "bg-emerald-500/10 dark:bg-emerald-400/10 text-emerald-700 dark:text-emerald-200 ring-1 ring-emerald-500/30 dark:ring-emerald-400/30" : "bg-red-500/10 dark:bg-red-400/10 text-red-700 dark:text-red-200 ring-1 ring-red-500/30 dark:ring-red-400/30"}`}>
           {result.ok ? "✓ " : "⚠ "}{result.message}
         </p>
       )}

@@ -9,8 +9,8 @@ function fmt(d: Date) {
 
 const KIND: Record<string, { label: string; cls: string }> = {
   SITE_MEETING: { label: "Meeting", cls: "bg-stone-100 text-stone-600 ring-1 ring-stone-200" },
-  MAINTENANCE: { label: "Maintenance", cls: "bg-amber-400/15 text-amber-200 ring-1 ring-amber-400/30" },
-  BOOKING: { label: "Booking", cls: "bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/30" },
+  MAINTENANCE: { label: "Maintenance", cls: "bg-amber-500/12 dark:bg-amber-400/15 text-amber-700 dark:text-amber-200 ring-1 ring-amber-500/30 dark:ring-amber-400/30" },
+  BOOKING: { label: "Booking", cls: "bg-emerald-500/12 dark:bg-emerald-400/15 text-emerald-700 dark:text-emerald-200 ring-1 ring-emerald-500/30 dark:ring-emerald-400/30" },
 };
 
 export default async function CalendarPage({ params }: { params: { projectId: string } }) {
@@ -88,7 +88,7 @@ export default async function CalendarPage({ params }: { params: { projectId: st
                           <p className="mt-1 text-xs text-stone-400">Added by {e.createdBy?.name ?? "—"}</p>
                         </div>
                         <form action={deleteEvent.bind(null, projectId, e.id)}>
-                          <button className="text-sm text-red-300 hover:text-red-200" type="submit">
+                          <button className="text-sm text-red-700 dark:text-red-300 hover:text-red-200" type="submit">
                             Remove
                           </button>
                         </form>

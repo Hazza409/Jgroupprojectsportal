@@ -54,7 +54,7 @@ export async function DocStore({
                 </div>
                 {isBuilder && (
                   <form action={deleteHandoverDoc.bind(null, projectId, d.id)}>
-                    <button className="text-xs text-red-300 hover:text-red-200" type="submit">Delete</button>
+                    <button className="text-xs text-red-700 dark:text-red-300 hover:text-red-200" type="submit">Delete</button>
                   </form>
                 )}
               </li>

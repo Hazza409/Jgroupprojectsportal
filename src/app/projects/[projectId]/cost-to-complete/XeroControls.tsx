@@ -30,7 +30,7 @@ export function XeroControls({
       <div className="flex items-center gap-2">
         {connected ? (
           <>
-            <span className="badge bg-emerald-400/15 text-emerald-200 ring-1 ring-emerald-400/30">Xero connected</span>
+            <span className="badge bg-emerald-500/12 dark:bg-emerald-400/15 text-emerald-700 dark:text-emerald-200 ring-1 ring-emerald-500/30 dark:ring-emerald-400/30">Xero connected</span>
             <button onClick={onSync} className="btn-ghost" disabled={pending}>
               {pending ? "Syncing…" : "Sync now"}
             </button>
@@ -42,7 +42,7 @@ export function XeroControls({
         )}
       </div>
       {lastSyncedAt && <p className="text-xs text-stone-400">Last synced {lastSyncedAt}</p>}
-      {result && <p className={`text-xs ${result.ok ? "text-brand" : "text-red-600"}`}>{result.message}</p>}
+      {result && <p className={`text-xs ${result.ok ? "text-brand" : "text-red-600 dark:text-red-300"}`}>{result.message}</p>}
     </div>
   );
 }

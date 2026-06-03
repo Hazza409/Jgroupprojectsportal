@@ -68,7 +68,7 @@ export function CreateJobForm() {
         </div>
       </div>
 
-      {error && <p className="text-sm text-red-300">{error}</p>}
+      {error && <p className="text-sm text-red-700 dark:text-red-300">{error}</p>}
 
       <div className="flex items-center gap-3">
         <button type="submit" className="btn-primary" disabled={pending}>
