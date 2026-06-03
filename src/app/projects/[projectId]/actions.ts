@@ -14,7 +14,9 @@ export async function setClientPassword(projectId: string, userId: string, formD
   const actor = await assertProjectAccess(projectId);
   if (actor.role !== Role.BUILDER) throw new AccessError("Only builders manage client access");
 
-  const password = String(formData.get("password") ?? "");
+  // Trim accidental edge whitespace — login compares exactly, so a stray space
+  // would silently break sign-in.
+  const password = String(formData.get("password") ?? "").trim();
   if (password.length < 8) return { ok: false, message: "Password must be at least 8 characters." };
 
   const membership = await db.projectMembership.findFirst({
