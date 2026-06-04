@@ -2,6 +2,7 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { CalendarGrid } from "@/components/CalendarGrid";
 
 const fmt = (d: Date) => new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(d);
 
@@ -33,6 +34,10 @@ export default async function MaintenanceCalendarPage({ params }: { params: { pr
           title="Maintenance Calendar"
           description="Scheduled maintenance and service bookings. Add items via Maintenance Schedule or Service & Bookings."
         />
+      </div>
+
+      <div className="mb-6">
+        <CalendarGrid events={events.map((e) => ({ id: e.id, title: e.title, kind: e.kind, startISO: e.startsAt.toISOString() }))} />
       </div>
 
       {events.length === 0 ? (

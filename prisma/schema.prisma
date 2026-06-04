@@ -75,6 +75,13 @@ enum QuoteRequestStatus {
   DECLINED
 }
 
+// RFI = builder asks the client a design question; client answers.
+enum RfiStatus {
+  OPEN // awaiting client answer
+  ANSWERED // client answered
+  CLOSED // builder closed it out
+}
+
 // ─────────────────────────── Identity ────────────────────────
 
 model User {
@@ -148,6 +155,9 @@ model Project {
   maintenanceItems  MaintenanceScheduleItem[]
   serviceBookings   ServiceBooking[]
   quoteRequests     QuoteRequest[]
+  // RFIs + fortnightly updates
+  rfis              Rfi[]
+  updates           ProjectUpdate[]
 
   @@index([status])
 }
@@ -583,4 +593,54 @@ model QuoteRequest {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
+}
+
+// ════════════════════ RFIs (design questions) ═══════════════
+// Builder raises a design question to the client; the client answers.
+model Rfi {
+  id           String    @id @default(cuid())
+  projectId    String
+  number       Int
+  subject      String
+  question     String
+  status       RfiStatus @default(OPEN)
+  answer       String?
+  dueDate      DateTime?
+  raisedById   String? // builder (loose ref)
+  answeredById String? // client (loose ref)
+  answeredAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, number])
+  @@index([projectId])
+}
+
+// ════════════════════ Fortnightly summary ═══════════════════
+// Dated site-update entries with a written summary + attached photos.
+model ProjectUpdate {
+  id          String   @id @default(cuid())
+  projectId   String
+  title       String
+  body        String
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  photos  UpdatePhoto[]
+
+  @@index([projectId])
+}
+
+model UpdatePhoto {
+  id           String   @id @default(cuid())
+  updateId     String
+  fileKey      String
+  originalName String
+  createdAt    DateTime @default(now())
+
+  update ProjectUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+
+  @@index([updateId])
 }

@@ -1,6 +1,7 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { CalendarGrid } from "@/components/CalendarGrid";
 import { createEvent, deleteEvent } from "./actions";
 
 function fmt(d: Date) {
@@ -32,6 +33,10 @@ export default async function CalendarPage({ params }: { params: { projectId: st
   return (
     <div>
       <ModuleHeader title="Calendar" description="Site meetings — editable by both builder and client." />
+
+      <div className="mb-6">
+        <CalendarGrid events={events.map((e) => ({ id: e.id, title: e.title, kind: e.kind, startISO: e.startsAt.toISOString() }))} />
+      </div>
 
       <form action={createEvent.bind(null, projectId)} className="card mb-6 grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">

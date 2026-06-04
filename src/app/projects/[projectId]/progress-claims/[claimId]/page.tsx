@@ -7,7 +7,6 @@ import { formatCents, sumCents } from "@/lib/money";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClaimLineForm } from "./ClaimLineForm";
 import { ReconUploadForm } from "./ReconUploadForm";
-import { NarrativeForm } from "./NarrativeForm";
 import { InvoiceUploadForm } from "./InvoiceUploadForm";
 import { generateClaimLines, deleteClaimLine, submitClaim, decideClaim } from "../actions";
 
@@ -185,17 +184,6 @@ export default async function ClaimDetailPage({
         )}
       </div>
 
-      {/* Last two weeks */}
-      <div className="card">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">Last two weeks</h3>
-        {isBuilder ? (
-          <NarrativeForm projectId={projectId} claimId={claimId} initial={claim.narrative ?? ""} />
-        ) : claim.narrative ? (
-          <p className="whitespace-pre-wrap text-sm text-stone-300">{claim.narrative}</p>
-        ) : (
-          <p className="text-sm text-stone-500">No update provided for this period.</p>
-        )}
-      </div>
 
       {/* Supplier backup */}
       {claim.reconLines.length > 0 && (
