@@ -89,7 +89,9 @@ export default async function VariationsPage({ params }: { params: { projectId: 
                   {v.description && <p className="text-sm text-stone-500">{v.description}</p>}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-semibold">{formatCents(inclMarginGst(v.totalCents))}</span>
+                  <span className="font-semibold">
+                    {v.status === "DRAFT" && v.totalCents === 0 ? "Being priced" : formatCents(inclMarginGst(v.totalCents))}
+                  </span>
                   <StatusBadge status={v.status} />
                 </div>
               </div>
@@ -98,7 +100,7 @@ export default async function VariationsPage({ params }: { params: { projectId: 
                 <ul className="mt-3 divide-y divide-stone-100 border-t border-stone-100 text-sm">
                   {v.lines.map((l) => (
                     <li key={l.id} className="flex justify-between py-1.5">
-                      <span>{l.description} · {l.quantity}{l.unit ? ` ${l.unit}` : ""}</span>
+                      <span>{l.description || "Line item"} · {l.quantity}{l.unit ? ` ${l.unit}` : ""}</span>
                       <span>{formatCents(inclMarginGst(l.totalCents))}</span>
                     </li>
                   ))}

@@ -28,7 +28,9 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email.toLowerCase().trim() },
         });
         if (!user) return null;
-        const ok = await bcrypt.compare(credentials.password, user.passwordHash);
+        // Trim to match how passwords are stored (all set-paths .trim()), so an
+        // accidental trailing space on either side never blocks a valid login.
+        const ok = await bcrypt.compare(credentials.password.trim(), user.passwordHash);
         if (!ok) return null;
         return { id: user.id, email: user.email, name: user.name, role: user.role };
       },

@@ -83,7 +83,7 @@ const ORDER: ProjectPhase[] = [ProjectPhase.BUILD, ProjectPhase.HANDOVER, Projec
 // stays accessible regardless of phase — this only changes which suite is primary.
 export async function setPhase(projectId: string, phase: ProjectPhase) {
   const user = await assertProjectAccess(projectId);
-  if (user.role !== "BUILDER") throw new AccessError("Only builders change the project phase");
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders change the project phase");
   if (!ORDER.includes(phase)) throw new Error("Invalid phase");
   await db.project.update({ where: { id: projectId }, data: { phase } });
   revalidatePath(`/projects/${projectId}`, "layout");

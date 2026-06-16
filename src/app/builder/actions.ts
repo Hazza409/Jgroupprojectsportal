@@ -35,7 +35,7 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
 
   // Optional client provisioning.
   const clientEmailRaw = String(formData.get("clientEmail") ?? "").trim().toLowerCase();
-  const clientPassword = String(formData.get("clientPassword") ?? "");
+  const clientPassword = String(formData.get("clientPassword") ?? "").trim();
   if (clientEmailRaw) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clientEmailRaw)) {
       return { ok: false, message: "Client email looks invalid." };

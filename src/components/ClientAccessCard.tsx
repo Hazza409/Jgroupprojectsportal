@@ -70,7 +70,7 @@ function ClientRow({ projectId, client }: { projectId: string; client: Client })
         </div>
       </div>
       <p className="mt-1 text-xs text-stone-400">
-        Signs in with <span className="font-medium text-stone-300">{client.email}</span> + this password (min 8, no spaces).
+        Signs in with <span className="font-medium text-stone-600">{client.email}</span> + this password (min 8, no spaces).
       </p>
       {result && <p className={`mt-2 rounded-md px-3 py-2 text-sm ${result.ok ? OK : BAD}`}>{result.ok ? "✓ " : "⚠ "}{result.message}</p>}
     </li>

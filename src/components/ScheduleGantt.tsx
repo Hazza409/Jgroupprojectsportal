@@ -113,7 +113,7 @@ export function ScheduleGantt({ items }: { items: Item[] }) {
                     className="grid items-center border-b border-stone-100 text-sm hover:bg-stone-50"
                     style={{ gridTemplateColumns: `${LEFT} 1fr` }}
                   >
-                    <div className="truncate px-4 py-2 pl-6 text-stone-300">{it.taskName}</div>
+                    <div className="truncate px-4 py-2 pl-6 text-stone-600">{it.taskName}</div>
                     <div className="py-2 text-right text-xs tabular-nums text-stone-500">
                       {it.durationDays > 0 ? `${it.durationDays}d` : "—"}
                     </div>

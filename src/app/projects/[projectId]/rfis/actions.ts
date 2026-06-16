@@ -34,9 +34,10 @@ export async function createRfi(projectId: string, formData: FormData) {
   refresh(projectId);
 }
 
-// Client answers an open RFI.
+// Client answers an open RFI. (Builders raise/close, not answer.)
 export async function answerRfi(projectId: string, rfiId: string, formData: FormData) {
   const user = await assertProjectAccess(projectId);
+  if (user.role === Role.BUILDER) throw new AccessError("RFIs are answered by the client");
   const answer = String(formData.get("answer") ?? "").trim();
   if (!answer) throw new Error("Answer is required");
   await db.rfi.updateMany({

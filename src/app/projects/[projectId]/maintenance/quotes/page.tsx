@@ -47,7 +47,7 @@ export default async function QuoteRequestsPage({ params }: { params: { projectI
                 <div>
                   <p className="font-medium">{q.title}</p>
                   {q.description && <p className="text-sm text-stone-500">{q.description}</p>}
-                  {q.response && <p className="mt-2 text-sm text-stone-300">J Group: {q.response}</p>}
+                  {q.response && <p className="mt-2 text-sm text-stone-600">J Group: {q.response}</p>}
                 </div>
                 <div className="flex items-center gap-3">
                   {q.quoteAmountCents != null && <span className="font-semibold tabular-nums">{formatCents(q.quoteAmountCents)}</span>}

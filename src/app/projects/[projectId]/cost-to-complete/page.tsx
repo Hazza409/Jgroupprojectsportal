@@ -183,7 +183,7 @@ export default async function CostToCompletePage({
               <ul className="space-y-2">
                 {approvedVars.map((v) => (
                   <li key={v.id} className="flex items-start justify-between gap-3 text-sm">
-                    <span className="min-w-0 text-stone-300">{v.title}</span>
+                    <span className="min-w-0 text-stone-600">{v.title}</span>
                     <span className="shrink-0 tabular-nums">{formatCents(inclMarginGst(v.totalCents))}</span>
                   </li>
                 ))}

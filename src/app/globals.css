@@ -62,14 +62,17 @@
   --c-ink: 26 26 26;
   --c-brand: 26 26 26;
   --c-onbrand: 255 255 255;
+  /* 50–200 stay light (surfaces, borders, fills). 300–500 darkened so MUTED
+     text reads on white in day mode — 400/500 now clear WCAG-AA, 300 much
+     improved. Ramp stays monotonic. */
   --c-stone-50: 245 244 242;
-  --c-stone-100: 236 235 231;
-  --c-stone-200: 225 222 216;
-  --c-stone-300: 207 203 195;
-  --c-stone-400: 168 163 154;
-  --c-stone-500: 131 125 114;
-  --c-stone-600: 95 90 81;
-  --c-stone-700: 70 66 59;
+  --c-stone-100: 234 232 228;
+  --c-stone-200: 214 210 203;
+  --c-stone-300: 156 150 140;
+  --c-stone-400: 120 114 105;
+  --c-stone-500: 94 89 81;
+  --c-stone-600: 74 70 63;
+  --c-stone-700: 58 54 48;
   --c-stone-900: 31 29 24;
 }
 

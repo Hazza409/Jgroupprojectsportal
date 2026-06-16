@@ -35,16 +35,18 @@ function findCell(grid: unknown[][], needle: string): { r: number; c: number } |
   return null;
 }
 
-/** Read a Code | Name | Amount block starting just below `headerRow` at column `base`. */
-function readBlock(grid: unknown[][], headerRow: number, base: number): Map<string, { name: string; cents: number }> {
-  const out = new Map<string, { name: string; cents: number }>();
+/** Read a Code | Name | Amount block starting just below `headerRow` at column `base`.
+ * A blank / "-" amount stays null (don't coerce to $0 — that would overwrite the
+ * estimate/current with zero on import). */
+function readBlock(grid: unknown[][], headerRow: number, base: number): Map<string, { name: string; cents: number | null }> {
+  const out = new Map<string, { name: string; cents: number | null }>();
   for (let r = headerRow + 1; r < grid.length; r++) {
     const code = s(grid[r]?.[base]);
     if (!code) break; // block ends at the first blank code
     if (/^(total|closed|incl)/i.test(code)) break;
     const name = s(grid[r]?.[base + 1]) || code;
-    const cents = dollarsToCents((numOrNull(grid[r]?.[base + 2]) ?? 0).toString());
-    out.set(code, { name, cents });
+    const raw = numOrNull(grid[r]?.[base + 2]);
+    out.set(code, { name, cents: raw === null ? null : dollarsToCents(raw.toString()) });
   }
   return out;
 }
