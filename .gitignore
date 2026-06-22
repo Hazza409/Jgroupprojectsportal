@@ -30,3 +30,7 @@ next-env.d.ts
 npm-debug.log*
 .vercel
 *.tsbuildinfo
+
+# editor swap files
+*.swp
+*.swo
