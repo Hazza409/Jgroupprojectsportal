@@ -13,7 +13,10 @@ services:
     name: jgroup-dashboard
     runtime: node
     plan: starter # paid (~$7/mo) — required for the persistent disk below
-    buildCommand: npm install && npm run build
+    # --include=dev forces build tools (prisma, typescript, tailwind, tsx) to
+    # install even though Render runs in production mode — without this the
+    # build fails with "prisma: not found" / "Please install typescript".
+    buildCommand: npm install --include=dev && npm run build
     # Run DB migrations on every deploy, then start. NEXTAUTH_URL is taken from
     # the public URL Render assigns this service (no manual step needed).
     startCommand: npx prisma migrate deploy && NEXTAUTH_URL=$RENDER_EXTERNAL_URL npm run start
