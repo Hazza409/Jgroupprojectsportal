@@ -32,7 +32,7 @@ export function CurrentCostsImport({ projectId }: { projectId: string }) {
   return (
     <form onSubmit={onSubmit} className="card">
       <p className="mb-3 text-sm text-stone-500">
-        Update the Cost to Complete from Excel — columns: <code>Cost Code</code>, <code>Cost Item</code>,{" "}
+        Update the Cost to Complete from Excel or CSV — columns: <code>Cost Code</code>, <code>Cost Item</code>,{" "}
         <code>Estimate</code>, <code>Current Cost to Date</code> (enter base ex-margin / ex-GST amounts;
         leave a column blank to leave it unchanged). Re-importing updates each code.{" "}
         <Link href="/api/templates/current-costs" className="underline">Blank template</Link>
@@ -41,7 +41,7 @@ export function CurrentCostsImport({ projectId }: { projectId: string }) {
         <input
           type="file"
           name="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.csv"
           required
           className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-2 file:text-sm"
         />

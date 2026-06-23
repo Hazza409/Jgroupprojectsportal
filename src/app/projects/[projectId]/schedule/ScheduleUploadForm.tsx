@@ -22,12 +22,12 @@ export function ScheduleUploadForm({ projectId }: { projectId: string }) {
   return (
     <form onSubmit={onSubmit} className="card">
       <p className="mb-3 text-sm text-stone-600">
-        Upload the fortnightly schedule (.xlsx). Expected columns: <code>Task</code>,{" "}
+        Upload the fortnightly schedule (.xlsx or .csv). Expected columns: <code>Task</code>,{" "}
         <code>Start</code>, <code>Finish</code>, <code>% Complete</code>. See{" "}
         <code>examples/sample-schedule.xlsx</code>. Re-importing replaces the current schedule.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <input type="file" name="file" accept=".xlsx,.xls" required className="text-sm" />
+        <input type="file" name="file" accept=".xlsx,.xls,.csv" required className="text-sm" />
         <button type="submit" className="btn-primary" disabled={pending}>
           {pending ? "Importing…" : "Import schedule"}
         </button>

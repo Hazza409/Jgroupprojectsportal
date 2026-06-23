@@ -22,7 +22,7 @@ export function UploadForm({ projectId }: { projectId: string }) {
   return (
     <form onSubmit={onSubmit} className="card">
       <p className="mb-3 text-sm text-stone-600">
-        Upload an estimate spreadsheet (.xlsx). Expected columns: <code>Cost Code</code>,{" "}
+        Upload an estimate spreadsheet (.xlsx or .csv). Expected columns: <code>Cost Code</code>,{" "}
         <code>Description</code>, <code>Qty</code>, <code>Unit</code>, <code>Unit Cost</code>,{" "}
         <code>Total</code>. See <code>examples/sample-estimate.xlsx</code>.
       </p>
@@ -30,7 +30,7 @@ export function UploadForm({ projectId }: { projectId: string }) {
         <input
           type="file"
           name="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.csv"
           required
           className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-2 file:text-sm"
         />

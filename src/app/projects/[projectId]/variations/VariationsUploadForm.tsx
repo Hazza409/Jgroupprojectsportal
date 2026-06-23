@@ -22,7 +22,7 @@ export function VariationsUploadForm({ projectId }: { projectId: string }) {
   return (
     <form onSubmit={onSubmit} className="card">
       <p className="mb-3 text-sm text-stone-600">
-        Upload a variations spreadsheet (.xlsx). Expected columns: <code>VO #</code>,{" "}
+        Upload a variations spreadsheet (.xlsx or .csv). Expected columns: <code>VO #</code>,{" "}
         <code>Title</code>, <code>Description</code>, <code>Line Description</code>, <code>Qty</code>,{" "}
         <code>Unit</code>, <code>Unit Cost</code>, <code>Status</code>. Rows sharing a VO #/Title group
         into one variation. Enter <strong>cost</strong> figures — margin &amp; GST are added automatically.
@@ -31,7 +31,7 @@ export function VariationsUploadForm({ projectId }: { projectId: string }) {
         <input
           type="file"
           name="file"
-          accept=".xlsx,.xls"
+          accept=".xlsx,.xls,.csv"
           required
           className="text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-100 file:px-3 file:py-2 file:text-sm"
         />

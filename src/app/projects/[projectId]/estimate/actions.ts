@@ -27,8 +27,8 @@ export async function importEstimate(
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, message: "No file uploaded." };
   }
-  if (!/\.xlsx?$/i.test(file.name)) {
-    return { ok: false, message: "Please upload an .xlsx or .xls file." };
+  if (!/\.(xlsx?|csv)$/i.test(file.name)) {
+    return { ok: false, message: "Please upload an .xlsx, .xls or .csv file." };
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
