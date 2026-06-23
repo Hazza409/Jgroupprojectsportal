@@ -20,6 +20,13 @@ const TEMPLATES: Record<string, { file: string; headers: string[]; example: (str
     headers: ["Cost Code", "Cost Item", "Estimate", "Current Cost to Date"],
     example: ["1015", "Concreting", 877239.56, 887396.49],
   },
+  variations: {
+    file: "jgroup-variations-template.xlsx",
+    // Rows sharing a VO #/Title group into one variation. Unit Cost is the BASE
+    // cost — the app adds builder's margin + GST for the client automatically.
+    headers: ["VO #", "Title", "Description", "Line Description", "Qty", "Unit", "Unit Cost", "Status"],
+    example: [1, "Upgrade to stone benchtops", "Kitchen island upgrade", "Natural stone supply & install", 1, "item", 4500, "DRAFT"],
+  },
 };
 
 export async function GET(_req: Request, { params }: { params: { kind: string } }) {

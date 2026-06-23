@@ -3,7 +3,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
 import { StatusBadge } from "@/components/StatusBadge";
-import { PhaseControl } from "@/components/PhaseControl";
+import { ClientViewControl } from "@/components/ClientViewControl";
 
 // Project overview — headline numbers pulled live from the schema.
 export default async function ProjectOverview({ params }: { params: { projectId: string } }) {
@@ -44,21 +44,34 @@ export default async function ProjectOverview({ params }: { params: { projectId:
     { label: "Approved variations", value: formatCents(approvedVariations) },
   ];
 
-  const links = [
+  // What this viewer sees. Builders see everything; a client sees either the
+  // construction modules or the Handover & Maintenance area per the builder's
+  // client-view switch (mirrors the nav + the server-side guard in the layout).
+  const isBuilder = user.role === "BUILDER";
+  const showConstruction = isBuilder || project.clientView === "CONSTRUCTION";
+  const showCare = isBuilder || project.clientView === "HANDOVER";
+
+  const constructionLinks = [
     { href: "estimate", label: "Original Estimate" },
     { href: "cost-to-complete", label: "Cost to Complete" },
     { href: "progress-claims", label: `Progress Claims (${claims})` },
+    { href: "variations", label: "Variations" },
     { href: "schedule", label: `Schedule (${schedule})` },
     { href: "calendar", label: `Calendar (${events})` },
     { href: "photos", label: `Photos (${photos})` },
+  ];
+  const careLinks = [
     { href: "handover", label: "Handover" },
     { href: "maintenance", label: "Maintenance" },
   ];
+  const links = [...(showConstruction ? constructionLinks : []), ...(showCare ? careLinks : [])];
 
   return (
     <div className="space-y-6">
-      {user.role === "BUILDER" && <PhaseControl projectId={projectId} phase={project.phase} />}
+      {isBuilder && <ClientViewControl projectId={projectId} clientView={project.clientView} />}
 
+      {showConstruction && (
+      <>
       <p className="text-xs text-stone-400">
         All amounts include builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) and GST ({(GST * 100).toFixed(0)}%).
       </p>
@@ -115,6 +128,9 @@ export default async function ProjectOverview({ params }: { params: { projectId:
           </ul>
         )}
       </div>
+
+      </>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {links.map((l) => (

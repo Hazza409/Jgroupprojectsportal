@@ -46,6 +46,14 @@ enum ProjectPhase {
   MAINTENANCE
 }
 
+// What the CLIENT sees. Builders always see every module; this only changes the
+// client's view. Decoupled from `phase` so the builder can flip the client to the
+// handover view without advancing the internal lifecycle.
+enum ProjectClientView {
+  CONSTRUCTION // client sees the build modules (estimate, schedule, claims, variations, RFIs…)
+  HANDOVER     // client sees the combined Handover & Maintenance area only
+}
+
 // One calendar, typed events (site meetings, maintenance, service bookings).
 enum CalendarEventKind {
   SITE_MEETING
@@ -132,6 +140,8 @@ model Project {
   status        String   @default("ACTIVE") // ACTIVE | ON_HOLD | COMPLETE
   // Lifecycle phase — drives which module suite is primary.
   phase         ProjectPhase @default(BUILD)
+  // What the client currently sees (builder-controlled). See ProjectClientView.
+  clientView    ProjectClientView @default(CONSTRUCTION)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

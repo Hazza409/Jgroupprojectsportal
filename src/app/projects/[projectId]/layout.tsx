@@ -1,9 +1,27 @@
+import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { TopBar } from "@/components/TopBar";
 import { ProjectNav } from "@/components/ProjectNav";
+
+// Module slugs grouped by the client-view they belong to. Used to enforce the
+// builder's client-view switch server-side (the nav hides them too, but the UI
+// is not the boundary — a client must not reach a hidden module by deep link).
+const CONSTRUCTION_SLUGS = new Set([
+  "estimate",
+  "cost-to-complete",
+  "progress-claims",
+  "variations",
+  "rfis",
+  "schedule",
+  "calendar",
+  "updates",
+  "photos",
+  "documents",
+]);
+const CARE_SLUGS = new Set(["handover", "maintenance"]);
 
 // Every page under /projects/[projectId] passes through this scope guard.
 // A client hitting a project they don't belong to gets a 404 (no existence leak).
@@ -21,11 +39,23 @@ export default async function ProjectLayout({
 
   const project = await db.project.findUnique({
     where: { id: params.projectId },
-    select: { id: true, name: true, address: true, phase: true },
+    select: { id: true, name: true, address: true, clientView: true },
   });
   if (!project) notFound();
 
-  const phaseLabel: Record<string, string> = { BUILD: "Build", HANDOVER: "Handover", MAINTENANCE: "Maintenance" };
+  const isBuilder = user.role === "BUILDER";
+
+  // Server-side enforcement of the client-view switch. The current path is
+  // injected as a header by middleware (src/middleware.ts).
+  const base = `/projects/${params.projectId}`;
+  const pathname = headers().get("x-pathname") ?? "";
+  const slug = (pathname.startsWith(base) ? pathname.slice(base.length) : "").replace(/^\//, "").split("/")[0];
+  if (!isBuilder) {
+    if (project.clientView === "CONSTRUCTION" && CARE_SLUGS.has(slug)) notFound();
+    if (project.clientView === "HANDOVER" && CONSTRUCTION_SLUGS.has(slug)) notFound();
+  }
+
+  const viewLabel = project.clientView === "HANDOVER" ? "Handover & Maintenance" : "Construction";
 
   return (
     <>
@@ -37,12 +67,12 @@ export default async function ProjectLayout({
             <p className="text-sm text-stone-500">{project.address ?? "No address"}</p>
           </div>
           <span className="badge bg-stone-100 text-stone-600 ring-1 ring-stone-200">
-            {phaseLabel[project.phase]} phase
+            {isBuilder ? `Client sees: ${viewLabel}` : viewLabel}
           </span>
         </div>
         <div className="grid gap-6 md:grid-cols-[220px_1fr]">
           <aside className="md:sticky md:top-6 md:self-start">
-            <ProjectNav projectId={project.id} phase={project.phase} isBuilder={user.role === "BUILDER"} />
+            <ProjectNav projectId={project.id} clientView={project.clientView} isBuilder={isBuilder} />
           </aside>
           <section className="min-w-0">{children}</section>
         </div>

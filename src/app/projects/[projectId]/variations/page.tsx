@@ -1,15 +1,11 @@
+import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { storage } from "@/lib/storage";
 import { formatCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import {
-  createVariation,
-  submitVariation,
-  decideVariation,
-  attachQuote,
-} from "./actions";
+import { VariationsUploadForm } from "./VariationsUploadForm";
+import { createVariation } from "./actions";
 
 export default async function VariationsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -19,21 +15,26 @@ export default async function VariationsPage({ params }: { params: { projectId: 
   const variations = await db.variation.findMany({
     where: { projectId },
     orderBy: { variationNumber: "desc" },
-    include: { lines: true, quotes: true },
+    select: {
+      id: true,
+      variationNumber: true,
+      title: true,
+      status: true,
+      totalCents: true,
+      _count: { select: { lines: true } },
+    },
   });
-
-  // Resolve download URLs for all quote files up front (scope already enforced).
-  const store = await storage();
-  const quoteUrls = new Map<string, string>();
-  for (const v of variations) {
-    for (const q of v.quotes) quoteUrls.set(q.id, await store.url(q.fileKey));
-  }
 
   return (
     <div>
       <ModuleHeader
         title="Variation Register"
-        description="Each variation carries line items and a total for client approval."
+        description="Click a variation to see its line-item breakdown and approve it."
+        action={
+          isBuilder ? (
+            <Link href={`/api/templates/variations`} className="btn-ghost">Blank template</Link>
+          ) : null
+        }
       />
 
       <div className="mb-6 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
@@ -42,117 +43,80 @@ export default async function VariationsPage({ params }: { params: { projectId: 
       </div>
 
       {isBuilder && (
-        <form action={createVariation.bind(null, projectId)} className="card mb-6 grid gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="label">Title</label>
-            <input name="title" className="input" required placeholder="e.g. Upgrade to stone benchtops" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label">Description (optional)</label>
-            <input name="description" className="input" />
-          </div>
-          <div>
-            <label className="label">Line description</label>
-            <input name="lineDescription" className="input" />
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="label">Qty</label>
-              <input name="quantity" type="number" step="any" defaultValue={1} className="input" />
+        <div className="mb-6 space-y-3">
+          <VariationsUploadForm projectId={projectId} />
+
+          <form action={createVariation.bind(null, projectId)} className="card grid gap-3 sm:grid-cols-2">
+            <p className="sm:col-span-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+              Or add one manually
+            </p>
+            <div className="sm:col-span-2">
+              <label className="label">Title</label>
+              <input name="title" className="input" required placeholder="e.g. Upgrade to stone benchtops" />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label">Description (optional)</label>
+              <input name="description" className="input" />
             </div>
             <div>
-              <label className="label">Unit</label>
-              <input name="unit" className="input" placeholder="ea" />
+              <label className="label">Line description</label>
+              <input name="lineDescription" className="input" />
             </div>
-            <div>
-              <label className="label">Unit cost $</label>
-              <input name="unitCost" type="number" step="0.01" className="input" placeholder="0.00" />
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="label">Qty</label>
+                <input name="quantity" type="number" step="any" defaultValue={1} className="input" />
+              </div>
+              <div>
+                <label className="label">Unit</label>
+                <input name="unit" className="input" placeholder="ea" />
+              </div>
+              <div>
+                <label className="label">Unit cost $</label>
+                <input name="unitCost" type="number" step="0.01" className="input" placeholder="0.00" />
+              </div>
             </div>
-          </div>
-          <div className="sm:col-span-2">
-            <button className="btn-primary" type="submit">Add variation</button>
-          </div>
-        </form>
+            <div className="sm:col-span-2">
+              <button className="btn-primary" type="submit">Add variation</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {variations.length === 0 ? (
         <div className="card text-stone-500">No variations yet.</div>
       ) : (
-        <div className="space-y-3">
-          {variations.map((v) => (
-            <div key={v.id} className="card">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-medium">
-                    VO #{v.variationNumber} · {v.title}
-                  </p>
-                  {v.description && <p className="text-sm text-stone-500">{v.description}</p>}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-semibold">
+        <div className="card overflow-x-auto p-0">
+          <table className="w-full text-sm">
+            <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+              <tr>
+                <th className="px-4 py-3">VO #</th>
+                <th className="px-4 py-3">Title</th>
+                <th className="px-4 py-3">Lines</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 text-right">Amount (incl margin &amp; GST)</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {variations.map((v) => (
+                <tr key={v.id} className="hover:bg-stone-50">
+                  <td className="px-4 py-3 tabular-nums">{v.variationNumber}</td>
+                  <td className="px-4 py-3 font-medium">{v.title}</td>
+                  <td className="px-4 py-3 tabular-nums text-stone-500">{v._count.lines}</td>
+                  <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
+                  <td className="px-4 py-3 text-right tabular-nums">
                     {v.status === "DRAFT" && v.totalCents === 0 ? "Being priced" : formatCents(inclMarginGst(v.totalCents))}
-                  </span>
-                  <StatusBadge status={v.status} />
-                </div>
-              </div>
-
-              {v.lines.length > 0 && (
-                <ul className="mt-3 divide-y divide-stone-100 border-t border-stone-100 text-sm">
-                  {v.lines.map((l) => (
-                    <li key={l.id} className="flex justify-between py-1.5">
-                      <span>{l.description || "Line item"} · {l.quantity}{l.unit ? ` ${l.unit}` : ""}</span>
-                      <span>{formatCents(inclMarginGst(l.totalCents))}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {v.quotes.length > 0 && (
-                <div className="mt-3 text-sm">
-                  <p className="mb-1 text-xs uppercase tracking-wide text-stone-400">Subcontractor quotes</p>
-                  <ul className="space-y-1">
-                    {v.quotes.map((q) => (
-                      <li key={q.id} className="flex justify-between">
-                        <a className="text-brand underline" href={quoteUrls.get(q.id)} target="_blank" rel="noreferrer">
-                          {q.vendorName} — {q.originalName}
-                        </a>
-                        <span>{formatCents(q.amountCents)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                {isBuilder && v.status === "DRAFT" && (
-                  <form action={submitVariation.bind(null, projectId, v.id)}>
-                    <button className="btn-ghost" type="submit">Submit for approval</button>
-                  </form>
-                )}
-                {v.status === "SUBMITTED" && (
-                  <>
-                    <form action={decideVariation.bind(null, projectId, v.id, true)}>
-                      <button className="btn-primary" type="submit">Approve</button>
-                    </form>
-                    <form action={decideVariation.bind(null, projectId, v.id, false)}>
-                      <button className="btn-ghost" type="submit">Reject</button>
-                    </form>
-                  </>
-                )}
-                {isBuilder && (
-                  <form
-                    action={attachQuote.bind(null, projectId, v.id)}
-                    className="flex flex-wrap items-center gap-2"
-                  >
-                    <input name="vendorName" className="input !w-40" placeholder="Vendor" />
-                    <input name="amount" type="number" step="0.01" className="input !w-28" placeholder="Amount $" />
-                    <input name="file" type="file" required className="text-xs" />
-                    <button className="btn-ghost" type="submit">Attach quote</button>
-                  </form>
-                )}
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Link href={`/projects/${projectId}/variations/${v.id}`} className="text-brand hover:underline">
+                      View →
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

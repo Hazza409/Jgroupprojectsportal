@@ -6,10 +6,19 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, lineTotalCents, formatCents, inclMarginGst } from "@/lib/money";
+import { parseVariationsBuffer } from "@/lib/excel/parseVariations";
 import { notifyBuilders } from "@/lib/email";
 
-function refresh(projectId: string) {
+export interface ImportResult {
+  ok: boolean;
+  message: string;
+  rowCount?: number;
+  warnings?: string[];
+}
+
+function refresh(projectId: string, variationId?: string) {
   revalidatePath(`/projects/${projectId}/variations`);
+  if (variationId) revalidatePath(`/projects/${projectId}/variations/${variationId}`);
 }
 
 // Builder creates a variation with one or more line items. For the scaffold the
@@ -55,6 +64,84 @@ export async function createVariation(projectId: string, formData: FormData) {
   refresh(projectId);
 }
 
+// Bulk-create variations from an uploaded .xlsx (same pattern as the estimate
+// importer). Rows sharing a VO #/Title roll up into one variation with line
+// items. Numbers are allocated sequentially from the project's current max so
+// they never collide with existing variations. Imported variations land as the
+// status given in the sheet (default DRAFT). Append-only — never deletes.
+export async function importVariations(projectId: string, formData: FormData): Promise<ImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders import variations");
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, message: "No file uploaded." };
+  }
+  if (!/\.xlsx?$/i.test(file.name)) {
+    return { ok: false, message: "Please upload an .xlsx or .xls file." };
+  }
+
+  const buf = Buffer.from(await file.arrayBuffer());
+  const parsed = parseVariationsBuffer(buf);
+  if (parsed.variations.length === 0) {
+    return { ok: false, message: "No variations parsed.", warnings: parsed.warnings };
+  }
+
+  // Persist the original file (scoped key) before touching the DB.
+  const store = await storage();
+  const key = buildKey({
+    projectId,
+    category: "variations",
+    originalName: `${Date.now()}-${file.name}`,
+  });
+  await store.put({
+    key,
+    body: buf,
+    contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  await db.$transaction(async (tx) => {
+    const last = await tx.variation.findFirst({
+      where: { projectId },
+      orderBy: { variationNumber: "desc" },
+      select: { variationNumber: true },
+    });
+    // Allocate numbers sequentially — @@unique([projectId, variationNumber])
+    // means we must NOT race; create one variation at a time inside the tx.
+    let next = (last?.variationNumber ?? 0) + 1;
+    for (const v of parsed.variations) {
+      await tx.variation.create({
+        data: {
+          projectId,
+          variationNumber: next++,
+          title: v.title,
+          description: v.description,
+          status: v.status,
+          totalCents: v.totalCents,
+          approvedAt: v.status === VariationStatus.APPROVED ? new Date() : null,
+          lines: {
+            create: v.lines.map((l) => ({
+              description: l.description,
+              quantity: l.quantity,
+              unit: l.unit,
+              unitCostCents: l.unitCostCents,
+              totalCents: l.totalCents,
+            })),
+          },
+        },
+      });
+    }
+  });
+
+  refresh(projectId);
+  return {
+    ok: true,
+    message: `Imported ${parsed.variations.length} variation(s).`,
+    rowCount: parsed.variations.length,
+    warnings: parsed.warnings,
+  };
+}
+
 export async function submitVariation(projectId: string, variationId: string) {
   const user = await assertProjectAccess(projectId);
   if (user.role !== Role.BUILDER) throw new AccessError("Only builders submit variations");
@@ -62,7 +149,7 @@ export async function submitVariation(projectId: string, variationId: string) {
     where: { id: variationId, projectId, status: VariationStatus.DRAFT },
     data: { status: VariationStatus.SUBMITTED },
   });
-  refresh(projectId);
+  refresh(projectId, variationId);
 }
 
 // Client approves/rejects a submitted variation.
@@ -94,7 +181,7 @@ export async function decideVariation(projectId: string, variationId: string, ap
     }
   }
 
-  refresh(projectId);
+  refresh(projectId, variationId);
 }
 
 // Builder attaches a subcontractor quote file to a variation.
@@ -121,5 +208,5 @@ export async function attachQuote(projectId: string, variationId: string, formDa
   await db.subcontractorQuote.create({
     data: { variationId, vendorName, amountCents, fileKey: key, originalName: file.name },
   });
-  refresh(projectId);
+  refresh(projectId, variationId);
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
-import { ProjectPhase, Role } from "@prisma/client";
+import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 
@@ -86,5 +86,18 @@ export async function setPhase(projectId: string, phase: ProjectPhase) {
   if (user.role !== Role.BUILDER) throw new AccessError("Only builders change the project phase");
   if (!ORDER.includes(phase)) throw new Error("Invalid phase");
   await db.project.update({ where: { id: projectId }, data: { phase } });
+  revalidatePath(`/projects/${projectId}`, "layout");
+}
+
+const CLIENT_VIEWS: ProjectClientView[] = [ProjectClientView.CONSTRUCTION, ProjectClientView.HANDOVER];
+
+// Builder chooses what the CLIENT sees: the construction modules, or the combined
+// Handover & Maintenance area. Builders always see everything regardless — this
+// only changes the client's view (and is enforced server-side in the layout).
+export async function setClientView(projectId: string, view: ProjectClientView) {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders change the client view");
+  if (!CLIENT_VIEWS.includes(view)) throw new Error("Invalid client view");
+  await db.project.update({ where: { id: projectId }, data: { clientView: view } });
   revalidatePath(`/projects/${projectId}`, "layout");
 }

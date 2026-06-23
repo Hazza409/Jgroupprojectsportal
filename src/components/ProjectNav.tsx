@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 type Item = { slug: string; label: string };
-type Section = { key: string; label: string; phase?: "BUILD" | "HANDOVER" | "MAINTENANCE"; items: Item[] };
+type Section = { key: string; label: string; group?: "build" | "care"; items: Item[] };
 
 const SECTIONS: Section[] = [
   { key: "top", label: "", items: [{ slug: "", label: "Overview" }] },
   {
     key: "build",
     label: "Build",
-    phase: "BUILD",
+    group: "build",
     items: [
       { slug: "estimate", label: "Original Estimate" },
       { slug: "cost-to-complete", label: "Cost to Complete" },
@@ -25,26 +25,42 @@ const SECTIONS: Section[] = [
       { slug: "documents", label: "Drawings & Design" },
     ],
   },
-  { key: "handover", label: "Handover", phase: "HANDOVER", items: [{ slug: "handover", label: "Handover" }] },
-  { key: "maintenance", label: "Maintenance", phase: "MAINTENANCE", items: [{ slug: "maintenance", label: "Maintenance" }] },
+  {
+    key: "care",
+    label: "Handover & Maintenance",
+    group: "care",
+    items: [
+      { slug: "handover", label: "Handover" },
+      { slug: "maintenance", label: "Maintenance" },
+    ],
+  },
 ];
 
 export function ProjectNav({
   projectId,
-  phase,
+  clientView,
   isBuilder = false,
 }: {
   projectId: string;
-  phase: "BUILD" | "HANDOVER" | "MAINTENANCE";
+  clientView: "CONSTRUCTION" | "HANDOVER";
   isBuilder?: boolean;
 }) {
   const pathname = usePathname();
   const base = `/projects/${projectId}`;
+  const activeGroup: "build" | "care" = clientView === "HANDOVER" ? "care" : "build";
 
-  // Builder-only admin section appended at the end.
+  // Builders see every section. Clients see Overview plus EITHER the build
+  // modules OR the Handover & Maintenance area, depending on the builder's
+  // client-view switch. (Enforced server-side in the project layout too.)
+  const visible = SECTIONS.filter((s) => {
+    if (!s.group) return true; // Overview always
+    if (isBuilder) return true;
+    return s.group === activeGroup;
+  });
+
   const sections = isBuilder
-    ? [...SECTIONS, { key: "admin", label: "Admin", items: [{ slug: "settings", label: "Settings" }] }]
-    : SECTIONS;
+    ? [...visible, { key: "admin", label: "Admin", items: [{ slug: "settings", label: "Settings" }] } as Section]
+    : visible;
 
   return (
     <nav className="space-y-4">
@@ -53,7 +69,9 @@ export function ProjectNav({
           {section.label && (
             <p className="flex items-center gap-2 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-400">
               {section.label}
-              {section.phase === phase && <span className="h-1.5 w-1.5 rounded-full bg-brand" title="Current phase" />}
+              {isBuilder && section.group === activeGroup && (
+                <span className="h-1.5 w-1.5 rounded-full bg-brand" title="Currently shown to the client" />
+              )}
             </p>
           )}
           {section.items.map((m) => {
