@@ -39,6 +39,10 @@ export function VariationsUploadForm({ projectId }: { projectId: string }) {
           {pending ? "Importing…" : "Import variations"}
         </button>
       </div>
+      <label className="mt-3 flex items-center gap-2 text-sm text-stone-600">
+        <input type="checkbox" name="replace" className="h-4 w-4" />
+        <span>Replace <strong>all</strong> existing variations first (deletes current variations, including approved ones)</span>
+      </label>
       {result && (
         <div className={`mt-3 text-sm ${result.ok ? "text-brand" : "text-red-600 dark:text-red-300"}`}>
           {result.message}

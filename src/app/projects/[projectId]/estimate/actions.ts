@@ -31,6 +31,9 @@ export async function importEstimate(
   if (!/\.(xlsx?|csv)$/i.test(file.name)) {
     return { ok: false, message: "Please upload an .xlsx, .xls or .csv file." };
   }
+  // Re-upload behaviour: when "Replace" is ticked (default), clear the existing
+  // estimate lines first so a re-import resets the table instead of appending.
+  const replace = !!formData.get("replace");
 
   const buf = Buffer.from(await file.arrayBuffer());
   const parsed = parseEstimateBuffer(buf);
@@ -74,6 +77,9 @@ export async function importEstimate(
       },
     });
 
+    // Reset on replace: clear the project's existing estimate lines first.
+    if (replace) await tx.estimateLineItem.deleteMany({ where: { projectId } });
+
     // Upsert cost codes for this project; build a code→id map.
     const codeMap = new Map<string, string>();
     for (const code of codes) {
@@ -104,7 +110,7 @@ export async function importEstimate(
   revalidatePath(`/projects/${projectId}/estimate`);
   return {
     ok: true,
-    message: `Imported ${parsed.lines.length} line item(s) across ${codes.length} cost code(s).`,
+    message: `${replace ? "Replaced the estimate —" : "Imported"} ${parsed.lines.length} line item(s) across ${codes.length} cost code(s).`,
     rowCount: parsed.lines.length,
     warnings: parsed.warnings,
   };

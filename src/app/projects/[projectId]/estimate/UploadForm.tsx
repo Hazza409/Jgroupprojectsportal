@@ -39,6 +39,10 @@ export function UploadForm({ projectId }: { projectId: string }) {
           {pending ? "Importing…" : "Import estimate"}
         </button>
       </div>
+      <label className="mt-3 flex items-center gap-2 text-sm text-stone-600">
+        <input type="checkbox" name="replace" defaultChecked className="h-4 w-4" />
+        Replace the current estimate (clears the existing lines, then imports)
+      </label>
       {result && (
         <div className={`mt-3 text-sm ${result.ok ? "text-brand" : "text-red-600 dark:text-red-300"}`}>
           {result.message}

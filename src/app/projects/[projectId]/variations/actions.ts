@@ -82,6 +82,9 @@ export async function importVariations(projectId: string, formData: FormData): P
   if (!/\.(xlsx?|csv)$/i.test(file.name)) {
     return { ok: false, message: "Please upload an .xlsx, .xls or .csv file." };
   }
+  // Optional reset: when "Replace" is ticked, delete ALL existing variations
+  // first (default off — variations are numbered, append-only records).
+  const replace = !!formData.get("replace");
 
   const buf = Buffer.from(await file.arrayBuffer());
   const parsed = parseVariationsBuffer(buf);
@@ -103,6 +106,8 @@ export async function importVariations(projectId: string, formData: FormData): P
   });
 
   await db.$transaction(async (tx) => {
+    // Reset on replace: wipe existing variations first (renumbers from 1).
+    if (replace) await tx.variation.deleteMany({ where: { projectId } });
     const last = await tx.variation.findFirst({
       where: { projectId },
       orderBy: { variationNumber: "desc" },
@@ -138,7 +143,7 @@ export async function importVariations(projectId: string, formData: FormData): P
   refresh(projectId);
   return {
     ok: true,
-    message: `Imported ${parsed.variations.length} variation(s).`,
+    message: `${replace ? "Replaced all variations —" : "Imported"} ${parsed.variations.length} variation(s).`,
     rowCount: parsed.variations.length,
     warnings: parsed.warnings,
   };
