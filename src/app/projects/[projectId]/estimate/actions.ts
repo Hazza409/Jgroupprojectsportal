@@ -22,6 +22,7 @@ export async function importEstimate(
   formData: FormData,
 ): Promise<ImportResult> {
   const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders import the estimate");
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {

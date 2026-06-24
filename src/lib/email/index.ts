@@ -94,11 +94,19 @@ export async function notifyProject(
   }
 }
 
-/** Shared: render a list of text lines into a simple email and send it. */
+/**
+ * Shared: render lines into a simple email and send. Sends to each recipient
+ * INDIVIDUALLY so no-one sees the others' addresses — a project can have several
+ * client logins plus the architect plus the J Group PM, and they must not be
+ * disclosed to each other in a visible To: header.
+ */
 async function sendLines(to: string[], subject: string, lines: string[]): Promise<void> {
   const text = lines.join("\n");
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#1a1a1a">${lines
     .map((l) => `<p style="margin:0 0 10px">${escapeHtml(l)}</p>`)
     .join("")}</div>`;
-  await (await email()).send({ to, subject, html, text });
+  const driver = await email();
+  for (const addr of to) {
+    await driver.send({ to: [addr], subject, html, text });
+  }
 }
