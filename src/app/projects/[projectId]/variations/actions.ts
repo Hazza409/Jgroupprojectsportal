@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { VariationStatus, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, lineTotalCents, formatCents, inclMarginGst } from "@/lib/money";
 import { parseVariationsBuffer } from "@/lib/excel/parseVariations";
-import { notifyBuilders } from "@/lib/email";
+import { notifyBuilders, notifyProject } from "@/lib/email";
 
 export interface ImportResult {
   ok: boolean;
@@ -62,6 +63,7 @@ export async function createVariation(projectId: string, formData: FormData) {
     },
   });
   refresh(projectId);
+  redirect(`/projects/${projectId}/variations`);
 }
 
 // Bulk-create variations from an uploaded .xlsx (same pattern as the estimate
@@ -149,6 +151,25 @@ export async function submitVariation(projectId: string, variationId: string) {
     where: { id: variationId, projectId, status: VariationStatus.DRAFT },
     data: { status: VariationStatus.SUBMITTED },
   });
+
+  // Tell the client(s) + PM there's a variation awaiting their approval.
+  const v = await db.variation.findUnique({
+    where: { id: variationId },
+    include: { project: { select: { name: true } } },
+  });
+  if (v) {
+    await notifyProject(
+      projectId,
+      `Variation for approval — ${v.project.name}`,
+      [
+        `J Group has submitted a variation for your approval on ${v.project.name}.`,
+        `VO #${v.variationNumber}: ${v.title}`,
+        `Amount: ${formatCents(inclMarginGst(v.totalCents))} (incl margin & GST)`,
+        `Sign in to review and approve or decline it.`,
+      ],
+      { excludeUserId: user.id },
+    );
+  }
   refresh(projectId, variationId);
 }
 

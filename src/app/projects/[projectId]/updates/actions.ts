@@ -5,6 +5,7 @@ import { Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
+import { notifyProject } from "@/lib/email";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/updates`);
@@ -23,6 +24,19 @@ export async function createUpdate(projectId: string, formData: FormData) {
   const body = String(formData.get("body") ?? "").trim();
   if (!title || !body) throw new Error("Title and summary are required");
   await db.projectUpdate.create({ data: { projectId, title, body, createdById: user.id } });
+
+  // Tell the client(s) + PM there's a new site update to read.
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
+  await notifyProject(
+    projectId,
+    `New site update — ${project?.name ?? "your project"}`,
+    [
+      `J Group has posted a new site update on ${project?.name ?? "your project"}.`,
+      `${title}`,
+      `Sign in to read the full summary and photos.`,
+    ],
+    { excludeUserId: user.id },
+  );
   refresh(projectId);
 }
 

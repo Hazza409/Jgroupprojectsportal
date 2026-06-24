@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { Role, RfiStatus } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
+import { notifyProject } from "@/lib/email";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/rfis`);
@@ -20,7 +21,7 @@ export async function createRfi(projectId: string, formData: FormData) {
   const dueRaw = String(formData.get("dueDate") ?? "");
 
   const last = await db.rfi.findFirst({ where: { projectId }, orderBy: { number: "desc" }, select: { number: true } });
-  await db.rfi.create({
+  const rfi = await db.rfi.create({
     data: {
       projectId,
       number: (last?.number ?? 0) + 1,
@@ -30,7 +31,22 @@ export async function createRfi(projectId: string, formData: FormData) {
       raisedById: user.id,
       status: RfiStatus.OPEN,
     },
+    include: { project: { select: { name: true } } },
   });
+
+  // Tell the client(s) + PM there's a design question awaiting their response.
+  await notifyProject(
+    projectId,
+    `New RFI — ${rfi.project.name}`,
+    [
+      `J Group has raised a design question (RFI #${rfi.number}) on ${rfi.project.name}.`,
+      `${subject}`,
+      rfi.dueDate
+        ? `Response needed by ${new Intl.DateTimeFormat("en-AU", { dateStyle: "medium" }).format(rfi.dueDate)}.`
+        : `Please sign in to respond.`,
+    ],
+    { excludeUserId: user.id },
+  );
   refresh(projectId);
 }
 

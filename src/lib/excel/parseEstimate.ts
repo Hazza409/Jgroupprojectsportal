@@ -5,14 +5,17 @@ import { dollarsToCents, lineTotalCents } from "../money";
 // First worksheet, header row anywhere in the first 10 rows. Recognised
 // headers (case-insensitive, flexible):
 //
-//   Cost Code | Description | Qty | Unit | Unit Cost | Total
+//   Cost Code | Cost Code Description | Line Item Description | Qty | Unit | Cost per Quantity | Overall Cost
 //
-// See examples/sample-estimate.xlsx for the canonical layout. Columns may be
-// reordered; "Total" is recomputed from Qty × Unit Cost and the sheet value is
-// only used as a validation cross-check (logged on mismatch).
+// "Cost Code Description" names the cost code (carried into Cost to Complete);
+// "Line Item Description" is the individual line. Columns may be reordered.
+// "Overall Cost" is recomputed from Qty × Cost per Quantity; the sheet value is
+// only a validation cross-check (logged on mismatch). Older sheets with a plain
+// "Description" column still work (treated as the line item description).
 
 export interface ParsedEstimateLine {
   costCode: string | null;
+  costCodeName: string | null;
   description: string;
   quantity: number;
   unit: string | null;
@@ -28,15 +31,17 @@ export interface ParsedEstimate {
 
 const HEADER_ALIASES: Record<keyof ColumnMap, string[]> = {
   costCode: ["cost code", "code", "cost_code"],
-  description: ["description", "item", "scope", "trade"],
+  costCodeName: ["cost code description", "cost code name", "code description", "cost item", "cost description"],
+  description: ["line item description", "line item", "line description", "description", "item", "scope", "trade"],
   quantity: ["qty", "quantity", "qnty"],
   unit: ["unit", "uom", "units"],
-  unitCost: ["unit cost", "rate", "unit price", "unitcost", "$/unit"],
-  total: ["total", "amount", "line total", "subtotal", "total cost"],
+  unitCost: ["cost per quantity", "cost per qty", "unit cost", "rate", "unit price", "unitcost", "$/unit"],
+  total: ["overall cost", "total", "amount", "line total", "subtotal", "total cost"],
 };
 
 interface ColumnMap {
   costCode: number;
+  costCodeName: number;
   description: number;
   quantity: number;
   unit: number;
@@ -106,6 +111,7 @@ export function parseEstimateBuffer(buf: Buffer): ParsedEstimate {
 
     lines.push({
       costCode: cell(map.costCode) ? String(cell(map.costCode)).trim() : null,
+      costCodeName: cell(map.costCodeName) ? String(cell(map.costCodeName)).trim() : null,
       description,
       quantity: quantity || 1,
       unit: cell(map.unit) ? String(cell(map.unit)).trim() : null,

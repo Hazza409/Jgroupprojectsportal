@@ -2,7 +2,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { CalendarGrid } from "@/components/CalendarGrid";
-import { createEvent, deleteEvent } from "./actions";
+import { createEvent, deleteEvent, respondToEvent } from "./actions";
 
 function fmt(d: Date) {
   return new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(d);
@@ -15,7 +15,7 @@ const KIND: Record<string, { label: string; cls: string }> = {
 };
 
 export default async function CalendarPage({ params }: { params: { projectId: string } }) {
-  await assertProjectAccess(params.projectId);
+  const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
 
   // Build calendar = site meetings only. Maintenance + bookings live on the
@@ -23,7 +23,10 @@ export default async function CalendarPage({ params }: { params: { projectId: st
   const events = await db.calendarEvent.findMany({
     where: { projectId, kind: "SITE_MEETING" },
     orderBy: { startsAt: "asc" },
-    include: { createdBy: { select: { name: true } } },
+    include: {
+      createdBy: { select: { name: true } },
+      responses: { include: { user: { select: { name: true, role: true } } } },
+    },
   });
 
   const now = Date.now();
@@ -32,7 +35,7 @@ export default async function CalendarPage({ params }: { params: { projectId: st
 
   return (
     <div>
-      <ModuleHeader title="Calendar" description="Site meetings — editable by both builder and client." />
+      <ModuleHeader title="Calendar" description="Site meetings — add, and accept the ones you'll attend." />
 
       <div className="mb-6">
         <CalendarGrid events={events.map((e) => ({ id: e.id, title: e.title, kind: e.kind, startISO: e.startsAt.toISOString() }))} />
@@ -76,29 +79,61 @@ export default async function CalendarPage({ params }: { params: { projectId: st
                     {group.label}
                   </h3>
                   <div className="space-y-2">
-                    {group.list.map((e) => (
-                      <div key={e.id} className="card flex items-center justify-between">
-                        <div>
-                          <p className="flex items-center gap-2 font-medium">
-                            {e.title}
-                            <span className={`badge ${KIND[e.kind]?.cls ?? KIND.SITE_MEETING.cls}`}>
-                              {KIND[e.kind]?.label ?? e.kind}
-                            </span>
-                          </p>
-                          <p className="text-sm text-stone-500">
-                            {fmt(e.startsAt)} → {fmt(e.endsAt)}
-                            {e.location ? ` · ${e.location}` : ""}
-                          </p>
-                          {e.notes && <p className="text-sm text-stone-400">{e.notes}</p>}
-                          <p className="mt-1 text-xs text-stone-400">Added by {e.createdBy?.name ?? "—"}</p>
+                    {group.list.map((e) => {
+                      const accepted = e.responses.filter((r) => r.status === "ACCEPTED");
+                      const mine = e.responses.find((r) => r.userId === user.id);
+                      const isUpcoming = group.label === "Upcoming";
+                      return (
+                        <div key={e.id} className="card">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="flex items-center gap-2 font-medium">
+                                {e.title}
+                                <span className={`badge ${KIND[e.kind]?.cls ?? KIND.SITE_MEETING.cls}`}>
+                                  {KIND[e.kind]?.label ?? e.kind}
+                                </span>
+                              </p>
+                              <p className="text-sm text-stone-500">
+                                {fmt(e.startsAt)} → {fmt(e.endsAt)}
+                                {e.location ? ` · ${e.location}` : ""}
+                              </p>
+                              {e.notes && <p className="text-sm text-stone-400">{e.notes}</p>}
+                              <p className="mt-1 text-xs text-stone-400">Added by {e.createdBy?.name ?? "—"}</p>
+                            </div>
+                            <form action={deleteEvent.bind(null, projectId, e.id)}>
+                              <button className="text-sm text-red-700 dark:text-red-300 hover:text-red-200" type="submit">
+                                Remove
+                              </button>
+                            </form>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-3">
+                            <p className="text-xs text-stone-500">
+                              {accepted.length > 0
+                                ? `Attending: ${accepted.map((r) => r.user.name).join(", ")}`
+                                : "No-one has accepted yet."}
+                            </p>
+                            {isUpcoming && (
+                              <div className="flex items-center gap-2">
+                                <form action={respondToEvent.bind(null, projectId, e.id, true)}>
+                                  <button
+                                    className={mine?.status === "ACCEPTED" ? "btn-primary" : "btn-ghost"}
+                                    type="submit"
+                                  >
+                                    {mine?.status === "ACCEPTED" ? "✓ Attending" : "Accept"}
+                                  </button>
+                                </form>
+                                <form action={respondToEvent.bind(null, projectId, e.id, false)}>
+                                  <button className="btn-ghost" type="submit">
+                                    {mine?.status === "DECLINED" ? "Declined" : "Decline"}
+                                  </button>
+                                </form>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <form action={deleteEvent.bind(null, projectId, e.id)}>
-                          <button className="text-sm text-red-700 dark:text-red-300 hover:text-red-200" type="submit">
-                            Remove
-                          </button>
-                        </form>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ),

@@ -5,7 +5,6 @@ import { formatCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { VariationsUploadForm } from "./VariationsUploadForm";
-import { createVariation } from "./actions";
 
 export default async function VariationsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -45,41 +44,11 @@ export default async function VariationsPage({ params }: { params: { projectId: 
       {isBuilder && (
         <div className="mb-6 space-y-3">
           <VariationsUploadForm projectId={projectId} />
-
-          <form action={createVariation.bind(null, projectId)} className="card grid gap-3 sm:grid-cols-2">
-            <p className="sm:col-span-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
-              Or add one manually
-            </p>
-            <div className="sm:col-span-2">
-              <label className="label">Title</label>
-              <input name="title" className="input" required placeholder="e.g. Upgrade to stone benchtops" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="label">Description (optional)</label>
-              <input name="description" className="input" />
-            </div>
-            <div>
-              <label className="label">Line description</label>
-              <input name="lineDescription" className="input" />
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="label">Qty</label>
-                <input name="quantity" type="number" step="any" defaultValue={1} className="input" />
-              </div>
-              <div>
-                <label className="label">Unit</label>
-                <input name="unit" className="input" placeholder="ea" />
-              </div>
-              <div>
-                <label className="label">Unit cost $</label>
-                <input name="unitCost" type="number" step="0.01" className="input" placeholder="0.00" />
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <button className="btn-primary" type="submit">Add variation</button>
-            </div>
-          </form>
+          <div>
+            <Link href={`/projects/${projectId}/variations/new`} className="btn-ghost">
+              + Add a variation manually
+            </Link>
+          </div>
         </div>
       )}
 

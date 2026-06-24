@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { Role } from "@prisma/client";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { notifyBuilders } from "@/lib/email";
+import { notifyBuilders, notifyProject } from "@/lib/email";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/calendar`);
@@ -37,9 +37,9 @@ export async function createEvent(projectId: string, formData: FormData) {
     },
   });
 
-  // Notify the J Group team when the CLIENT requests a meeting.
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
   if (user.role === Role.CLIENT) {
-    const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
+    // Client requested a meeting → notify the J Group team.
     await notifyBuilders(
       `Meeting requested — ${project?.name ?? "project"}`,
       [
@@ -50,8 +50,45 @@ export async function createEvent(projectId: string, formData: FormData) {
         `Open the J Group dashboard calendar to confirm or reschedule.`,
       ].filter(Boolean),
     );
+  } else {
+    // Builder scheduled a meeting → notify the client(s) + PM, who can accept it.
+    await notifyProject(
+      projectId,
+      `Site meeting scheduled — ${project?.name ?? "your project"}`,
+      [
+        `J Group has scheduled a site meeting on ${project?.name ?? "your project"}.`,
+        `Title: ${title}`,
+        `When: ${fmtDateTime(startsAt)} – ${fmtDateTime(endsAt)}`,
+        location ? `Where: ${location}` : "",
+        `Sign in to the calendar to accept.`,
+      ].filter(Boolean),
+      { excludeUserId: user.id },
+    );
   }
 
+  refresh(projectId);
+}
+
+// A project member (client/architect/PM) accepts or declines a site meeting.
+export async function respondToEvent(projectId: string, eventId: string, accept: boolean) {
+  const user = await assertProjectAccess(projectId);
+  const event = await db.calendarEvent.findFirst({
+    where: { id: eventId, projectId },
+    select: { id: true, title: true },
+  });
+  if (!event) throw new Error("Meeting not found");
+
+  await db.calendarEventResponse.upsert({
+    where: { eventId_userId: { eventId, userId: user.id } },
+    create: { eventId, userId: user.id, status: accept ? "ACCEPTED" : "DECLINED" },
+    update: { status: accept ? "ACCEPTED" : "DECLINED" },
+  });
+
+  // Let the J Group team know who's coming.
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
+  await notifyBuilders(`Meeting ${accept ? "accepted" : "declined"} — ${project?.name ?? "project"}`, [
+    `${user.name} (${user.role.toLowerCase()}) ${accept ? "accepted" : "declined"} the site meeting "${event.title}" on ${project?.name ?? "the project"}.`,
+  ]);
   refresh(projectId);
 }
 

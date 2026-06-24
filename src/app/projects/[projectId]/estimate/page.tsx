@@ -54,8 +54,9 @@ export default async function EstimatePage({ params }: { params: { projectId: st
           <table className="w-full text-sm">
             <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
               <tr>
-                <th className="px-4 py-3">Cost code</th>
-                <th className="px-4 py-3">Description</th>
+                <th className="px-4 py-3">Code</th>
+                <th className="px-4 py-3">Cost code description</th>
+                <th className="px-4 py-3">Line item</th>
                 <th className="px-4 py-3 text-right">Qty</th>
                 <th className="px-4 py-3">Unit</th>
                 <th className="px-4 py-3 text-right">Unit cost</th>
@@ -66,6 +67,7 @@ export default async function EstimatePage({ params }: { params: { projectId: st
               {lines.map((l) => (
                 <tr key={l.id}>
                   <td className="px-4 py-2 font-mono text-xs">{l.costCode?.code ?? "—"}</td>
+                  <td className="px-4 py-2">{l.costCode?.name ?? "—"}</td>
                   <td className="px-4 py-2">{l.description}</td>
                   <td className="px-4 py-2 text-right">{l.quantity}</td>
                   <td className="px-4 py-2">{l.unit ?? "—"}</td>
@@ -76,11 +78,11 @@ export default async function EstimatePage({ params }: { params: { projectId: st
             </tbody>
             <tfoot className="border-t border-stone-200 bg-stone-50">
               <tr className="text-stone-500">
-                <td colSpan={5} className="px-4 py-2 text-right">Subtotal (ex margin &amp; GST)</td>
+                <td colSpan={6} className="px-4 py-2 text-right">Subtotal (ex margin &amp; GST)</td>
                 <td className="px-4 py-2 text-right tabular-nums">{formatCents(total)}</td>
               </tr>
               <tr className="text-stone-500">
-                <td colSpan={5} className="px-4 py-2 text-right">
+                <td colSpan={6} className="px-4 py-2 text-right">
                   + Builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) &amp; GST ({(GST * 100).toFixed(0)}%)
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
@@ -88,7 +90,7 @@ export default async function EstimatePage({ params }: { params: { projectId: st
                 </td>
               </tr>
               <tr className="border-t border-stone-200 font-semibold">
-                <td colSpan={5} className="px-4 py-3 text-right">Total (incl margin &amp; GST)</td>
+                <td colSpan={6} className="px-4 py-3 text-right">Total (incl margin &amp; GST)</td>
                 <td className="px-4 py-3 text-right tabular-nums">{formatCents(inclMarginGst(total))}</td>
               </tr>
             </tfoot>

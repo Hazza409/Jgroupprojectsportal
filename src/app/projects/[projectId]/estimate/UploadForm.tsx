@@ -23,8 +23,9 @@ export function UploadForm({ projectId }: { projectId: string }) {
     <form onSubmit={onSubmit} className="card">
       <p className="mb-3 text-sm text-stone-600">
         Upload an estimate spreadsheet (.xlsx or .csv). Expected columns: <code>Cost Code</code>,{" "}
-        <code>Description</code>, <code>Qty</code>, <code>Unit</code>, <code>Unit Cost</code>,{" "}
-        <code>Total</code>. See <code>examples/sample-estimate.xlsx</code>.
+        <code>Cost Code Description</code>, <code>Line Item Description</code>, <code>Qty</code>,{" "}
+        <code>Unit</code>, <code>Cost per Quantity</code>, <code>Overall Cost</code>. Use the{" "}
+        <strong>Blank template</strong> for the exact layout.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <input

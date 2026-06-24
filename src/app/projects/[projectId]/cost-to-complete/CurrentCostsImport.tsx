@@ -23,9 +23,12 @@ export function CurrentCostsImport({ projectId }: { projectId: string }) {
 
   if (!open) {
     return (
-      <button className="btn-ghost" onClick={() => setOpen(true)}>
-        Import / update from Excel
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button className="btn-ghost" onClick={() => setOpen(true)}>
+          Import / update from Excel
+        </button>
+        <Link href="/api/templates/current-costs" className="btn-ghost">Blank template</Link>
+      </div>
     );
   }
 

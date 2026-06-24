@@ -49,12 +49,56 @@ export async function notifyBuilders(subject: string, lines: string[]): Promise<
   try {
     const to = await builderRecipients();
     if (to.length === 0) return;
-    const text = lines.join("\n");
-    const html = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#1a1a1a">${lines
-      .map((l) => `<p style="margin:0 0 10px">${escapeHtml(l)}</p>`)
-      .join("")}</div>`;
-    await (await email()).send({ to, subject, html, text });
+    await sendLines(to, subject, lines);
   } catch (e) {
     console.error("[email] notifyBuilders failed:", e);
   }
+}
+
+/**
+ * A project's members split by role. "PMs" = the J Group builders assigned to
+ * the project (via membership). Optionally exclude the user who triggered the
+ * change so they aren't emailed about their own action.
+ */
+export async function projectMemberEmails(
+  projectId: string,
+  opts: { excludeUserId?: string } = {},
+): Promise<{ clients: string[]; pms: string[] }> {
+  const memberships = await db.projectMembership.findMany({
+    where: { projectId, ...(opts.excludeUserId ? { userId: { not: opts.excludeUserId } } : {}) },
+    include: { user: { select: { email: true, role: true } } },
+  });
+  const clients = memberships.filter((m) => m.user.role === "CLIENT").map((m) => m.user.email);
+  const pms = memberships.filter((m) => m.user.role === "BUILDER").map((m) => m.user.email);
+  return { clients, pms };
+}
+
+/**
+ * Notify a project's client(s) AND PM(s) of a change made on the project.
+ * Fire-safe. In dev/console mode this just logs; in prod it sends via Resend
+ * once EMAIL_DRIVER=resend + keys are set.
+ */
+export async function notifyProject(
+  projectId: string,
+  subject: string,
+  lines: string[],
+  opts: { excludeUserId?: string } = {},
+): Promise<void> {
+  try {
+    const { clients, pms } = await projectMemberEmails(projectId, opts);
+    const to = Array.from(new Set([...clients, ...pms]));
+    if (to.length === 0) return;
+    await sendLines(to, subject, lines);
+  } catch (e) {
+    console.error("[email] notifyProject failed:", e);
+  }
+}
+
+/** Shared: render a list of text lines into a simple email and send it. */
+async function sendLines(to: string[], subject: string, lines: string[]): Promise<void> {
+  const text = lines.join("\n");
+  const html = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#1a1a1a">${lines
+    .map((l) => `<p style="margin:0 0 10px">${escapeHtml(l)}</p>`)
+    .join("")}</div>`;
+  await (await email()).send({ to, subject, html, text });
 }

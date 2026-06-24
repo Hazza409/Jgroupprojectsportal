@@ -7,7 +7,7 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, formatCents, sumCents } from "@/lib/money";
-import { notifyBuilders } from "@/lib/email";
+import { notifyBuilders, notifyProject } from "@/lib/email";
 import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
 
 export interface ReconImportResult {
@@ -232,6 +232,25 @@ export async function submitClaim(projectId: string, claimId: string) {
     where: { id: claimId, projectId, status: ClaimStatus.DRAFT },
     data: { status: ClaimStatus.SUBMITTED, submittedById: user.id, submittedAt: new Date() },
   });
+
+  // Tell the client(s) + PM there's a progress claim awaiting their review.
+  const claim = await db.progressClaim.findUnique({
+    where: { id: claimId },
+    include: { project: { select: { name: true } }, lines: { select: { claimedAmountCents: true } } },
+  });
+  if (claim) {
+    const total = claim.totalCents > 0 ? claim.totalCents : sumCents(claim.lines.map((l) => l.claimedAmountCents));
+    await notifyProject(
+      projectId,
+      `Progress claim for review — ${claim.project.name}`,
+      [
+        `J Group has submitted Progress Claim #${claim.claimNumber} for your review on ${claim.project.name}.`,
+        `Claim total: ${formatCents(total)}`,
+        `Sign in to review and approve it.`,
+      ],
+      { excludeUserId: user.id },
+    );
+  }
   refresh(projectId, claimId);
 }
 

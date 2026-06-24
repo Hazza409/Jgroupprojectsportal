@@ -7,8 +7,8 @@ import { getSessionUser } from "@/auth";
 const TEMPLATES: Record<string, { file: string; headers: string[]; example: (string | number)[] }> = {
   estimate: {
     file: "jgroup-estimate-template.xlsx",
-    headers: ["Cost Code", "Description", "Qty", "Unit", "Unit Cost", "Total"],
-    example: ["1015", "Concreting", 1, "item", 877239.56, 877239.56],
+    headers: ["Cost Code", "Cost Code Description", "Line Item Description", "Qty", "Unit", "Cost per Quantity", "Overall Cost"],
+    example: ["1015", "Concreting", "Slab & footings to engineer's detail", 1, "item", 877239.56, 877239.56],
   },
   schedule: {
     file: "jgroup-schedule-template.xlsx",

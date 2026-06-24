@@ -54,6 +54,13 @@ export async function importEstimate(
   const codes = Array.from(
     new Set(parsed.lines.map((l) => l.costCode).filter((c): c is string => !!c)),
   );
+  // First non-empty "Cost Code Description" seen per code → that code's name.
+  const nameByCode = new Map<string, string>();
+  for (const l of parsed.lines) {
+    if (l.costCode && l.costCodeName && !nameByCode.has(l.costCode)) {
+      nameByCode.set(l.costCode, l.costCodeName);
+    }
+  }
 
   await db.$transaction(async (tx) => {
     const importRow = await tx.estimateImport.create({
@@ -69,10 +76,11 @@ export async function importEstimate(
     // Upsert cost codes for this project; build a code→id map.
     const codeMap = new Map<string, string>();
     for (const code of codes) {
+      const name = nameByCode.get(code);
       const cc = await tx.costCode.upsert({
         where: { projectId_code: { projectId, code } },
-        create: { projectId, code, name: code },
-        update: {},
+        create: { projectId, code, name: name ?? code },
+        update: name ? { name } : {}, // only overwrite the name if the sheet supplied one
       });
       codeMap.set(code, cc.id);
     }
