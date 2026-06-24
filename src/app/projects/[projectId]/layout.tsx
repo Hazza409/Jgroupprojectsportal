@@ -50,9 +50,13 @@ export default async function ProjectLayout({
   const base = `/projects/${params.projectId}`;
   const pathname = headers().get("x-pathname") ?? "";
   const slug = (pathname.startsWith(base) ? pathname.slice(base.length) : "").replace(/^\//, "").split("/")[0];
+  // Send a client who lands on a module hidden by the current client-view to
+  // their overview (which is always visible) — never a 404/blank.
   if (!isBuilder) {
-    if (project.clientView === "CONSTRUCTION" && CARE_SLUGS.has(slug)) notFound();
-    if (project.clientView === "HANDOVER" && CONSTRUCTION_SLUGS.has(slug)) notFound();
+    const hidden =
+      (project.clientView === "CONSTRUCTION" && CARE_SLUGS.has(slug)) ||
+      (project.clientView === "HANDOVER" && CONSTRUCTION_SLUGS.has(slug));
+    if (hidden) redirect(base);
   }
 
   const viewLabel = project.clientView === "HANDOVER" ? "Handover & Maintenance" : "Construction";
