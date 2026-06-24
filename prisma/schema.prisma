@@ -107,6 +107,7 @@ model User {
   uploadedDocs    DesignDocument[]    @relation("DocUploader")
   authoredEvents  CalendarEvent[]     @relation("EventAuthor")
   submittedClaims ProgressClaim[]     @relation("ClaimSubmitter")
+  eventResponses  CalendarEventResponse[]
 }
 
 // Join between User and Project. This is the row-level scoping anchor:
@@ -441,8 +442,26 @@ model CalendarEvent {
 
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?   @relation("EventAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  responses CalendarEventResponse[]
 
   @@index([projectId])
+}
+
+// RSVP to a calendar event (site meeting). Clients/architects accept or decline;
+// builders see who's coming. One response per user per event.
+model CalendarEventResponse {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  status    String   @default("ACCEPTED") // ACCEPTED | DECLINED
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
 }
 
 // ─────────────────────────── Photos ──────────────────────────
