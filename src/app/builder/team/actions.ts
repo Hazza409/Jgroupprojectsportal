@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { Role } from "@prisma/client";
 import { assertBuilder } from "@/lib/scope";
 import { db } from "@/lib/db";
+import { validatePassword } from "@/lib/password";
 
 export interface StaffResult {
   ok: boolean;
@@ -23,7 +24,8 @@ export async function createStaff(formData: FormData): Promise<StaffResult> {
 
   if (!name) return { ok: false, message: "Name is required." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, message: "Enter a valid email." };
-  if (password.length < 8) return { ok: false, message: "Temporary password must be at least 8 characters." };
+  const pwCheck = validatePassword(password);
+  if (!pwCheck.ok) return { ok: false, message: pwCheck.message! };
 
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) return { ok: false, message: "A user with that email already exists." };

@@ -12,6 +12,11 @@ export interface SessionUser {
   role: Role;
 }
 
+// Brute-force lockout: after this many consecutive failed logins, lock the
+// account for the cooldown below. Cleared on the next successful sign-in.
+const MAX_FAILED_ATTEMPTS = 8;
+const LOCKOUT_MINUTES = 15;
+
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   pages: { signIn: "/login" },
@@ -28,10 +33,35 @@ export const authOptions: NextAuthOptions = {
           where: { email: credentials.email.toLowerCase().trim() },
         });
         if (!user) return null;
+
+        // Locked out from too many recent failed attempts? Reject without
+        // checking the password (and don't disclose the lock — avoids leaking
+        // which emails exist / are under attack).
+        if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) return null;
+
         // Trim to match how passwords are stored (all set-paths .trim()), so an
         // accidental trailing space on either side never blocks a valid login.
         const ok = await bcrypt.compare(credentials.password.trim(), user.passwordHash);
-        if (!ok) return null;
+        if (!ok) {
+          // Count the failure; lock the account once the threshold is reached.
+          const attempts = user.failedLoginAttempts + 1;
+          await db.user.update({
+            where: { id: user.id },
+            data:
+              attempts >= MAX_FAILED_ATTEMPTS
+                ? { failedLoginAttempts: 0, lockedUntil: new Date(Date.now() + LOCKOUT_MINUTES * 60_000) }
+                : { failedLoginAttempts: attempts },
+          });
+          return null;
+        }
+
+        // Success — clear any prior failed-attempt / lock state.
+        if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+          await db.user.update({
+            where: { id: user.id },
+            data: { failedLoginAttempts: 0, lockedUntil: null },
+          });
+        }
         return { id: user.id, email: user.email, name: user.name, role: user.role };
       },
     }),

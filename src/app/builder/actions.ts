@@ -6,6 +6,7 @@ import { Role } from "@prisma/client";
 import { assertBuilder } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { dollarsToCents } from "@/lib/money";
+import { validatePassword } from "@/lib/password";
 
 // Builder deletes a job and all its data (cascades). Irreversible.
 export async function deleteJob(projectId: string): Promise<void> {
@@ -40,9 +41,8 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clientEmailRaw)) {
       return { ok: false, message: "Client email looks invalid." };
     }
-    if (clientPassword.length < 8) {
-      return { ok: false, message: "Client temporary password must be at least 8 characters." };
-    }
+    const pwCheck = validatePassword(clientPassword);
+    if (!pwCheck.ok) return { ok: false, message: pwCheck.message! };
   }
 
   try {

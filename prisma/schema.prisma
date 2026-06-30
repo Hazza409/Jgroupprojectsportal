@@ -99,6 +99,10 @@ model User {
   // bcrypt hash. Never store plaintext.
   passwordHash String
   role         Role     @default(CLIENT)
+  // Brute-force protection: lock the account for a cooldown after repeated
+  // failed logins (see src/auth.ts). Reset to 0 on a successful sign-in.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

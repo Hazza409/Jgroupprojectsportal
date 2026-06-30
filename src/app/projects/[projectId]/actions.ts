@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
+import { validatePassword } from "@/lib/password";
 
 export interface SimpleResult { ok: boolean; message: string }
 
@@ -17,7 +18,8 @@ export async function setClientPassword(projectId: string, userId: string, formD
   // Trim accidental edge whitespace — login compares exactly, so a stray space
   // would silently break sign-in.
   const password = String(formData.get("password") ?? "").trim();
-  if (password.length < 8) return { ok: false, message: "Password must be at least 8 characters." };
+  const pwCheck = validatePassword(password);
+  if (!pwCheck.ok) return { ok: false, message: pwCheck.message! };
 
   const membership = await db.projectMembership.findFirst({
     where: { projectId, userId, user: { role: Role.CLIENT } },
@@ -42,7 +44,8 @@ export async function addClientToProject(projectId: string, formData: FormData):
   const password = String(formData.get("password") ?? "").trim();
   if (!name) return { ok: false, message: "Name is required." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, message: "Enter a valid email." };
-  if (password.length < 8) return { ok: false, message: "Password must be at least 8 characters." };
+  const pwCheck = validatePassword(password);
+  if (!pwCheck.ok) return { ok: false, message: pwCheck.message! };
 
   const existing = await db.user.findUnique({ where: { email } });
   let userId: string;

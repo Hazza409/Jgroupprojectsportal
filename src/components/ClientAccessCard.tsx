@@ -55,9 +55,9 @@ function ClientRow({ projectId, client }: { projectId: string; client: Client })
                 type="text"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                minLength={8}
+                minLength={12}
                 className="input !w-48"
-                placeholder="At least 8 characters"
+                placeholder="At least 12 characters"
               />
             </div>
             <button className="btn-primary" type="submit" disabled={pending}>
@@ -70,7 +70,7 @@ function ClientRow({ projectId, client }: { projectId: string; client: Client })
         </div>
       </div>
       <p className="mt-1 text-xs text-stone-400">
-        Signs in with <span className="font-medium text-stone-600">{client.email}</span> + this password (min 8, no spaces).
+        Signs in with <span className="font-medium text-stone-600">{client.email}</span> + this password (min 12, no spaces).
       </p>
       {result && <p className={`mt-2 rounded-md px-3 py-2 text-sm ${result.ok ? OK : BAD}`}>{result.ok ? "✓ " : "⚠ "}{result.message}</p>}
     </li>
@@ -111,7 +111,7 @@ function AddClientForm({ projectId }: { projectId: string }) {
         </div>
         <div>
           <label className="label">Temporary password</label>
-          <input name="password" type="text" required minLength={8} className="input" placeholder="min 8 characters" />
+          <input name="password" type="text" required minLength={12} className="input" placeholder="min 12 characters" />
         </div>
       </div>
       <div className="mt-3 flex items-center gap-3">
