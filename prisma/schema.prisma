@@ -173,6 +173,8 @@ model Project {
   // RFIs + fortnightly updates
   rfis              Rfi[]
   updates           ProjectUpdate[]
+  // Client-facing "who to contact at J Group" list
+  contacts          ProjectContact[]
 
   @@index([status])
 }
@@ -676,4 +678,23 @@ model UpdatePhoto {
   update ProjectUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
 
   @@index([updateId])
+}
+
+// ════════════════════ J Group contacts ══════════════════════
+// Client-facing list of who to contact at J Group for this project (PM, site
+// supervisor, accounts…). Curated by the builder; visible to client + architect
+// in every view (it's never hidden by the client-view switch).
+model ProjectContact {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  role      String? // e.g. "Project Manager", "Site Supervisor", "Accounts"
+  phone     String?
+  email     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
 }

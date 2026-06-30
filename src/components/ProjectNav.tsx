@@ -7,7 +7,7 @@ type Item = { slug: string; label: string };
 type Section = { key: string; label: string; group?: "build" | "care"; items: Item[] };
 
 const SECTIONS: Section[] = [
-  { key: "top", label: "", items: [{ slug: "", label: "Overview" }] },
+  { key: "top", label: "", items: [{ slug: "", label: "Overview" }, { slug: "contacts", label: "J Group Contacts" }] },
   {
     key: "build",
     label: "Build",
