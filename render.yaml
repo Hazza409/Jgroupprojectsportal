@@ -38,8 +38,11 @@ services:
         value: /var/data
       - key: NODE_VERSION
         value: "20"
+      # Email: all three are dashboard-managed so you can switch sending on/off
+      # in Render without a code push. Unset EMAIL_DRIVER → defaults to "console"
+      # (logs only). Set EMAIL_DRIVER=resend + the two below to send for real.
       - key: EMAIL_DRIVER
-        value: console # set to "resend" + the keys below to send real emails
+        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
