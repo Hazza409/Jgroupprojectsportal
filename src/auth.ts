@@ -16,6 +16,10 @@ export interface SessionUser {
 // account for the cooldown below. Cleared on the next successful sign-in.
 const MAX_FAILED_ATTEMPTS = 8;
 const LOCKOUT_MINUTES = 15;
+// A fixed throwaway bcrypt hash compared against on the no-user / locked paths,
+// so every failed login takes ~the same time — an attacker can't tell which
+// emails exist or are locked from response latency (no account enumeration).
+const DUMMY_HASH = bcrypt.hashSync("timing-equaliser-not-a-real-password", 10);
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
@@ -29,29 +33,40 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) return null;
+        // Trim to match how passwords are stored (all set-paths .trim()), so an
+        // accidental trailing space on either side never blocks a valid login.
+        const password = credentials.password.trim();
         const user = await db.user.findUnique({
           where: { email: credentials.email.toLowerCase().trim() },
         });
-        if (!user) return null;
 
-        // Locked out from too many recent failed attempts? Reject without
-        // checking the password (and don't disclose the lock — avoids leaking
-        // which emails exist / are under attack).
-        if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) return null;
+        // No such email, or locked out: still run one bcrypt.compare (against a
+        // dummy hash) so the response time matches the wrong-password path. Don't
+        // disclose the reason — avoids account enumeration / lock probing.
+        if (!user) {
+          await bcrypt.compare(password, DUMMY_HASH);
+          return null;
+        }
+        if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+          await bcrypt.compare(password, DUMMY_HASH);
+          return null;
+        }
 
-        // Trim to match how passwords are stored (all set-paths .trim()), so an
-        // accidental trailing space on either side never blocks a valid login.
-        const ok = await bcrypt.compare(credentials.password.trim(), user.passwordHash);
+        const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) {
-          // Count the failure; lock the account once the threshold is reached.
-          const attempts = user.failedLoginAttempts + 1;
-          await db.user.update({
+          // Atomic increment (SET col = col + 1) so concurrent guesses can't
+          // outrun the counter via a lost-update race; lock once at threshold.
+          const updated = await db.user.update({
             where: { id: user.id },
-            data:
-              attempts >= MAX_FAILED_ATTEMPTS
-                ? { failedLoginAttempts: 0, lockedUntil: new Date(Date.now() + LOCKOUT_MINUTES * 60_000) }
-                : { failedLoginAttempts: attempts },
+            data: { failedLoginAttempts: { increment: 1 } },
+            select: { failedLoginAttempts: true },
           });
+          if (updated.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
+            await db.user.update({
+              where: { id: user.id },
+              data: { failedLoginAttempts: 0, lockedUntil: new Date(Date.now() + LOCKOUT_MINUTES * 60_000) },
+            });
+          }
           return null;
         }
 
