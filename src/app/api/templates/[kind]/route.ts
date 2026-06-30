@@ -27,6 +27,11 @@ const TEMPLATES: Record<string, { file: string; headers: string[]; example: (str
     headers: ["VO #", "Title", "Description", "Line Description", "Qty", "Unit", "Unit Cost", "Status"],
     example: [1, "Upgrade to stone benchtops", "Kitchen island upgrade", "Natural stone supply & install", 1, "item", 4500, "DRAFT"],
   },
+  subcontractors: {
+    file: "jgroup-subcontractors-template.xlsx",
+    headers: ["Trade", "Company", "Contact", "Phone", "Email"],
+    example: ["Electrical", "Bright Sparks Pty Ltd", "Dave Sparks", "0400 111 222", "dave@brightsparks.com.au"],
+  },
 };
 
 export async function GET(_req: Request, { params }: { params: { kind: string } }) {

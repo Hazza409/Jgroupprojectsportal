@@ -175,6 +175,8 @@ model Project {
   updates           ProjectUpdate[]
   // Client-facing "who to contact at J Group" list
   contacts          ProjectContact[]
+  // Subcontractor directory (shown in Handover), Excel/CSV uploadable
+  subcontractors    SubcontractorContact[]
 
   @@index([status])
 }
@@ -693,6 +695,25 @@ model ProjectContact {
   email     String?
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// Subcontractor directory for a project — the trades who worked on the build,
+// shown in Handover so the owner can reach them for warranty/maintenance.
+// Curated by the builder via Excel/CSV upload or manual entry; client read-only.
+model SubcontractorContact {
+  id          String   @id @default(cuid())
+  projectId   String
+  trade       String? // e.g. "Electrical", "Plumbing", "Tiling"
+  company     String?
+  contactName String?
+  phone       String?
+  email       String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 

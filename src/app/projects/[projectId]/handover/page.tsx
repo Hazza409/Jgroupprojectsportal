@@ -8,17 +8,19 @@ export default async function HandoverHub({ params }: { params: { projectId: str
   await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
 
-  const [register, om, jgroup, warranties] = await Promise.all([
+  const [register, om, jgroup, warranties, subs] = await Promise.all([
     db.handoverDocument.count({ where: { projectId, kind: "REGISTER" } }),
     db.handoverDocument.count({ where: { projectId, kind: "OM_MANUAL" } }),
     db.handoverDocument.count({ where: { projectId, kind: "JGROUP" } }),
     db.warranty.count({ where: { projectId } }),
+    db.subcontractorContact.count({ where: { projectId } }),
   ]);
 
   const cards = [
     { href: "handover/register", label: "Document Register", desc: "Master index of all handover documents.", count: register },
     { href: "handover/om-manuals", label: "O&M Manuals", desc: "Operation & maintenance manuals.", count: om },
     { href: "handover/warranties", label: "Warranties", desc: "Warranty records — issuer, item, expiry.", count: warranties },
+    { href: "handover/subcontractors", label: "Subcontractors", desc: "Trades on the build — contacts for warranty & maintenance.", count: subs },
     { href: "handover/jgroup", label: "J Group Documents", desc: "Company-issued handover documents.", count: jgroup },
   ];
 
