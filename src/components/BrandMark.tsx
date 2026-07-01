@@ -1,17 +1,19 @@
-// The J Group Projects symbol — a thin angular corner mark (the brand's blind
-// deboss). Inherits color via `currentColor`, so set text color on the wrapper.
+// The J Group Projects symbol — a bold "J": a thick vertical stroke curving into
+// a foot at the bottom-left. Inherits color via `currentColor`, so set the text
+// color on the wrapper. Scales crisply at any size.
 export function BrandMark({ className = "" }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 40 48"
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={7}
+      strokeLinecap="butt"
       className={className}
       aria-hidden="true"
     >
-      {/* vertical stem dropping to a left-turning foot — a minimalist J */}
-      <path d="M30 2 V38 H8" strokeLinecap="square" />
+      {/* stem down the right, a rounded corner, then a foot to the left */}
+      <path d="M30 4 V33 A7 7 0 0 1 23 40 H4" />
     </svg>
   );
 }
