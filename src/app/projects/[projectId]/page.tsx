@@ -10,11 +10,14 @@ export default async function ProjectOverview({ params }: { params: { projectId:
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
 
-  const [project, estimateLines, actuals, claims, approvedVars, pendingVars, schedule, events, photos] =
+  const [project, estimateLines, approvedClaims, claims, approvedVars, pendingVars, schedule, events, photos] =
     await Promise.all([
       db.project.findUniqueOrThrow({ where: { id: projectId } }),
       db.estimateLineItem.findMany({ where: { projectId }, select: { totalCents: true } }),
-      db.costActual.findMany({ where: { projectId }, select: { amountCents: true } }),
+      db.progressClaim.findMany({
+        where: { projectId, status: "APPROVED" },
+        select: { totalCents: true, lines: { select: { claimedAmountCents: true } } },
+      }),
       db.progressClaim.count({ where: { projectId } }),
       db.variation.findMany({ where: { projectId, status: "APPROVED" }, select: { totalCents: true } }),
       db.variation.findMany({
@@ -29,18 +32,21 @@ export default async function ProjectOverview({ params }: { params: { projectId:
 
   // All figures shown inclusive of builder's margin + GST (matches Cost to Complete).
   const estimateTotal = inclMarginGst(sumCents(estimateLines.map((l) => l.totalCents)));
-  const actualsTotal = inclMarginGst(sumCents(actuals.map((a) => a.amountCents)));
   const approvedVariations = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)));
 
-  // Drawn down = costs to date as a % of (estimate + approved variations).
-  // (Ratio is unaffected by the uniform gross-up.)
+  // Drawn down = what the client has APPROVED across progress claims — headline
+  // claim totals (recon total inc GST when built from a sheet, else line sum;
+  // same figure the Progress Claims register shows).
+  const claimedTotal = sumCents(
+    approvedClaims.map((c) => (c.totalCents > 0 ? c.totalCents : sumCents(c.lines.map((l) => l.claimedAmountCents)))),
+  );
   const budgetBase = estimateTotal + approvedVariations;
-  const drawnPct = budgetBase > 0 ? (actualsTotal / budgetBase) * 100 : 0;
+  const drawnPct = budgetBase > 0 ? (claimedTotal / budgetBase) * 100 : 0;
 
   const stats = [
     { label: "Original estimate", value: formatCents(estimateTotal) },
     { label: "Estimate + approved variations", value: formatCents(budgetBase) },
-    { label: "Drawn down to date", value: formatCents(actualsTotal) },
+    { label: "Drawn down (approved claims)", value: formatCents(claimedTotal) },
     { label: "Approved variations", value: formatCents(approvedVariations) },
   ];
 
@@ -84,11 +90,11 @@ export default async function ProjectOverview({ params }: { params: { projectId:
         ))}
       </div>
 
-      {/* Drawn-down progress: costs to date vs estimate + approved variations. */}
+      {/* Drawn-down progress: approved progress claims vs estimate + approved variations. */}
       <div className="card">
         <div className="flex items-end justify-between">
           <p className="text-xs uppercase tracking-wide text-stone-400">
-            Drawn down · estimate + approved variations
+            Drawn down · approved progress claims
           </p>
           <p className="text-2xl font-semibold">{drawnPct.toFixed(1)}%</p>
         </div>
@@ -96,7 +102,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
           <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, drawnPct)}%` }} />
         </div>
         <p className="mt-2 text-xs text-stone-400">
-          {formatCents(actualsTotal)} of {formatCents(budgetBase)} drawn down
+          {formatCents(claimedTotal)} of {formatCents(budgetBase)} across {approvedClaims.length} approved claim{approvedClaims.length === 1 ? "" : "s"}
         </p>
       </div>
 

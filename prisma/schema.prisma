@@ -301,13 +301,28 @@ model ProgressClaim {
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
-  project     Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  submittedBy User?            @relation("ClaimSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
-  lines       ClaimLineItem[]
-  reconLines  ClaimReconLine[]
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submittedBy  User?              @relation("ClaimSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  lines        ClaimLineItem[]
+  reconLines   ClaimReconLine[]
+  invoiceFiles ClaimInvoiceFile[]
 
   @@unique([projectId, claimNumber])
   @@index([projectId])
+}
+
+// Uploaded supplier-invoice files backing a claim — shown to the client for
+// transparency. Distinct from xeroInvoiceKey (the tax invoice the client pays).
+model ClaimInvoiceFile {
+  id           String   @id @default(cuid())
+  claimId      String
+  fileKey      String
+  originalName String
+  createdAt    DateTime @default(now())
+
+  claim ProgressClaim @relation(fields: [claimId], references: [id], onDelete: Cascade)
+
+  @@index([claimId])
 }
 
 model ClaimLineItem {

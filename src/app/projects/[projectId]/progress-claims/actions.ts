@@ -222,6 +222,68 @@ export async function uploadXeroInvoice(projectId: string, claimId: string, form
   refresh(projectId, claimId);
 }
 
+// Builder re-opens a submitted or knocked-back claim so it can be edited and
+// resubmitted (the recon re-import replaces its contents — that's the "replace").
+export async function reopenClaim(projectId: string, claimId: string) {
+  await builderOnly(projectId);
+  await db.progressClaim.updateMany({
+    where: { id: claimId, projectId, status: { in: [ClaimStatus.SUBMITTED, ClaimStatus.REJECTED] } },
+    data: { status: ClaimStatus.DRAFT, submittedAt: null, approvedAt: null },
+  });
+  refresh(projectId, claimId);
+}
+
+// Builder deletes a claim outright (e.g. raised in error). Approved claims are
+// protected — they're the financial record the client signed off on.
+export async function deleteClaim(projectId: string, claimId: string) {
+  await builderOnly(projectId);
+  const claim = await db.progressClaim.findFirst({
+    where: { id: claimId, projectId },
+    include: { invoiceFiles: { select: { fileKey: true } } },
+  });
+  if (!claim) return;
+  if (claim.status === ClaimStatus.APPROVED) {
+    throw new Error("Approved claims can't be deleted — they're the record the client signed off on.");
+  }
+  // Best-effort cleanup of stored files; DB rows cascade with the claim.
+  const store = await storage();
+  const keys = [claim.reconSheetKey, claim.xeroInvoiceKey, ...claim.invoiceFiles.map((f) => f.fileKey)];
+  await Promise.all(keys.filter((k): k is string => !!k).map((k) => store.delete(k).catch(() => {})));
+  await db.progressClaim.delete({ where: { id: claim.id } });
+  revalidatePath(`/projects/${projectId}/progress-claims`);
+  redirect(`/projects/${projectId}/progress-claims`);
+}
+
+// Builder attaches supplier-invoice files (PDFs/images) to a claim — the
+// transparency backup the client can open. Multiple files per upload.
+export async function uploadClaimInvoices(projectId: string, claimId: string, formData: FormData) {
+  await builderOnly(projectId);
+  await db.progressClaim.findFirstOrThrow({ where: { id: claimId, projectId }, select: { id: true } });
+
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) throw new Error("No files uploaded");
+
+  const store = await storage();
+  for (const file of files) {
+    const buf = Buffer.from(await file.arrayBuffer());
+    const key = buildKey({ projectId, category: "claim-invoices", originalName: `${Date.now()}-${file.name}` });
+    await store.put({ key, body: buf, contentType: file.type || "application/pdf" });
+    await db.claimInvoiceFile.create({ data: { claimId, fileKey: key, originalName: file.name } });
+  }
+  refresh(projectId, claimId);
+}
+
+export async function deleteClaimInvoiceFile(projectId: string, claimId: string, fileId: string) {
+  await builderOnly(projectId);
+  const file = await db.claimInvoiceFile.findFirst({
+    where: { id: fileId, claimId, claim: { projectId } },
+  });
+  if (!file) return;
+  await (await storage()).delete(file.fileKey).catch(() => {});
+  await db.claimInvoiceFile.delete({ where: { id: file.id } });
+  refresh(projectId, claimId);
+}
+
 // Builder submits a draft for client approval (must have at least one line).
 export async function submitClaim(projectId: string, claimId: string) {
   const user = await builderOnly(projectId);

@@ -8,7 +8,16 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ClaimLineForm } from "./ClaimLineForm";
 import { ReconUploadForm } from "./ReconUploadForm";
 import { InvoiceUploadForm } from "./InvoiceUploadForm";
-import { generateClaimLines, deleteClaimLine, submitClaim, decideClaim } from "../actions";
+import { DeleteClaimButton } from "./DeleteClaimButton";
+import {
+  generateClaimLines,
+  deleteClaimLine,
+  submitClaim,
+  decideClaim,
+  reopenClaim,
+  uploadClaimInvoices,
+  deleteClaimInvoiceFile,
+} from "../actions";
 
 const fmtDate = (d: Date | null) =>
   d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium" }).format(d) : null;
@@ -27,6 +36,7 @@ export default async function ClaimDetailPage({
     include: {
       lines: { include: { costCode: { select: { code: true } } }, orderBy: { id: "asc" } },
       reconLines: { orderBy: { id: "asc" } },
+      invoiceFiles: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!claim) notFound();
@@ -44,6 +54,8 @@ export default async function ClaimDetailPage({
   const store = await storage();
   const reconUrl = claim.reconSheetKey ? await store.url(claim.reconSheetKey) : null;
   const invoiceUrl = claim.xeroInvoiceKey ? await store.url(claim.xeroInvoiceKey) : null;
+  const backupUrls = new Map<string, string>();
+  for (const f of claim.invoiceFiles) backupUrls.set(f.id, await store.url(f.fileKey));
 
   const summary = [
     { label: "Labour this period", value: claim.labourCents },
@@ -93,6 +105,15 @@ export default async function ClaimDetailPage({
                   <button className="btn-ghost" type="submit">Reject</button>
                 </form>
               </>
+            )}
+            {/* Knocked back (or withdrawn) → builder re-opens, edits, resubmits */}
+            {isBuilder && (claim.status === "SUBMITTED" || claim.status === "REJECTED") && (
+              <form action={reopenClaim.bind(null, projectId, claimId)}>
+                <button className="btn-ghost" type="submit">Reopen as draft</button>
+              </form>
+            )}
+            {isBuilder && claim.status !== "APPROVED" && (
+              <DeleteClaimButton projectId={projectId} claimId={claimId} claimNumber={claim.claimNumber} />
             )}
           </div>
         </div>
@@ -184,6 +205,51 @@ export default async function ClaimDetailPage({
         )}
       </div>
 
+
+      {/* Uploaded supplier invoices — transparency backup the client can open */}
+      <div className="card">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">
+          Supplier invoices{claim.invoiceFiles.length > 0 ? ` · ${claim.invoiceFiles.length}` : ""}
+        </h3>
+        {claim.invoiceFiles.length === 0 ? (
+          <p className="text-sm text-stone-500">
+            {isBuilder
+              ? "Upload the supplier invoices behind this claim so the client can see the backup."
+              : "No supplier invoices attached yet."}
+          </p>
+        ) : (
+          <ul className="divide-y divide-stone-100 text-sm">
+            {claim.invoiceFiles.map((f) => (
+              <li key={f.id} className="flex items-center justify-between gap-3 py-2">
+                <a
+                  href={backupUrls.get(f.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 truncate text-brand hover:underline"
+                >
+                  {f.originalName}
+                </a>
+                {isBuilder && (
+                  <form action={deleteClaimInvoiceFile.bind(null, projectId, claimId, f.id)}>
+                    <button className="shrink-0 text-xs text-red-700 dark:text-red-300 hover:text-red-200" type="submit">
+                      Remove
+                    </button>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {isBuilder && (
+          <form
+            action={uploadClaimInvoices.bind(null, projectId, claimId)}
+            className="mt-3 flex flex-wrap items-center gap-3 border-t border-stone-100 pt-3"
+          >
+            <input type="file" name="files" accept=".pdf,image/*" multiple required className="text-sm" />
+            <button className="btn-ghost" type="submit">Upload invoices</button>
+          </form>
+        )}
+      </div>
 
       {/* Supplier backup */}
       {claim.reconLines.length > 0 && (
