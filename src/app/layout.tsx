@@ -1,10 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
   title: "J Group Projects — Dashboard",
   description: "Client & builder dashboard for J Group Projects.",
+  // Installable home-screen app (see src/app/manifest.ts + public/icons).
+  manifest: "/manifest.webmanifest",
+  icons: { apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "J Group", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#161514",
 };
 
 // Applies the saved theme before first paint (default: dark/night) so there's no
