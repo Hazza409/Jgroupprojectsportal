@@ -116,3 +116,13 @@ body {
     @apply font-display font-light tracking-tight;
   }
 }
+
+@layer base {
+  /* Brand headings in Ginto Nord; body text stays in the neutral sans.
+     (Only Light is licensed, so headings render in true Ginto Nord Light.) */
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+}
