@@ -24,6 +24,9 @@ async function email(): Promise<EmailDriver> {
   if (kind === "resend") {
     const { ResendEmail } = await import("./resend");
     driver = new ResendEmail();
+  } else if (kind === "smtp" || kind === "gmail") {
+    const { SmtpEmail } = await import("./smtp");
+    driver = new SmtpEmail();
   } else {
     const { ConsoleEmail } = await import("./console");
     driver = new ConsoleEmail();
