@@ -9,7 +9,7 @@ export function TopBar({ user }: { user: SessionUser }) {
     <header className="border-b border-stone-200 bg-chrome">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <Link href={user.role === "BUILDER" ? "/builder" : "/projects"} className="flex items-center gap-3">
-          <BrandMark className="h-6 w-5 text-ink" />
+          <BrandMark className="h-6 w-6 text-ink" />
           <span className="flex flex-col leading-none">
             <span className="wordmark text-lg text-ink">J Group Projects</span>
             <span className="mt-0.5 text-[10px] uppercase tracking-[0.25em] text-stone-500">

@@ -12,7 +12,7 @@ export default async function HomePage() {
   return (
     <main className="relative flex min-h-screen flex-col justify-between overflow-hidden bg-base px-6 py-10 sm:px-12 sm:py-14">
       <div className="flex items-center gap-3 text-ink">
-        <BrandMark className="h-6 w-5" />
+        <BrandMark className="h-6 w-6" />
         <span className="wordmark text-lg">J Group Projects</span>
       </div>
 
