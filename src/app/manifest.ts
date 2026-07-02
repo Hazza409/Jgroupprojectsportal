@@ -10,7 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Client & builder dashboard for J Group Projects.",
     start_url: "/",
     display: "standalone",
-    background_color: "#161514",
+    // Launch splash matches the icon/logo: charcoal mark on white.
+    background_color: "#ffffff",
     theme_color: "#161514",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },

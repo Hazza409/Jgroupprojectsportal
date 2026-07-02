@@ -67,8 +67,9 @@ function inMark(u, v) {
   return false;
 }
 
-const BG = [22, 21, 20]; // brand ebony  #161514
-const FG = [244, 242, 238]; // brand ink #f4f2ee
+// Matches the brand lock-up: charcoal J on white (see brand/logo-horizontal-charcoal.jpg).
+const BG = [255, 255, 255]; // white
+const FG = [43, 43, 43]; // brand charcoal
 
 function makeIcon(size, padFrac) {
   const rgba = Buffer.alloc(size * size * 4);
