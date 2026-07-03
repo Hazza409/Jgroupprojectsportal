@@ -19,7 +19,7 @@ const bcrypt = require("bcryptjs");
 
 const EMAIL = "builder@jgroup.test";
 const PASSWORD = "builder123";
-const NAME = "J Group Projects";
+const NAME = "Builder Admin";
 
 (async () => {
   const db = new PrismaClient();

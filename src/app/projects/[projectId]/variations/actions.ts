@@ -7,6 +7,7 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, lineTotalCents, formatCents, inclMarginGst } from "@/lib/money";
+import { getCompany, companyShortName } from "@/lib/company";
 import { parseVariationsBuffer } from "@/lib/excel/parseVariations";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 
@@ -163,13 +164,14 @@ export async function submitVariation(projectId: string, variationId: string) {
     include: { project: { select: { name: true } } },
   });
   if (v) {
+    const company = await getCompany();
     await notifyProject(
       projectId,
       `Variation for approval — ${v.project.name}`,
       [
-        `J Group has submitted a variation for your approval on ${v.project.name}.`,
+        `${companyShortName(company)} has submitted a variation for your approval on ${v.project.name}.`,
         `VO #${v.variationNumber}: ${v.title}`,
-        `Amount: ${formatCents(inclMarginGst(v.totalCents))} (incl margin & GST)`,
+        `Amount: ${formatCents(inclMarginGst(v.totalCents, company))} (incl margin & GST)`,
         `Sign in to review and approve or decline it.`,
       ],
       { excludeUserId: user.id },
@@ -195,13 +197,14 @@ export async function decideVariation(projectId: string, variationId: string, ap
       include: { project: { select: { name: true } } },
     });
     if (v) {
+      const company = await getCompany();
       await notifyBuilders(
         `Variation approved — ${v.project.name}`,
         [
           `${user.name} (${user.role.toLowerCase()}) approved a variation on ${v.project.name}.`,
           `VO #${v.variationNumber}: ${v.title}`,
-          `Approved amount: ${formatCents(inclMarginGst(v.totalCents))} (incl margin & GST)`,
-          `Open the J Group dashboard to action it.`,
+          `Approved amount: ${formatCents(inclMarginGst(v.totalCents, company))} (incl margin & GST)`,
+          `Open the ${companyShortName(company)} dashboard to action it.`,
         ],
       );
     }

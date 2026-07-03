@@ -5,6 +5,7 @@ import { Role, RfiStatus } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { notifyProject } from "@/lib/email";
+import { getCompany, companyShortName } from "@/lib/company";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/rfis`);
@@ -39,7 +40,7 @@ export async function createRfi(projectId: string, formData: FormData) {
     projectId,
     `New RFI — ${rfi.project.name}`,
     [
-      `J Group has raised a design question (RFI #${rfi.number}) on ${rfi.project.name}.`,
+      `${companyShortName(await getCompany())} has raised a design question (RFI #${rfi.number}) on ${rfi.project.name}.`,
       `${subject}`,
       rfi.dueDate
         ? `Response needed by ${new Intl.DateTimeFormat("en-AU", { dateStyle: "medium" }).format(rfi.dueDate)}.`

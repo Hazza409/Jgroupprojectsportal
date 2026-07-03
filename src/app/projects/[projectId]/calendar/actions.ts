@@ -5,6 +5,7 @@ import { Role } from "@prisma/client";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { notifyBuilders, notifyProject } from "@/lib/email";
+import { getCompany, companyShortName } from "@/lib/company";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/calendar`);
@@ -38,6 +39,7 @@ export async function createEvent(projectId: string, formData: FormData) {
   });
 
   const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
+  const company = await getCompany();
   if (user.role === Role.CLIENT) {
     // Client requested a meeting → notify the J Group team.
     await notifyBuilders(
@@ -47,7 +49,7 @@ export async function createEvent(projectId: string, formData: FormData) {
         `Title: ${title}`,
         `When: ${fmtDateTime(startsAt)} – ${fmtDateTime(endsAt)}`,
         location ? `Where: ${location}` : "",
-        `Open the J Group dashboard calendar to confirm or reschedule.`,
+        `Open the ${companyShortName(company)} dashboard calendar to confirm or reschedule.`,
       ].filter(Boolean),
     );
   } else {
@@ -56,7 +58,7 @@ export async function createEvent(projectId: string, formData: FormData) {
       projectId,
       `Site meeting scheduled — ${project?.name ?? "your project"}`,
       [
-        `J Group has scheduled a site meeting on ${project?.name ?? "your project"}.`,
+        `${companyShortName(company)} has scheduled a site meeting on ${project?.name ?? "your project"}.`,
         `Title: ${title}`,
         `When: ${fmtDateTime(startsAt)} – ${fmtDateTime(endsAt)}`,
         location ? `Where: ${location}` : "",

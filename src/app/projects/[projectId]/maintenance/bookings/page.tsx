@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createBooking, scheduleBooking, setBookingStatus } from "../actions";
+import { getCompany, companyShortName } from "@/lib/company";
 
 const fmtDateTime = (d: Date | null) =>
   d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(d) : null;
@@ -12,6 +13,7 @@ export default async function BookingsPage({ params }: { params: { projectId: st
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const bookings = await db.serviceBooking.findMany({ where: { projectId }, orderBy: { createdAt: "desc" } });
 
@@ -21,7 +23,7 @@ export default async function BookingsPage({ params }: { params: { projectId: st
       <div className="mt-2">
         <ModuleHeader
           title="Service & Bookings"
-          description={isBuilder ? "Schedule and manage service visits requested by the client." : "Request a service visit; J Group will schedule it."}
+          description={isBuilder ? "Schedule and manage service visits requested by the client." : `Request a service visit; ${companyShortName(company)} will schedule it.`}
         />
       </div>
 

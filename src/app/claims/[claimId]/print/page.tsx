@@ -4,6 +4,7 @@ import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { PrintButton } from "./PrintButton";
+import { getCompany } from "@/lib/company";
 
 const fmtDate = (d: Date | null) =>
   d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "long" }).format(d) : "—";
@@ -24,6 +25,7 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
   });
   if (!claim) notFound();
   if (!(await canAccessProject(user, claim.projectId))) notFound();
+  const company = await getCompany();
 
   const summary = [
     { label: "Labour this period", value: claim.labourCents },
@@ -48,8 +50,10 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
         {/* Brand header */}
         <header className="flex items-start justify-between border-b border-neutral-300 pb-5">
           <div>
-            <div className="font-display text-xl font-light tracking-tight">J Group Projects</div>
-            <div className="mt-0.5 text-[10px] uppercase tracking-[0.25em] text-neutral-400">One Of One</div>
+            <div className="font-display text-xl font-light tracking-tight">{company.name}</div>
+            {company.tagline && (
+              <div className="mt-0.5 text-[10px] uppercase tracking-[0.25em] text-neutral-400">{company.tagline}</div>
+            )}
           </div>
           <div className="text-right">
             <div className="font-display text-lg font-light">Progress Claim #{claim.claimNumber}</div>
@@ -123,7 +127,7 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
         </section>
 
         <footer className="mt-10 border-t border-neutral-200 pt-4 text-[10px] uppercase tracking-[0.2em] text-neutral-400">
-          J Group Projects · Design · Construction · Landscape
+          {company.name}{company.printFooter ? ` · ${company.printFooter}` : ""}
         </footer>
       </div>
     </div>

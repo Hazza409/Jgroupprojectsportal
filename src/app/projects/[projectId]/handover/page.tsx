@@ -2,11 +2,13 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { getCompany, companyShortName } from "@/lib/company";
 
 // Handover hub — links to the per-project document repositories.
 export default async function HandoverHub({ params }: { params: { projectId: string } }) {
   await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
+  const company = await getCompany();
 
   const [register, om, jgroup, warranties, subs] = await Promise.all([
     db.handoverDocument.count({ where: { projectId, kind: "REGISTER" } }),
@@ -21,7 +23,7 @@ export default async function HandoverHub({ params }: { params: { projectId: str
     { href: "handover/om-manuals", label: "O&M Manuals", desc: "Operation & maintenance manuals.", count: om },
     { href: "handover/warranties", label: "Warranties", desc: "Warranty records — issuer, item, expiry.", count: warranties },
     { href: "handover/subcontractors", label: "Subcontractors", desc: "Trades on the build — contacts for warranty & maintenance.", count: subs },
-    { href: "handover/jgroup", label: "J Group Documents", desc: "Company-issued handover documents.", count: jgroup },
+    { href: "handover/jgroup", label: `${companyShortName(company)} Documents`, desc: "Company-issued handover documents.", count: jgroup },
   ];
 
   return (

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { createUpdate, addUpdatePhotos, deleteUpdatePhoto, deleteUpdate } from "./actions";
+import { getCompany, companyShortName } from "@/lib/company";
 
 const fmtDate = (d: Date) => new Intl.DateTimeFormat("en-AU", { dateStyle: "long" }).format(d);
 
@@ -13,6 +14,7 @@ export default async function UpdatesPage({ params }: { params: { projectId: str
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const updates = await db.projectUpdate.findMany({
     where: { projectId },
@@ -31,7 +33,7 @@ export default async function UpdatesPage({ params }: { params: { projectId: str
     <div>
       <ModuleHeader
         title="Fortnightly Summary"
-        description={isBuilder ? "Post a fortnightly update with a summary and photos." : "Fortnightly updates from J Group on your build."}
+        description={isBuilder ? "Post a fortnightly update with a summary and photos." : `Fortnightly updates from ${companyShortName(company)} on your build.`}
       />
 
       {isBuilder && (

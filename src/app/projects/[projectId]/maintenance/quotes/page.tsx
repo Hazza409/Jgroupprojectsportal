@@ -5,11 +5,13 @@ import { formatCents } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createQuoteRequest, respondQuote, decideQuote } from "../actions";
+import { getCompany, companyShortName } from "@/lib/company";
 
 export default async function QuoteRequestsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const quotes = await db.quoteRequest.findMany({ where: { projectId }, orderBy: { createdAt: "desc" } });
 
@@ -19,7 +21,7 @@ export default async function QuoteRequestsPage({ params }: { params: { projectI
       <div className="mt-2">
         <ModuleHeader
           title="Quote Requests"
-          description={isBuilder ? "Respond to client quote requests with a price." : "Request a quote for additional work; J Group will respond."}
+          description={isBuilder ? "Respond to client quote requests with a price." : `Request a quote for additional work; ${companyShortName(company)} will respond.`}
         />
       </div>
 
@@ -47,7 +49,7 @@ export default async function QuoteRequestsPage({ params }: { params: { projectI
                 <div>
                   <p className="font-medium">{q.title}</p>
                   {q.description && <p className="text-sm text-stone-500">{q.description}</p>}
-                  {q.response && <p className="mt-2 text-sm text-stone-600">J Group: {q.response}</p>}
+                  {q.response && <p className="mt-2 text-sm text-stone-600">{companyShortName(company)}: {q.response}</p>}
                 </div>
                 <div className="flex items-center gap-3">
                   {q.quoteAmountCents != null && <span className="font-semibold tabular-nums">{formatCents(q.quoteAmountCents)}</span>}

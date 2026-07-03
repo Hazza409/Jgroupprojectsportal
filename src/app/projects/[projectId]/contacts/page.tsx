@@ -2,11 +2,13 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { createContact, deleteContact } from "./actions";
+import { getCompany, companyShortName } from "@/lib/company";
 
 export default async function ContactsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const contacts = await db.projectContact.findMany({
     where: { projectId },
@@ -16,11 +18,11 @@ export default async function ContactsPage({ params }: { params: { projectId: st
   return (
     <div>
       <ModuleHeader
-        title="J Group Contacts"
+        title={`${companyShortName(company)} Contacts`}
         description={
           isBuilder
-            ? "Add the J Group people your client can contact for this project."
-            : "Your key contacts at J Group for this project."
+            ? `Add the ${companyShortName(company)} people your client can contact for this project.`
+            : `Your key contacts at ${companyShortName(company)} for this project.`
         }
       />
 
@@ -40,7 +42,7 @@ export default async function ContactsPage({ params }: { params: { projectId: st
           </div>
           <div>
             <label className="label">Email</label>
-            <input name="email" type="email" className="input" placeholder="name@jgroupprojects.com" />
+            <input name="email" type="email" className="input" placeholder="name@company.com" />
           </div>
           <div className="sm:col-span-2">
             <button className="btn-primary" type="submit">Add contact</button>

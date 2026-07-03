@@ -5,6 +5,7 @@ import { Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { TopBar } from "@/components/TopBar";
 import { StaffForm } from "./StaffForm";
+import { getCompany, companyShortName } from "@/lib/company";
 
 // Builder-only: manage J Group staff (project-manager logins). All builders see
 // every project and receive the team notification emails.
@@ -12,6 +13,7 @@ export default async function TeamPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== Role.BUILDER) redirect("/projects");
+  const company = await getCompany();
 
   const staff = await db.user.findMany({
     where: { role: Role.BUILDER },
@@ -29,7 +31,7 @@ export default async function TeamPage() {
           <Link href="/builder" className="text-sm text-stone-500 hover:text-ink">← All projects</Link>
           <h1 className="mt-2 text-2xl font-semibold">Team</h1>
           <p className="text-sm text-stone-500">
-            Project-manager logins for J Group staff. Everyone here receives email alerts when a
+            Project-manager logins for {companyShortName(company)} staff. Everyone here receives email alerts when a
             client requests a meeting or approves a variation.
           </p>
         </div>

@@ -4,12 +4,15 @@
 // break the user action that triggered them, so helpers swallow + log errors.
 
 import { db } from "../db";
+import { getCompany } from "../company";
 
 export interface EmailMessage {
   to: string[];
   subject: string;
   html: string;
   text?: string;
+  /** Sender display name (from Company settings). Drivers may ignore it. */
+  fromName?: string;
 }
 
 export interface EmailDriver {
@@ -39,7 +42,7 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Recipients for a project-level notification: the J Group team (all builders).
+ * Recipients for a project-level notification: the builder team (all builders).
  * (Could later be narrowed to PMs assigned to the specific project.)
  */
 export async function builderRecipients(): Promise<string[]> {
@@ -47,7 +50,7 @@ export async function builderRecipients(): Promise<string[]> {
   return builders.map((b) => b.email);
 }
 
-/** Notify the J Group team. Fire-safe: logs and returns on any failure. */
+/** Notify the builder team. Fire-safe: logs and returns on any failure. */
 export async function notifyBuilders(subject: string, lines: string[]): Promise<void> {
   try {
     const to = await builderRecipients();
@@ -59,7 +62,7 @@ export async function notifyBuilders(subject: string, lines: string[]): Promise<
 }
 
 /**
- * A project's members split by role. "PMs" = the J Group builders assigned to
+ * A project's members split by role. "PMs" = the builders assigned to
  * the project (via membership). Optionally exclude the user who triggered the
  * change so they aren't emailed about their own action.
  */
@@ -100,16 +103,17 @@ export async function notifyProject(
 /**
  * Shared: render lines into a simple email and send. Sends to each recipient
  * INDIVIDUALLY so no-one sees the others' addresses — a project can have several
- * client logins plus the architect plus the J Group PM, and they must not be
+ * client logins plus the architect plus the builder PM, and they must not be
  * disclosed to each other in a visible To: header.
  */
 async function sendLines(to: string[], subject: string, lines: string[]): Promise<void> {
+  const company = await getCompany();
   const text = lines.join("\n");
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#1a1a1a">${lines
     .map((l) => `<p style="margin:0 0 10px">${escapeHtml(l)}</p>`)
     .join("")}</div>`;
   const driver = await email();
   for (const addr of to) {
-    await driver.send({ to: [addr], subject, html, text });
+    await driver.send({ to: [addr], subject, html, text, fromName: company.name });
   }
 }

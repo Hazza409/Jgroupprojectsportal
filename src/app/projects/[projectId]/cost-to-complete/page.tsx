@@ -1,13 +1,14 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
+import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
+import { getCompany, companyShortName } from "@/lib/company";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { isConnected } from "@/lib/xero/tokens";
 import { XeroControls } from "./XeroControls";
 import { CurrentCostsImport } from "./CurrentCostsImport";
 
 // Cost to Complete — laid out like the J Group CTC workbook. EVERY figure on this
-// page is shown INCLUSIVE of builder's margin (12.5%) then GST (10%) — no mixing
+// page is shown INCLUSIVE of builder's margin then GST (rates from Company settings) — no mixing
 // of ex/inc amounts. Underlying DB values are stored ex-margin/ex-GST; we gross
 // up once here via inclMarginGst().
 export default async function CostToCompletePage({
@@ -20,6 +21,7 @@ export default async function CostToCompletePage({
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const [xeroConnected, xeroConn, costCodes, approvedVars] = await Promise.all([
     isConnected(projectId),
@@ -41,16 +43,16 @@ export default async function CostToCompletePage({
 
   // Per-code rows grossed up for display.
   const rows = costCodes.map((cc) => {
-    const estimate = inclMarginGst(sumCents(cc.estimateLines.map((l) => l.totalCents)));
-    const current = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)));
+    const estimate = inclMarginGst(sumCents(cc.estimateLines.map((l) => l.totalCents)), company);
+    const current = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)), company);
     return { id: cc.id, code: cc.code, name: cc.name, estimate, current, variance: estimate - current };
   });
 
   // Totals are grossed from the AGGREGATE base (not summed per-row) so they match
   // the Overview to the cent — single, unambiguous rounding.
-  const estimateTotal = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.estimateLines.map((l) => l.totalCents))));
-  const currentToDate = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))));
-  const approvedVarTotal = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)));
+  const estimateTotal = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.estimateLines.map((l) => l.totalCents))), company);
+  const currentToDate = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))), company);
+  const approvedVarTotal = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)), company);
 
   const revisedEstimate = estimateTotal + approvedVarTotal;
   const costToComplete = revisedEstimate - currentToDate;
@@ -92,7 +94,7 @@ export default async function CostToCompletePage({
 
       {/* Unambiguous: every figure on this page is grossed up. */}
       <div className="mb-4 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
-        All amounts include builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) and GST ({(GST * 100).toFixed(0)}%).
+        All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
       </div>
 
       {/* Three headline figures, as per the CTC workbook. */}
@@ -122,7 +124,7 @@ export default async function CostToCompletePage({
             ? xeroConnected
               ? "Click Sync now to pull current costs against matching cost codes."
               : "Connect Xero (top right) or import current costs to populate this view."
-            : "Costs appear once J Group connects Xero and syncs."}
+            : `Costs appear once ${companyShortName(company)} connects Xero and syncs.`}
         </div>
       )}
 
@@ -184,7 +186,7 @@ export default async function CostToCompletePage({
                 {approvedVars.map((v) => (
                   <li key={v.id} className="flex items-start justify-between gap-3 text-sm">
                     <span className="min-w-0 text-stone-600">{v.title}</span>
-                    <span className="shrink-0 tabular-nums">{formatCents(inclMarginGst(v.totalCents))}</span>
+                    <span className="shrink-0 tabular-nums">{formatCents(inclMarginGst(v.totalCents, company))}</span>
                   </li>
                 ))}
               </ul>

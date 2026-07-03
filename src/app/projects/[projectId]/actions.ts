@@ -58,7 +58,7 @@ export async function addClientToProject(projectId: string, formData: FormData):
     await db.user.update({ where: { id: existing.id }, data: { passwordHash: await bcrypt.hash(password, 10), name } });
     userId = existing.id;
   } else {
-    return { ok: false, message: "That email belongs to a J Group staff account." };
+    return { ok: false, message: "That email belongs to a staff account." };
   }
 
   await db.projectMembership.upsert({

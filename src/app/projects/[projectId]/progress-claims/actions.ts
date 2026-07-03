@@ -9,6 +9,7 @@ import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, formatCents, sumCents } from "@/lib/money";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
+import { getCompany, companyShortName } from "@/lib/company";
 
 export interface ReconImportResult {
   ok: boolean;
@@ -126,7 +127,7 @@ export async function importReconSheet(
   if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload the reconciliation .xlsx file." };
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const parsed = parseReconciliationBuffer(buf);
+  const parsed = parseReconciliationBuffer(buf, (await getCompany()).marginPercent);
   if (parsed.budgetOverview.length === 0 && parsed.supplierLines.length === 0) {
     return { ok: false, message: parsed.warnings[0] ?? "Could not read the reconciliation sheet." };
   }
@@ -306,7 +307,7 @@ export async function submitClaim(projectId: string, claimId: string) {
       projectId,
       `Progress claim for review — ${claim.project.name}`,
       [
-        `J Group has submitted Progress Claim #${claim.claimNumber} for your review on ${claim.project.name}.`,
+        `${companyShortName(await getCompany())} has submitted Progress Claim #${claim.claimNumber} for your review on ${claim.project.name}.`,
         `Claim total: ${formatCents(total)}`,
         `Sign in to review and approve it.`,
       ],
@@ -334,7 +335,7 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
     await notifyBuilders(`Progress claim approved — ${claim.project.name}`, [
       `${user.name} (${user.role.toLowerCase()}) approved Claim #${claim.claimNumber} on ${claim.project.name}.`,
       `Approved amount: ${formatCents(total)}`,
-      `Open the J Group dashboard — the Xero invoice push is a separate, manual step.`,
+      `Open the ${companyShortName(await getCompany())} dashboard — the Xero invoice push is a separate, manual step.`,
     ]);
   }
   refresh(projectId, claimId);

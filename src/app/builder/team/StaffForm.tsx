@@ -34,7 +34,7 @@ export function StaffForm() {
         </div>
         <div>
           <label className="label" htmlFor="email">Email</label>
-          <input id="email" name="email" type="email" className="input" required placeholder="jordan@jgroup.com" />
+          <input id="email" name="email" type="email" className="input" required placeholder="name@company.com" />
         </div>
         <div>
           <label className="label" htmlFor="password">Temporary password</label>

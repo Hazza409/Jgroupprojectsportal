@@ -6,12 +6,14 @@ import { Role } from "@prisma/client";
 import { formatCents } from "@/lib/money";
 import { TopBar } from "@/components/TopBar";
 import { DeleteJobButton } from "./DeleteJobButton";
+import { getCompany, companyShortName } from "@/lib/company";
 
 // BUILDER index — every project. Clients never reach this (redirected away).
 export default async function BuilderHome() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== Role.BUILDER) redirect("/projects");
+  const company = await getCompany();
 
   const projects = await db.project.findMany({
     orderBy: { createdAt: "desc" },
@@ -25,9 +27,10 @@ export default async function BuilderHome() {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">All projects</h1>
-            <p className="text-sm text-stone-500">{projects.length} project(s) · J Group staff view</p>
+            <p className="text-sm text-stone-500">{projects.length} project(s) · {companyShortName(company)} staff view</p>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/builder/settings" className="btn-ghost">Company settings</Link>
             <Link href="/builder/team" className="btn-ghost">Team</Link>
             <Link href="/builder/new" className="btn-primary">New job</Link>
           </div>

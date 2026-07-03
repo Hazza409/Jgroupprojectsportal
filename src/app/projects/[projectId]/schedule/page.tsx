@@ -5,11 +5,13 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { ScheduleGantt } from "@/components/ScheduleGantt";
 import { ScheduleUploadForm } from "./ScheduleUploadForm";
 import { AddTaskForm } from "./AddTaskForm";
+import { getCompany, companyShortName } from "@/lib/company";
 
 export default async function SchedulePage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const items = await db.scheduleItem.findMany({
     where: { projectId },
@@ -23,7 +25,7 @@ export default async function SchedulePage({ params }: { params: { projectId: st
         description={
           isBuilder
             ? "Construction programme — fortnightly updated. Import from Excel or add tasks manually."
-            : "Construction programme — updated fortnightly by J Group."
+            : `Construction programme — updated fortnightly by ${companyShortName(company)}.`
         }
         action={
           isBuilder ? (

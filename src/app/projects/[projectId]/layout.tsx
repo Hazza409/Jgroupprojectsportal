@@ -5,6 +5,7 @@ import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { TopBar } from "@/components/TopBar";
 import { ProjectNav } from "@/components/ProjectNav";
+import { getCompany, companyShortName } from "@/lib/company";
 
 // Module slugs grouped by the client-view they belong to. Used to enforce the
 // builder's client-view switch server-side (the nav hides them too, but the UI
@@ -60,6 +61,7 @@ export default async function ProjectLayout({
   }
 
   const viewLabel = project.clientView === "HANDOVER" ? "Handover & Maintenance" : "Construction";
+  const company = await getCompany();
 
   return (
     <>
@@ -76,7 +78,12 @@ export default async function ProjectLayout({
         </div>
         <div className="grid gap-6 md:grid-cols-[220px_1fr]">
           <aside className="md:sticky md:top-6 md:self-start">
-            <ProjectNav projectId={project.id} clientView={project.clientView} isBuilder={isBuilder} />
+            <ProjectNav
+              projectId={project.id}
+              clientView={project.clientView}
+              isBuilder={isBuilder}
+              contactsLabel={`${companyShortName(company)} Contacts`}
+            />
           </aside>
           <section className="min-w-0">{children}</section>
         </div>

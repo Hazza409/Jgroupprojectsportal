@@ -7,7 +7,7 @@ type Item = { slug: string; label: string };
 type Section = { key: string; label: string; group?: "build" | "care"; items: Item[] };
 
 const SECTIONS: Section[] = [
-  { key: "top", label: "", items: [{ slug: "", label: "Overview" }, { slug: "contacts", label: "J Group Contacts" }] },
+  { key: "top", label: "", items: [{ slug: "", label: "Overview" }, { slug: "contacts", label: "" /* set per-company below */ }] },
   {
     key: "build",
     label: "Build",
@@ -40,10 +40,13 @@ export function ProjectNav({
   projectId,
   clientView,
   isBuilder = false,
+  contactsLabel,
 }: {
   projectId: string;
   clientView: "CONSTRUCTION" | "HANDOVER";
   isBuilder?: boolean;
+  /** Company-branded label for the contacts item, e.g. "J Group Contacts". */
+  contactsLabel: string;
 }) {
   const pathname = usePathname();
   const base = `/projects/${projectId}`;
@@ -85,7 +88,7 @@ export function ProjectNav({
                   active ? "bg-brand text-onbrand" : "text-stone-700 hover:bg-stone-100"
                 }`}
               >
-                {m.label}
+                {m.slug === "contacts" ? contactsLabel : m.label}
               </Link>
             );
           })}

@@ -7,7 +7,7 @@ import { dollarsToCents } from "../money";
 //   • Supplier detail: Supplier | Document Number | Budget Allocation | Amount(ex-GST)
 //   • Budget Overview: <cost code> | Current | Prior | To Date
 //   • Labour Hours → "Per Invoice" row = labour this period
-//   • Builder's Margin (12.5%), GST, Total amount per invoice
+//   • Builder's Margin, GST, Total amount per invoice
 // Anchored on label strings, so it tolerates row shifts between months.
 
 export interface ReconSupplierLine {
@@ -73,14 +73,14 @@ function pickSheet(wb: XLSX.WorkBook): { name: string; rows: unknown[][] } | nul
   return best;
 }
 
-export function parseReconciliationBuffer(buf: Buffer): ParsedRecon {
+export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12.5): ParsedRecon {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
   const picked = pickSheet(wb);
   const warnings: string[] = [];
   const empty: ParsedRecon = {
     meta: { job: null, invoiceRef: null, date: null, periodLabel: null, invoiceNumber: null },
     supplierLines: [], budgetOverview: [], costsCents: 0, labourCents: 0,
-    marginPercent: 12.5, marginCents: 0, subtotalCents: 0, gstCents: 0, totalCents: 0, warnings,
+    marginPercent: defaultMarginPercent, marginCents: 0, subtotalCents: 0, gstCents: 0, totalCents: 0, warnings,
   };
   if (!picked) { warnings.push("No worksheet found."); return empty; }
   const { name, rows } = picked;
@@ -150,7 +150,7 @@ export function parseReconciliationBuffer(buf: Buffer): ParsedRecon {
   // Builder's margin (value column is 3 right of the label, like column E).
   const marginHdrCell = findCell(rows, "builders margin current invoice");
   const marginPct = marginHdrCell ? Number(s(rows[marginHdrCell.r][marginHdrCell.c]).match(/([\d.]+)\s*%/)?.[1]) : NaN;
-  const marginPercent = Number.isFinite(marginPct) ? marginPct : 12.5;
+  const marginPercent = Number.isFinite(marginPct) ? marginPct : defaultMarginPercent;
   const marginCell = findCell(rows, "total builder's margin per invoice");
   const marginCents = marginCell ? cents(rows[marginCell.r][marginCell.c + 3]) : Math.round((labourCents + costsCents) * (marginPercent / 100));
 
@@ -162,7 +162,7 @@ export function parseReconciliationBuffer(buf: Buffer): ParsedRecon {
   const totalCents = totalCell ? cents(rows[totalCell.r][totalCell.c + 3]) : subtotalCents + gstCents;
 
   if (supplierLines.length === 0 && budgetOverview.length === 0) {
-    warnings.push("Could not find supplier or budget-overview rows — check the sheet matches the J Group recon format.");
+    warnings.push("Could not find supplier or budget-overview rows — check the sheet matches the expected reconciliation format.");
   }
 
   return { meta, supplierLines, budgetOverview, costsCents, labourCents, marginPercent, marginCents, subtotalCents, gstCents, totalCents, warnings };

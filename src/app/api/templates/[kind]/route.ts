@@ -6,29 +6,29 @@ import { getSessionUser } from "@/auth";
 // plus one greyed example row so the format is unambiguous. Auth required.
 const TEMPLATES: Record<string, { file: string; headers: string[]; example: (string | number)[] }> = {
   estimate: {
-    file: "jgroup-estimate-template.xlsx",
+    file: "estimate-template.xlsx",
     headers: ["Cost Code", "Cost Code Description", "Line Item Description", "Qty", "Unit", "Cost per Quantity", "Overall Cost"],
     example: ["1015", "Concreting", "Slab & footings to engineer's detail", 1, "item", 877239.56, 877239.56],
   },
   schedule: {
-    file: "jgroup-schedule-template.xlsx",
+    file: "schedule-template.xlsx",
     headers: ["Phase", "Task", "Start", "Finish", "Duration (Days)", "% Complete"],
     example: ["Framing", "Install Framing", "2025-10-01", "2025-11-12", 42, 100],
   },
   "current-costs": {
-    file: "jgroup-cost-to-complete-template.xlsx",
+    file: "cost-to-complete-template.xlsx",
     headers: ["Cost Code", "Cost Item", "Estimate", "Current Cost to Date"],
     example: ["1015", "Concreting", 877239.56, 887396.49],
   },
   variations: {
-    file: "jgroup-variations-template.xlsx",
+    file: "variations-template.xlsx",
     // Rows sharing a VO #/Title group into one variation. Unit Cost is the BASE
     // cost — the app adds builder's margin + GST for the client automatically.
     headers: ["VO #", "Title", "Description", "Line Description", "Qty", "Unit", "Unit Cost", "Status"],
     example: [1, "Upgrade to stone benchtops", "Kitchen island upgrade", "Natural stone supply & install", 1, "item", 4500, "DRAFT"],
   },
   subcontractors: {
-    file: "jgroup-subcontractors-template.xlsx",
+    file: "subcontractors-template.xlsx",
     headers: ["Trade", "Company", "Contact", "Phone", "Email"],
     example: ["Electrical", "Bright Sparks Pty Ltd", "Dave Sparks", "0400 111 222", "dave@brightsparks.com.au"],
   },

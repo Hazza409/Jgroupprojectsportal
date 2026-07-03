@@ -8,11 +8,12 @@ import type { EmailDriver, EmailMessage } from "./index";
 //   SMTP_USER=you@jgroupprojects.com     (the mailbox that sends)
 //   SMTP_PASS=<16-char Gmail App Password>
 //   SMTP_HOST=smtp.gmail.com (default) · SMTP_PORT=465 (default, TLS)
-//   EMAIL_FROM optional — defaults to "J Group Projects <SMTP_USER>". Gmail
+//   EMAIL_FROM optional — defaults to "<company name> <SMTP_USER>" using the
+//   per-message fromName from Company settings. Gmail
 //   only lets you send as the authenticated mailbox (or its aliases).
 export class SmtpEmail implements EmailDriver {
   private transporter;
-  private from: string;
+  private user: string;
 
   constructor() {
     const user = process.env.SMTP_USER;
@@ -27,12 +28,14 @@ export class SmtpEmail implements EmailDriver {
       secure: port === 465, // implicit TLS on 465; STARTTLS otherwise
       auth: { user, pass },
     });
-    this.from = process.env.EMAIL_FROM || `J Group Projects <${user}>`;
+    this.user = user;
   }
 
   async send(msg: EmailMessage): Promise<void> {
+    const from =
+      process.env.EMAIL_FROM || (msg.fromName ? `"${msg.fromName}" <${this.user}>` : this.user);
     await this.transporter.sendMail({
-      from: this.from,
+      from,
       to: msg.to,
       subject: msg.subject,
       html: msg.html,

@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
-import { formatCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
+import { formatCents, inclMarginGst } from "@/lib/money";
+import { getCompany } from "@/lib/company";
 import { StatusBadge } from "@/components/StatusBadge";
 import { submitVariation, decideVariation, attachQuote } from "../actions";
 
@@ -15,6 +16,7 @@ export default async function VariationDetailPage({
   const user = await assertProjectAccess(params.projectId);
   const { projectId, variationId } = params;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const v = await db.variation.findFirst({
     where: { id: variationId, projectId },
@@ -27,7 +29,7 @@ export default async function VariationDetailPage({
   const quoteUrls = new Map<string, string>();
   for (const q of v.quotes) quoteUrls.set(q.id, await store.url(q.fileKey));
 
-  const inclTotal = inclMarginGst(v.totalCents);
+  const inclTotal = inclMarginGst(v.totalCents, company);
 
   return (
     <div>
@@ -68,7 +70,7 @@ export default async function VariationDetailPage({
                   <td className="px-4 py-2">{l.description || "Line item"}</td>
                   <td className="px-4 py-2 text-right tabular-nums">{l.quantity}</td>
                   <td className="px-4 py-2">{l.unit ?? "—"}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">{formatCents(inclMarginGst(l.totalCents))}</td>
+                  <td className="px-4 py-2 text-right tabular-nums">{formatCents(inclMarginGst(l.totalCents, company))}</td>
                 </tr>
               ))
             )}
@@ -80,7 +82,7 @@ export default async function VariationDetailPage({
             </tr>
             <tr className="text-stone-500">
               <td colSpan={3} className="px-4 py-2 text-right">
-                + Builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) &amp; GST ({(GST * 100).toFixed(0)}%)
+                + Builder&apos;s margin ({company.marginPercent.toFixed(1)}%) &amp; GST ({company.gstPercent.toFixed(0)}%)
               </td>
               <td className="px-4 py-2 text-right tabular-nums">{formatCents(inclTotal - v.totalCents)}</td>
             </tr>

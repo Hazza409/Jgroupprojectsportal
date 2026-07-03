@@ -1,6 +1,7 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
+import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
+import { getCompany } from "@/lib/company";
 import Link from "next/link";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { UploadForm } from "./UploadForm";
@@ -9,6 +10,7 @@ import { AddLineForm } from "./AddLineForm";
 export default async function EstimatePage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
+  const company = await getCompany();
 
   const [lines, lastImport] = await Promise.all([
     db.estimateLineItem.findMany({
@@ -83,15 +85,15 @@ export default async function EstimatePage({ params }: { params: { projectId: st
               </tr>
               <tr className="text-stone-500">
                 <td colSpan={6} className="px-4 py-2 text-right">
-                  + Builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) &amp; GST ({(GST * 100).toFixed(0)}%)
+                  + Builder&apos;s margin ({company.marginPercent.toFixed(1)}%) &amp; GST ({company.gstPercent.toFixed(0)}%)
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums">
-                  {formatCents(inclMarginGst(total) - total)}
+                  {formatCents(inclMarginGst(total, company) - total)}
                 </td>
               </tr>
               <tr className="border-t border-stone-200 font-semibold">
                 <td colSpan={6} className="px-4 py-3 text-right">Total (incl margin &amp; GST)</td>
-                <td className="px-4 py-3 text-right tabular-nums">{formatCents(inclMarginGst(total))}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{formatCents(inclMarginGst(total, company))}</td>
               </tr>
             </tfoot>
           </table>

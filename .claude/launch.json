@@ -2,7 +2,8 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "jgroup-dev",
+      "name": "jgroup-dashboard",
+      "cwd": "/Users/harrymillard/jgroup-dashboard",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000

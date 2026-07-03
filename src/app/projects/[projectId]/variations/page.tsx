@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
+import { formatCents, inclMarginGst } from "@/lib/money";
+import { getCompany } from "@/lib/company";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { VariationsUploadForm } from "./VariationsUploadForm";
@@ -10,6 +11,7 @@ export default async function VariationsPage({ params }: { params: { projectId: 
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const variations = await db.variation.findMany({
     where: { projectId },
@@ -37,7 +39,7 @@ export default async function VariationsPage({ params }: { params: { projectId: 
       />
 
       <div className="mb-6 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
-        Variation prices include builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) and GST ({(GST * 100).toFixed(0)}%).
+        Variation prices include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
         Subcontractor quotes are the underlying supplier cost.
       </div>
 
@@ -75,7 +77,7 @@ export default async function VariationsPage({ params }: { params: { projectId: 
                   <td className="px-4 py-3 tabular-nums text-stone-500">{v._count.lines}</td>
                   <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
                   <td className="px-4 py-3 text-right tabular-nums">
-                    {v.status === "DRAFT" && v.totalCents === 0 ? "Being priced" : formatCents(inclMarginGst(v.totalCents))}
+                    {v.status === "DRAFT" && v.totalCents === 0 ? "Being priced" : formatCents(inclMarginGst(v.totalCents, company))}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link href={`/projects/${projectId}/variations/${v.id}`} className="text-brand hover:underline">

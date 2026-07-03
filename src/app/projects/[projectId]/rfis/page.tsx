@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createRfi, answerRfi, closeRfi, deleteRfi } from "./actions";
+import { getCompany, companyShortName } from "@/lib/company";
 
 const fmtDate = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium" }).format(d) : null);
 
@@ -11,6 +12,7 @@ export default async function RfisPage({ params }: { params: { projectId: string
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
+  const company = await getCompany();
 
   const rfis = await db.rfi.findMany({ where: { projectId }, orderBy: { number: "desc" } });
 
@@ -18,7 +20,7 @@ export default async function RfisPage({ params }: { params: { projectId: string
     <div>
       <ModuleHeader
         title="RFIs"
-        description={isBuilder ? "Raise design questions for the client to answer." : "Design questions from J Group — please answer."}
+        description={isBuilder ? "Raise design questions for the client to answer." : `Design questions from ${companyShortName(company)} — please answer.`}
       />
 
       {isBuilder && (

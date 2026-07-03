@@ -90,6 +90,34 @@ enum RfiStatus {
   CLOSED // builder closed it out
 }
 
+// ─────────────────────────── Company ─────────────────────────
+// White-label branding + commercial settings (SAAS-PLAN M1). One row today
+// (J Group, seeded by migration); becomes the tenant anchor in M2 when
+// projects/users gain companyId. All branding must read from here — never
+// hardcode a company name, logo, margin or GST rate in the app.
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String // e.g. "J Group Projects" — full display name + email sender name
+  shortName String? // e.g. "J Group" — home-screen icon label, compact contexts
+  tagline   String? // e.g. "One Of One" — shown under the wordmark; blank hides it
+  location  String? // e.g. "Sydney" — landing-page footer; blank hides it
+  // Claim-document footer line, e.g. "Design · Construction · Landscape".
+  printFooter String?
+  // Uploaded logo (storage key, NOT a URL). Null → wordmark-only lockup with a
+  // generic monogram; J Group ships with its built-in "J" mark (see BrandMark).
+  logoKey   String?
+  // Optional hex accent colours per theme (e.g. "#c8a25a"). Null keeps the
+  // monochrome default (white-on-dark / ink-on-light) — J Group's look.
+  brandColorDark  String?
+  brandColorLight String?
+  // Commercial defaults used in progress-claim maths.
+  marginPercent Float @default(12.5) // builder's margin %
+  gstPercent    Float @default(10) // Australian GST
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // ─────────────────────────── Identity ────────────────────────
 
 model User {

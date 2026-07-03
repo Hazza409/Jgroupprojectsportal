@@ -6,6 +6,7 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { notifyProject } from "@/lib/email";
+import { getCompany, companyShortName } from "@/lib/company";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/updates`);
@@ -31,7 +32,7 @@ export async function createUpdate(projectId: string, formData: FormData) {
     projectId,
     `New site update — ${project?.name ?? "your project"}`,
     [
-      `J Group has posted a new site update on ${project?.name ?? "your project"}.`,
+      `${companyShortName(await getCompany())} has posted a new site update on ${project?.name ?? "your project"}.`,
       `${title}`,
       `Sign in to read the full summary and photos.`,
     ],

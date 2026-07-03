@@ -194,7 +194,7 @@ export default async function ClaimDetailPage({
         ) : (
           <p className="text-sm text-stone-500">
             {isBuilder
-              ? "Upload the Xero-generated tax invoice (with J Group payment details)."
+              ? "Upload the Xero-generated tax invoice (with your payment details)."
               : "The tax invoice will appear here once issued."}
           </p>
         )}

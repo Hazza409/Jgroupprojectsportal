@@ -12,7 +12,7 @@ One milestone ≈ one working session. Start a session with:
 
 ---
 
-## Milestone 1 — White-label (1 session)
+## Milestone 1 — White-label (1 session) ✅ DONE 2026-07-04
 Unscrew the J Group branding from the walls.
 - New `Company` model + settings page: name, logo upload, tagline, brand
   colours, builder's margin %, GST %.
@@ -84,3 +84,15 @@ Strangers must be able to join without Claude/Harry doing it by hand.
 
 ## Status log
 - 2026-07-02: Plan written. Nothing started.
+- 2026-07-04: **M1 (white-label) complete.** `Company` model added (name, short
+  name, tagline, location, print footer, logo upload, per-theme accent colours,
+  margin %, GST %); J Group seeded by the migration itself so prod self-seeds on
+  deploy and looks identical. Every hardcoded "J Group" / "One Of One" / 12.5% /
+  10% reference (pages, nav, emails, claim print, manifest, metadata) now reads
+  from settings via `src/lib/company.ts`. New builder-only page:
+  **/builder/settings**. Margin/GST constants removed from `money.ts` —
+  `inclMarginGst(cents, company)` everywhere. Logo uploads live under public
+  `company/` storage keys. Font: Ginto stays for J Group; stack already falls
+  back to Helvetica/Arial (per-tenant font choice deferred to M2/M3).
+  Verified: build + typecheck clean, browser smoke test (identical rendering,
+  settings round-trip, accent + margin flow-through). Next: **Milestone 2**.

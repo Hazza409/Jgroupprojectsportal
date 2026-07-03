@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents, inclMarginGst, BUILDERS_MARGIN, GST } from "@/lib/money";
+import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
+import { getCompany } from "@/lib/company";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClientViewControl } from "@/components/ClientViewControl";
 
@@ -9,6 +10,7 @@ import { ClientViewControl } from "@/components/ClientViewControl";
 export default async function ProjectOverview({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
+  const company = await getCompany();
 
   const [project, estimateLines, approvedClaims, claims, approvedVars, pendingVars, schedule, events, photos] =
     await Promise.all([
@@ -31,8 +33,8 @@ export default async function ProjectOverview({ params }: { params: { projectId:
     ]);
 
   // All figures shown inclusive of builder's margin + GST (matches Cost to Complete).
-  const estimateTotal = inclMarginGst(sumCents(estimateLines.map((l) => l.totalCents)));
-  const approvedVariations = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)));
+  const estimateTotal = inclMarginGst(sumCents(estimateLines.map((l) => l.totalCents)), company);
+  const approvedVariations = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)), company);
 
   // Drawn down = what the client has APPROVED across progress claims — headline
   // claim totals (recon total inc GST when built from a sheet, else line sum;
@@ -79,7 +81,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
       {showConstruction && (
       <>
       <p className="text-xs text-stone-400">
-        All amounts include builder&apos;s margin ({(BUILDERS_MARGIN * 100).toFixed(1)}%) and GST ({(GST * 100).toFixed(0)}%).
+        All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
       </p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
@@ -125,7 +127,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
                   <span className="text-sm tabular-nums">
-                    {v.totalCents > 0 ? formatCents(inclMarginGst(v.totalCents)) : "Being priced"}
+                    {v.totalCents > 0 ? formatCents(inclMarginGst(v.totalCents, company)) : "Being priced"}
                   </span>
                   <StatusBadge status={v.status} />
                 </span>

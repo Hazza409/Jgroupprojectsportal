@@ -40,7 +40,7 @@ async function main() {
       name: PROJECT,
       address: "12 Ocean View Pde, Freshwater NSW 2096",
       clientName: "Sarah & Tom Whitfield",
-      contractValueCents: inclMarginGst(estimateBase),
+      contractValueCents: inclMarginGst(estimateBase, { marginPercent: 12.5, gstPercent: 10 }),
       status: "ACTIVE",
       memberships: { create: [{ userId: builder.id, role: Role.BUILDER }] },
     },

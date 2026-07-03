@@ -2,7 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Ginto Nord (J Group brand type, licensed — Dinamo) ────────
+/* ── Ginto Nord (J Group's brand type; licence is J-Group-only — Dinamo).
+   Other tenants fall back to the neutral sans stack in tailwind.config.
+   ────────
    The brand display family, used app-wide. Only Thin + Light are
    licensed here; Light covers the 251–900 range so headings render
    in true Ginto Nord Light rather than a faux-bold synthetic weight. */
