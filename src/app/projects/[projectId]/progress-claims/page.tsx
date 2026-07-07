@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents } from "@/lib/money";
+import { formatCents } from "@/lib/money";
 import { getCompany } from "@/lib/company";
-import { projectDrawdown } from "@/lib/claims";
+import { projectDrawdown, claimHeadlineCents } from "@/lib/claims";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createClaim } from "./actions";
@@ -40,7 +40,7 @@ export default async function ProgressClaimsPage({ params }: { params: { project
       ) : (
         <div className="space-y-3">
           {claims.map((c) => {
-            const total = c.totalCents > 0 ? c.totalCents : sumCents(c.lines.map((l) => l.claimedAmountCents));
+            const total = claimHeadlineCents(c, company);
             return (
               <Link
                 key={c.id}

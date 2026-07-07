@@ -3,6 +3,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
 import { getCompany } from "@/lib/company";
+import { claimHeadlineCents } from "@/lib/claims";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClientViewControl } from "@/components/ClientViewControl";
 
@@ -36,12 +37,11 @@ export default async function ProjectOverview({ params }: { params: { projectId:
   const estimateTotal = inclMarginGst(sumCents(estimateLines.map((l) => l.totalCents)), company);
   const approvedVariations = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)), company);
 
-  // Drawn down = what the client has APPROVED across progress claims — headline
-  // claim totals (recon total inc GST when built from a sheet, else line sum;
-  // same figure the Progress Claims register shows).
-  const claimedTotal = sumCents(
-    approvedClaims.map((c) => (c.totalCents > 0 ? c.totalCents : sumCents(c.lines.map((l) => l.claimedAmountCents)))),
-  );
+  // Drawn down = what the client has APPROVED across progress claims — the
+  // client-facing headline (recon total inc GST from a sheet, else the line sum
+  // grossed to inc margin+GST). claimHeadlineCents keeps this identical to the
+  // register, ledger, claim detail, and printed invoice.
+  const claimedTotal = sumCents(approvedClaims.map((c) => claimHeadlineCents(c, company)));
   const budgetBase = estimateTotal + approvedVariations;
   const drawnPct = budgetBase > 0 ? (claimedTotal / budgetBase) * 100 : 0;
 

@@ -57,11 +57,15 @@ export async function importCurrentCosts(projectId: string, formData: FormData):
   if (!/\.(xlsx?|csv)$/i.test(file.name)) return { ok: false, message: "Please upload an .xlsx, .xls or .csv file." };
 
   const buf = Buffer.from(await file.arrayBuffer());
-  // Accept either the simple template OR the full "Cost to Complete Workings" workbook.
-  let { rows, warnings } = parseCostRowsBuffer(buf);
+  // Try the full "Cost to Complete Workings" workbook FIRST — it anchors on
+  // unambiguous section titles. The simple template's generic headers ("Code",
+  // "Amount") otherwise mis-latch onto the workbook and ingest its Total row as
+  // a cost code, doubling Current to Date.
+  let rows: Awaited<ReturnType<typeof parseCostRowsBuffer>>["rows"];
+  let warnings: string[];
   let importedVariations = 0;
-  if (rows.length === 0) {
-    const wbk = parseCtcWorkbookBuffer(buf);
+  const wbk = parseCtcWorkbookBuffer(buf);
+  if (wbk.rows.length > 0) {
     rows = wbk.rows;
     warnings = wbk.warnings;
     // Seed approved variations from the workbook ONLY if none exist yet (avoid dupes
@@ -88,8 +92,35 @@ export async function importCurrentCosts(projectId: string, formData: FormData):
         importedVariations++;
       }
     }
+  } else {
+    const simple = parseCostRowsBuffer(buf);
+    rows = simple.rows;
+    warnings = simple.warnings;
   }
   if (rows.length === 0) return { ok: false, message: warnings[0] ?? "No rows parsed." };
+
+  // Double-count guard: 'import:<code>' rows are ABSOLUTE cost-to-date and would
+  // stack on top of per-period claim/Xero actuals for the same code. Warn (don't
+  // silently corrupt) so the builder decides which source to keep. Claim/Xero
+  // actuals carry a costCodeId, so detect overlap by cost code.
+  const importCodeStrings = rows.filter((r) => r.currentCents !== null).map((r) => r.code);
+  const existingCodes = importCodeStrings.length
+    ? await db.costCode.findMany({ where: { projectId, code: { in: importCodeStrings } }, select: { id: true, code: true } })
+    : [];
+  const overlapCodes = existingCodes.length
+    ? await db.costActual.findMany({
+        where: {
+          projectId,
+          costCodeId: { in: existingCodes.map((c) => c.id) },
+          NOT: { xeroSourceId: { startsWith: "import:" } },
+        },
+        select: { costCodeId: true },
+        distinct: ["costCodeId"],
+      })
+    : [];
+  const overlapCodeLabels = overlapCodes
+    .map((o) => existingCodes.find((c) => c.id === o.costCodeId)?.code)
+    .filter(Boolean);
 
   let estimateUpdates = 0;
   let currentUpdates = 0;
@@ -141,8 +172,11 @@ export async function importCurrentCosts(projectId: string, formData: FormData):
   revalidatePath(`/projects/${projectId}/estimate`);
   revalidatePath(`/projects/${projectId}/variations`);
   const varNote = importedVariations > 0 ? `, ${importedVariations} variation(s)` : "";
+  const overlapNote = overlapCodeLabels.length
+    ? ` ⚠ ${overlapCodeLabels.length} code(s) also have costs from approved claims or Xero (${overlapCodeLabels.slice(0, 6).join(", ")}${overlapCodeLabels.length > 6 ? "…" : ""}) — Current to Date now counts BOTH. Remove one source to avoid double-counting.`
+    : "";
   return {
     ok: true,
-    message: `Updated ${rows.length} cost code(s) — ${estimateUpdates} estimate, ${currentUpdates} current cost${varNote}.`,
+    message: `Updated ${rows.length} cost code(s) — ${estimateUpdates} estimate, ${currentUpdates} current cost${varNote}.${overlapNote}`,
   };
 }

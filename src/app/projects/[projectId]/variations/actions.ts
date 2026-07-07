@@ -107,8 +107,10 @@ export async function importVariations(projectId: string, formData: FormData): P
   });
 
   await db.$transaction(async (tx) => {
-    // Reset on replace: wipe existing variations first (renumbers from 1).
-    if (replace) await tx.variation.deleteMany({ where: { projectId } });
+    // Reset on replace: wipe existing variations first — but NEVER approved
+    // ones. A client's approval (and its date) is a contract record; a re-import
+    // must not silently delete it, forge a new approvedAt, or re-base the budget.
+    if (replace) await tx.variation.deleteMany({ where: { projectId, status: { not: VariationStatus.APPROVED } } });
     const last = await tx.variation.findFirst({
       where: { projectId },
       orderBy: { variationNumber: "desc" },

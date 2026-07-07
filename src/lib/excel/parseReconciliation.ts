@@ -44,15 +44,31 @@ const num = (v: unknown): number | null => {
 };
 const cents = (v: unknown) => dollarsToCents((num(v) ?? 0).toString());
 
+// Normalize label text for matching: lowercase, drop apostrophes (so
+// "builder's" == "builders"), collapse whitespace. Guards against the sheet's
+// inconsistent apostrophe use breaking margin/GST lookups.
+const norm = (v: unknown) => s(v).toLowerCase().replace(/['’`]/g, "").replace(/\s+/g, " ").trim();
+
 // Find the first cell (any column) whose text contains `needle`. Returns row+col
 // so values can be read relative to the label (the sheet may omit column A).
 function findCell(rows: unknown[][], needle: string, from = 0): { r: number; c: number } | null {
-  const n = needle.toLowerCase();
+  const n = norm(needle);
   for (let r = from; r < rows.length; r++) {
     const row = rows[r] ?? [];
     for (let c = 0; c < row.length; c++) {
-      if (s(row[c]).toLowerCase().includes(n)) return { r, c };
+      if (norm(row[c]).includes(n)) return { r, c };
     }
+  }
+  return null;
+}
+
+// Find a row whose cell IN A SPECIFIC COLUMN exactly equals `needle` — used for
+// the supplier "Total" row so a supplier literally named "Total Tools" can't
+// hijack it.
+function findRowInColumn(rows: unknown[][], col: number, needle: string, from = 0): number | null {
+  const n = norm(needle);
+  for (let r = from; r < rows.length; r++) {
+    if (norm((rows[r] ?? [])[col]) === n) return r;
   }
   return null;
 }
@@ -73,7 +89,7 @@ function pickSheet(wb: XLSX.WorkBook): { name: string; rows: unknown[][] } | nul
   return best;
 }
 
-export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12.5): ParsedRecon {
+export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12.5, defaultGstPercent = 10): ParsedRecon {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
   const picked = pickSheet(wb);
   const warnings: string[] = [];
@@ -140,11 +156,12 @@ export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12
   const labCell = findCell(rows, "per invoice");
   const labourCents = labCell ? cents(rows[labCell.r][labCell.c + 1]) : 0;
 
-  // Costs this period — supplier "Total" row (amount at base+3), else sum.
-  const costsTotalCell = supHdrCell ? findCell(rows, "total", supHdrCell.r + 1) : null;
+  // Costs this period — the supplier "Total" row (exact match in the supplier
+  // LABEL column so a supplier named "Total Tools" can't hijack it), else sum.
+  const costsTotalRow = supHdrCell ? findRowInColumn(rows, supHdrCell.c, "total", supHdrCell.r + 1) : null;
   const costsCents =
-    costsTotalCell && num(rows[costsTotalCell.r][supHdrCell!.c + 3]) !== null
-      ? cents(rows[costsTotalCell.r][supHdrCell!.c + 3])
+    costsTotalRow !== null && num(rows[costsTotalRow][supHdrCell!.c + 3]) !== null
+      ? cents(rows[costsTotalRow][supHdrCell!.c + 3])
       : supplierLines.reduce((a, l) => a + l.amountCents, 0);
 
   // Builder's margin (value column is 3 right of the label, like column E).
@@ -156,7 +173,7 @@ export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12
 
   // GST + total
   const gstCell = findCell(rows, "gst this invoice");
-  const gstCents = gstCell ? cents(rows[gstCell.r][gstCell.c + 3]) : Math.round((labourCents + costsCents + marginCents) * 0.1);
+  const gstCents = gstCell ? cents(rows[gstCell.r][gstCell.c + 3]) : Math.round((labourCents + costsCents + marginCents) * (defaultGstPercent / 100));
   const totalCell = findCell(rows, "total amount per invoice");
   const subtotalCents = labourCents + costsCents + marginCents;
   const totalCents = totalCell ? cents(rows[totalCell.r][totalCell.c + 3]) : subtotalCents + gstCents;

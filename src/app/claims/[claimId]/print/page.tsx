@@ -2,10 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents } from "@/lib/money";
+import { formatCents } from "@/lib/money";
 import { PrintButton } from "./PrintButton";
 import { getCompany } from "@/lib/company";
-import { projectDrawdown } from "@/lib/claims";
+import { projectDrawdown, claimHeadlineCents } from "@/lib/claims";
 
 const fmtDate = (d: Date | null) =>
   d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "long" }).format(d) : "—";
@@ -26,6 +26,10 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
   });
   if (!claim) notFound();
   if (!(await canAccessProject(user, claim.projectId))) notFound();
+  // This route lives OUTSIDE /projects/[projectId], so the project layout's
+  // client-view guard doesn't cover it: enforce it here too — a client on the
+  // Handover view must not reach financial documents by deep link.
+  if (user.role === "CLIENT" && claim.project.clientView === "HANDOVER") notFound();
   const company = await getCompany();
 
   const summary = [
@@ -40,7 +44,7 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
   // Invoice-on-invoice contract position (budget = estimate + approved
   // variations incl margin+GST; prior = approved claims before this one).
   const drawdown = await projectDrawdown(claim.projectId, company);
-  const headline = claim.totalCents > 0 ? claim.totalCents : sumCents(claim.lines.map((l) => l.claimedAmountCents));
+  const headline = claimHeadlineCents(claim, company);
   const priorDrawnCents = drawdown.rows
     .filter((r) => r.claimNumber < claim.claimNumber && r.drawnToDateCents !== null)
     .reduce((acc, r) => acc + r.amountCents, 0);

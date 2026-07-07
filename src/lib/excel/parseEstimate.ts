@@ -96,10 +96,17 @@ export function parseEstimateBuffer(buf: Buffer): ParsedEstimate {
 
     const description = String(cell(map.description) ?? "").trim();
     if (!description) continue; // skip blank/section-break rows
+    // Skip subtotal/total summary rows carrying an amount (would inflate the
+    // estimate) — but only when they have no qty/rate of their own.
+    const qtyCell = cell(map.quantity);
+    const hasQty = qtyCell !== undefined && qtyCell !== null && String(qtyCell).trim() !== "";
+    if (/^(sub[\s-]?total|total|grand total)\b/i.test(description) && !hasQty && !cell(map.unitCost)) continue;
 
-    const quantity = Number(cell(map.quantity) ?? 1) || 0;
+    // Blank qty defaults to 1 (lump-sum line); an EXPLICIT 0 stays 0; garbage
+    // text ("2 ea") falls back to 1.
+    const quantity = !hasQty ? 1 : Number.isFinite(Number(qtyCell)) ? Number(qtyCell) : 1;
     const unitCostCents = dollarsToCents(cell(map.unitCost) as string | number);
-    const computed = lineTotalCents(quantity || 1, unitCostCents);
+    const computed = lineTotalCents(quantity, unitCostCents);
     const sheetTotalCents = dollarsToCents(cell(map.total) as string | number);
 
     // If sheet has a total but it disagrees with qty×rate by > 1c, flag it.
@@ -113,7 +120,7 @@ export function parseEstimateBuffer(buf: Buffer): ParsedEstimate {
       costCode: cell(map.costCode) ? String(cell(map.costCode)).trim() : null,
       costCodeName: cell(map.costCodeName) ? String(cell(map.costCodeName)).trim() : null,
       description,
-      quantity: quantity || 1,
+      quantity,
       unit: cell(map.unit) ? String(cell(map.unit)).trim() : null,
       unitCostCents,
       // Prefer computed; fall back to sheet total if no unit cost was provided.

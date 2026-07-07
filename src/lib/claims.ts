@@ -51,12 +51,22 @@ export function matchCostCodeId(description: string, codes: CodeRef[]): string |
 
   // Tier 2: unique near match — only for names long enough that a distance of
   // 2 can't be a coincidence, and only when exactly one code is the best fit.
+  // Names whose DIGITS differ never fuzzy-match ("Stage 2" must not match
+  // "Stage 1" at distance 1 — that posts money to the wrong stage).
   if (target.length < 6) return null;
+  const digits = (s: string) => s.replace(/[^0-9]/g, "");
+  const maxD = target.length < 10 ? 1 : 2;
   let best: CodeRef | null = null;
-  let bestD = 3; // accept distance ≤ 2
+  let bestD = maxD + 1;
   let ties = 0;
   for (const c of codes) {
-    const d = editDistance(target, normalizeCostName(c.name));
+    const norm = normalizeCostName(c.name);
+    if (digits(norm) !== digits(target)) continue;
+    // On short names a SAME-LENGTH single-char change is a different trade
+    // ("Piling"/"Tiling", "Screens"/"Screeds") — not a plural. Only accept a
+    // near-match that changes length (plural/appended char) for short names.
+    if (target.length < 10 && norm.length === target.length) continue;
+    const d = editDistance(target, norm);
     if (d < bestD) {
       best = c;
       bestD = d;
@@ -66,6 +76,20 @@ export function matchCostCodeId(description: string, codes: CodeRef[]): string |
     }
   }
   return best && ties === 1 ? best.id : null;
+}
+
+/**
+ * A claim's client-facing headline amount (inc margin + GST):
+ * recon-built claims store it (totalCents from the sheet); manual claims store
+ * base-cost lines, so gross the line sum. EVERY page/email must use this — the
+ * same figure everywhere (register, ledger, detail, print, overview).
+ */
+export function claimHeadlineCents(
+  claim: { totalCents: number; lines: { claimedAmountCents: number }[] },
+  company: { marginPercent: number; gstPercent: number },
+): number {
+  if (claim.totalCents > 0) return claim.totalCents;
+  return inclMarginGst(sumCents(claim.lines.map((l) => l.claimedAmountCents)), company);
 }
 
 /** A project's cost codes in deterministic order, for matching. */
@@ -109,7 +133,7 @@ async function relinkClaimLines(claimId: string, codes: CodeRef[]): Promise<numb
 export async function materializeClaimActuals(projectId: string, claimId: string): Promise<number> {
   const claim = await db.progressClaim.findFirst({
     where: { id: claimId, projectId, status: ClaimStatus.APPROVED },
-    select: { id: true, claimNumber: true, approvedAt: true },
+    select: { id: true, claimNumber: true, approvedAt: true, labourCents: true },
   });
   if (!claim) return 0;
 
@@ -135,6 +159,29 @@ export async function materializeClaimActuals(projectId: string, claimId: string
       },
       // Keep linkage + amount in sync if the line was re-linked or corrected.
       update: { costCodeId: l.costCodeId, amountCents: l.claimedAmountCents },
+    });
+  }
+
+  // J Group's recon sheets carry the builder's own labour as a SUMMARY figure,
+  // not a budget-overview line — without this it never reaches Cost to
+  // Complete (the "Labour" cost code stays $0 while the drawdown includes it).
+  // Post it as its own actual, keyed claim:<id>:labour — but only when no line
+  // already maps to the Labour code (then the sheet covered labour itself).
+  const labourCode = codes.find((c) => normalizeCostName(c.name) === "labour") ?? null;
+  const labourCoveredByLines = labourCode ? lines.some((l) => l.costCodeId === labourCode.id) : false;
+  if (claim.labourCents !== 0 && !labourCoveredByLines) {
+    const xeroSourceId = `claim:${claim.id}:labour`;
+    await db.costActual.upsert({
+      where: { projectId_xeroSourceId: { projectId, xeroSourceId } },
+      create: {
+        projectId,
+        costCodeId: labourCode?.id ?? null,
+        xeroSourceId,
+        description: `Claim #${claim.claimNumber} — Labour`,
+        amountCents: claim.labourCents,
+        occurredAt,
+      },
+      update: { costCodeId: labourCode?.id ?? null, amountCents: claim.labourCents },
     });
   }
   return lines.length;
@@ -189,7 +236,7 @@ export async function projectDrawdown(
 
   let drawn = 0;
   const rows: DrawdownRow[] = claims.map((c) => {
-    const amountCents = c.totalCents > 0 ? c.totalCents : sumCents(c.lines.map((l) => l.claimedAmountCents));
+    const amountCents = claimHeadlineCents(c, company);
     const counts = c.status === ClaimStatus.APPROVED;
     if (counts) drawn += amountCents;
     return {

@@ -6,11 +6,11 @@ import { ClaimStatus, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
-import { dollarsToCents, formatCents, sumCents } from "@/lib/money";
+import { dollarsToCents, formatCents } from "@/lib/money";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
 import { getCompany, companyShortName } from "@/lib/company";
-import { materializeClaimActuals, matchCostCodeId, projectCodeRefs } from "@/lib/claims";
+import { materializeClaimActuals, matchCostCodeId, projectCodeRefs, claimHeadlineCents } from "@/lib/claims";
 
 export interface ReconImportResult {
   ok: boolean;
@@ -128,7 +128,8 @@ export async function importReconSheet(
   if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload the reconciliation .xlsx file." };
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const parsed = parseReconciliationBuffer(buf, (await getCompany()).marginPercent);
+  const reconCompany = await getCompany();
+  const parsed = parseReconciliationBuffer(buf, reconCompany.marginPercent, reconCompany.gstPercent);
   if (parsed.budgetOverview.length === 0 && parsed.supplierLines.length === 0) {
     return { ok: false, message: parsed.warnings[0] ?? "Could not read the reconciliation sheet." };
   }
@@ -230,6 +231,15 @@ export async function uploadXeroInvoice(projectId: string, claimId: string, form
 // the claim's costs to Cost to Complete exactly like a normal approval.
 export async function recordClaimApproved(projectId: string, claimId: string) {
   await builderOnly(projectId);
+  // Must have content — otherwise a stale totalCents would draw down the budget
+  // while posting nothing to Cost to Complete.
+  const claim = await db.progressClaim.findFirst({
+    where: { id: claimId, projectId },
+    select: { totalCents: true, _count: { select: { lines: true } } },
+  });
+  if (!claim || (claim._count.lines === 0 && claim.totalCents === 0)) {
+    throw new Error("Add line items or import a reconciliation sheet before recording as approved");
+  }
   const updated = await db.progressClaim.updateMany({
     where: { id: claimId, projectId, status: { in: [ClaimStatus.DRAFT, ClaimStatus.SUBMITTED] } },
     data: { status: ClaimStatus.APPROVED, approvedAt: new Date() },
@@ -320,7 +330,7 @@ export async function submitClaim(projectId: string, claimId: string) {
     include: { project: { select: { name: true } }, lines: { select: { claimedAmountCents: true } } },
   });
   if (claim) {
-    const total = claim.totalCents > 0 ? claim.totalCents : sumCents(claim.lines.map((l) => l.claimedAmountCents));
+    const total = claimHeadlineCents(claim, await getCompany());
     await notifyProject(
       projectId,
       `Progress claim for review — ${claim.project.name}`,
@@ -354,8 +364,8 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
     revalidatePath(`/projects/${projectId}/cost-to-complete`);
     revalidatePath(`/projects/${projectId}`); // overview drawn-down
 
-    // Headline = recon total (inc GST) when built from a sheet, else line sum.
-    const total = claim.totalCents > 0 ? claim.totalCents : sumCents(claim.lines.map((l) => l.claimedAmountCents));
+    // Headline = recon total (inc GST) when built from a sheet, else grossed line sum.
+    const total = claimHeadlineCents(claim, await getCompany());
     await notifyBuilders(`Progress claim approved — ${claim.project.name}`, [
       `${user.name} (${user.role.toLowerCase()}) approved Claim #${claim.claimNumber} on ${claim.project.name}.`,
       `Approved amount: ${formatCents(total)}`,

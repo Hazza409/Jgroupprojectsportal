@@ -11,7 +11,15 @@ import { storage } from "@/lib/storage";
 // shows on the public landing/login pages) — no auth, but nothing sensitive
 // may ever be stored under company/.
 export async function GET(_req: NextRequest, { params }: { params: { key: string[] } }) {
-  const segments = params.key.map(decodeURIComponent);
+  // Next has already decoded the path segments once. Do NOT decode again — a
+  // second decode lets "%252e%252e" survive as ".." and makes the authorized
+  // path (segments[1]) diverge from the served path (segments.join). Reject any
+  // segment that is empty or contains traversal/separator characters so the
+  // path we authorize is exactly the path we read.
+  const segments = params.key;
+  if (segments.some((seg) => !seg || seg === "." || seg === ".." || seg.includes("/") || seg.includes("\\"))) {
+    return new NextResponse("Not found", { status: 404 });
+  }
 
   if (segments[0] === "company" && segments.length >= 3) {
     try {

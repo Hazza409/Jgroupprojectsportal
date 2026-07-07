@@ -24,7 +24,7 @@ export default async function CostToCompletePage({
   const isBuilder = user.role === "BUILDER";
   const company = await getCompany();
 
-  const [xeroConnected, xeroConn, costCodes, approvedVars, unallocatedActuals] = await Promise.all([
+  const [xeroConnected, xeroConn, costCodes, approvedVars, unallocatedActuals, unallocatedEstLines] = await Promise.all([
     isConnected(projectId),
     db.xeroConnection.findUnique({ where: { projectId }, select: { lastSyncedAt: true } }),
     db.costCode.findMany({
@@ -43,6 +43,9 @@ export default async function CostToCompletePage({
     // Costs with no matching cost code (e.g. claim lines for variation work or
     // renamed items) — shown as an "Unallocated" row so money never disappears.
     db.costActual.findMany({ where: { projectId, costCodeId: null }, select: { amountCents: true } }),
+    // Estimate lines with no cost code — included in the total (and their own
+    // row) so the CTC estimate reconciles with the Overview and drawdown budget.
+    db.estimateLineItem.findMany({ where: { projectId, costCodeId: null }, select: { totalCents: true } }),
   ]);
 
   // Per-code rows grossed up for display.
@@ -52,14 +55,19 @@ export default async function CostToCompletePage({
     return { id: cc.id, code: cc.code, name: cc.name, estimate, current, variance: estimate - current };
   });
 
-  // Unallocated costs (no matching cost code) — kept visible so the page total
-  // reconciles with the Progress Claims register.
+  // Unallocated costs / estimate (no matching cost code) — kept visible so the
+  // page totals reconcile with the Overview, drawdown, and claims register.
   const unallocatedBase = sumCents(unallocatedActuals.map((a) => a.amountCents));
   const unallocated = inclMarginGst(unallocatedBase, company);
+  const unallocatedEstBase = sumCents(unallocatedEstLines.map((l) => l.totalCents));
+  const unallocatedEst = inclMarginGst(unallocatedEstBase, company);
 
   // Totals are grossed from the AGGREGATE base (not summed per-row) so they match
   // the Overview to the cent — single, unambiguous rounding.
-  const estimateTotal = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.estimateLines.map((l) => l.totalCents))), company);
+  const estimateTotal = inclMarginGst(
+    sumCents(costCodes.flatMap((cc) => cc.estimateLines.map((l) => l.totalCents))) + unallocatedEstBase,
+    company,
+  );
   const currentToDate = inclMarginGst(
     sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))) + unallocatedBase,
     company,
@@ -176,13 +184,15 @@ export default async function CostToCompletePage({
                     </td>
                   </tr>
                 ))}
-                {unallocated !== 0 && (
+                {(unallocated !== 0 || unallocatedEst !== 0) && (
                   <tr>
                     <td className="px-4 py-2 font-mono text-xs text-stone-400">—</td>
                     <td className="px-4 py-2 text-stone-500">Unallocated (no matching cost code)</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">—</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{formatCents(unallocated)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">—</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">
+                      {unallocatedEst !== 0 ? formatCents(unallocatedEst) : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">{unallocated !== 0 ? formatCents(unallocated) : "—"}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">{formatCents(unallocatedEst - unallocated)}</td>
                   </tr>
                 )}
               </tbody>

@@ -50,7 +50,20 @@ function toDate(value: unknown): Date | null {
     if (!parsed) return null;
     return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d, parsed.H, parsed.M, parsed.S));
   }
-  const d = new Date(String(value));
+  const str = String(value).trim();
+  // Day-first formats (AU): d/m/y or d-m-y. new Date() would read these as US
+  // month-first, silently flipping 03/04/2026 (3 Apr) to 4 Mar. Parse explicitly.
+  const dmy = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/.exec(str);
+  if (dmy) {
+    let [, dd, mm, yy] = dmy;
+    const day = Number(dd), month = Number(mm);
+    let year = Number(yy);
+    if (year < 100) year += 2000;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return new Date(Date.UTC(year, month - 1, day));
+    }
+  }
+  const d = new Date(str);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
@@ -89,7 +102,9 @@ export function parseScheduleBuffer(buf: Buffer): ParsedSchedule {
     const taskName = String(row[map.task!] ?? "").trim();
     if (!taskName) continue;
 
-    let pct = Number(map.percent! >= 0 ? row[map.percent!] : 0) || 0;
+    // Accept "50%", "50", or 0.5 — strip a trailing % so text cells don't → 0.
+    const pctRaw = map.percent! >= 0 ? row[map.percent!] : 0;
+    let pct = Number(String(pctRaw ?? "").replace(/[%\s]/g, "")) || 0;
     if (pct > 0 && pct <= 1) pct = pct * 100; // accept 0.5 meaning 50%
     pct = Math.max(0, Math.min(100, pct));
 

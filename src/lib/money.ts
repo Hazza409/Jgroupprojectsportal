@@ -19,10 +19,19 @@ export function inclMarginGst(baseCents: number, rates: MarginGstRates): number 
   return Math.round(baseCents * (1 + rates.marginPercent / 100) * (1 + rates.gstPercent / 100));
 }
 
-/** Parse a user/Excel-entered dollar string or number into integer cents. */
+/** Parse a user/Excel-entered dollar string or number into integer cents.
+ *  Accounting-style parentheses negatives — "(1,234.56)" — parse as negative. */
 export function dollarsToCents(input: string | number | null | undefined): number {
   if (input === null || input === undefined || input === "") return 0;
-  const n = typeof input === "number" ? input : Number(String(input).replace(/[$,\s]/g, ""));
+  let n: number;
+  if (typeof input === "number") {
+    n = input;
+  } else {
+    let s = String(input).replace(/[$,\s]/g, "");
+    const parens = /^\((.*)\)$/.exec(s);
+    if (parens) s = `-${parens[1]}`;
+    n = Number(s);
+  }
   if (!Number.isFinite(n)) return 0;
   // Round to nearest cent to avoid float drift (e.g. 0.1 + 0.2 issues).
   return Math.round(n * 100);
