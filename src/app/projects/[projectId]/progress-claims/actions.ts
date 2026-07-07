@@ -224,6 +224,23 @@ export async function uploadXeroInvoice(projectId: string, claimId: string, form
   refresh(projectId, claimId);
 }
 
+// Builder records a claim as ALREADY approved — for historical claims that
+// were approved outside the portal before the project was added to the site.
+// Skips the submit → client-approve flow, sends NO notifications, and posts
+// the claim's costs to Cost to Complete exactly like a normal approval.
+export async function recordClaimApproved(projectId: string, claimId: string) {
+  await builderOnly(projectId);
+  const updated = await db.progressClaim.updateMany({
+    where: { id: claimId, projectId, status: { in: [ClaimStatus.DRAFT, ClaimStatus.SUBMITTED] } },
+    data: { status: ClaimStatus.APPROVED, approvedAt: new Date() },
+  });
+  if (updated.count === 0) return;
+  await materializeClaimActuals(projectId, claimId);
+  revalidatePath(`/projects/${projectId}/cost-to-complete`);
+  revalidatePath(`/projects/${projectId}`);
+  refresh(projectId, claimId);
+}
+
 // Builder re-opens a submitted or knocked-back claim so it can be edited and
 // resubmitted (the recon re-import replaces its contents — that's the "replace").
 export async function reopenClaim(projectId: string, claimId: string) {

@@ -55,14 +55,16 @@ function encodePNG(width, height, rgba) {
 // Path M80 6 V71 A17 17 0 0 1 63 88 H6 with strokeWidth 8 (butt caps):
 //   stem: x 76..84, y 6..71 · corner ring: centre (63,71), radius 13..21,
 //   quadrant right+below centre · foot: x 6..63, y 84..92.
-function inMark(u, v) {
-  if (u >= 76 && u <= 84 && v >= 6 && v <= 71) return true;
-  if (u >= 6 && u <= 63 && v >= 84 && v <= 92) return true;
+// `w` = half the stroke width (default 4 = the brand's slim stroke). The
+// favicon uses a bolder stroke so the J still reads at 16px tab size.
+function inMark(u, v, w = 4) {
+  if (u >= 80 - w && u <= 80 + w && v >= 6 && v <= 71) return true;
+  if (u >= 6 && u <= 63 && v >= 88 - w && v <= 88 + w) return true;
   const du = u - 63;
   const dv = v - 71;
   if (du >= 0 && dv >= 0) {
     const r = Math.hypot(du, dv);
-    if (r >= 13 && r <= 21) return true;
+    if (r >= 17 - w && r <= 17 + w) return true;
   }
   return false;
 }
@@ -71,7 +73,7 @@ function inMark(u, v) {
 const BG = [255, 255, 255]; // white
 const FG = [43, 43, 43]; // brand charcoal
 
-function makeIcon(size, padFrac) {
+function makeIcon(size, padFrac, w = 4) {
   const rgba = Buffer.alloc(size * size * 4);
   const content = size * (1 - 2 * padFrac);
   const off = size * padFrac;
@@ -83,7 +85,7 @@ function makeIcon(size, padFrac) {
         for (let sx = 0; sx < SS; sx++) {
           const u = ((x + (sx + 0.5) / SS - off) / content) * 100;
           const v = ((y + (sy + 0.5) / SS - off) / content) * 100;
-          if (inMark(u, v)) hit++;
+          if (inMark(u, v, w)) hit++;
         }
       }
       const a = hit / (SS * SS);
@@ -109,3 +111,9 @@ for (const [name, size, pad] of targets) {
   fs.writeFileSync(path.join(out, name), makeIcon(size, pad));
   console.log(`✓ ${name} (${size}x${size})`);
 }
+
+// Favicon (browser tab): Next serves src/app/icon.png automatically. Bolder
+// stroke + tight padding so the J is legible at 16px.
+const favicon = path.join(__dirname, "..", "src", "app", "icon.png");
+fs.writeFileSync(favicon, makeIcon(96, 0.08, 8));
+console.log("✓ src/app/icon.png (96x96 favicon, bold stroke)");

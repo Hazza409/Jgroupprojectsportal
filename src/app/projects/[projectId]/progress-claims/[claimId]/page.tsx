@@ -11,6 +11,7 @@ import { ClaimLineForm } from "./ClaimLineForm";
 import { ReconUploadForm } from "./ReconUploadForm";
 import { InvoiceUploadForm } from "./InvoiceUploadForm";
 import { DeleteClaimButton } from "./DeleteClaimButton";
+import { MarkApprovedButton } from "./MarkApprovedButton";
 import {
   generateClaimLines,
   deleteClaimLine,
@@ -112,6 +113,10 @@ export default async function ClaimDetailPage({
               <form action={submitClaim.bind(null, projectId, claimId)}>
                 <button className="btn-primary" type="submit">Submit for approval</button>
               </form>
+            )}
+            {/* Onboarding existing projects: record historical approvals directly */}
+            {isBuilder && (isDraft || claim.status === "SUBMITTED") && (
+              <MarkApprovedButton projectId={projectId} claimId={claimId} claimNumber={claim.claimNumber} />
             )}
             {claim.status === "SUBMITTED" && (
               <>
