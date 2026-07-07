@@ -10,6 +10,7 @@ import { dollarsToCents, formatCents, sumCents } from "@/lib/money";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
 import { getCompany, companyShortName } from "@/lib/company";
+import { materializeClaimActuals } from "@/lib/claims";
 
 export interface ReconImportResult {
   ok: boolean;
@@ -330,6 +331,12 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
   });
 
   if (approve) {
+    // Post the claim's per-cost-code amounts into the cost feed so the
+    // Cost to Complete "Current to Date" reflects this approval (idempotent).
+    await materializeClaimActuals(projectId, claimId);
+    revalidatePath(`/projects/${projectId}/cost-to-complete`);
+    revalidatePath(`/projects/${projectId}`); // overview drawn-down
+
     // Headline = recon total (inc GST) when built from a sheet, else line sum.
     const total = claim.totalCents > 0 ? claim.totalCents : sumCents(claim.lines.map((l) => l.claimedAmountCents));
     await notifyBuilders(`Progress claim approved — ${claim.project.name}`, [
