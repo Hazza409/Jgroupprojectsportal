@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
-import { formatCents, sumCents } from "@/lib/money";
+import { formatCents } from "@/lib/money";
 import { getCompany } from "@/lib/company";
-import { projectDrawdown } from "@/lib/claims";
+import { projectDrawdown, claimHeadlineCents } from "@/lib/claims";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClaimLineForm } from "./ClaimLineForm";
 import { ReconUploadForm } from "./ReconUploadForm";
@@ -52,16 +52,17 @@ export default async function ClaimDetailPage({
 
   const isDraft = claim.status === "DRAFT";
   const fromSheet = claim.totalCents > 0 || claim.reconLines.length > 0;
-  const lineSum = sumCents(claim.lines.map((l) => l.claimedAmountCents));
-  const headline = fromSheet ? claim.totalCents : lineSum;
   const store = await storage();
   const reconUrl = claim.reconSheetKey ? await store.url(claim.reconSheetKey) : null;
   const invoiceUrl = claim.xeroInvoiceKey ? await store.url(claim.xeroInvoiceKey) : null;
   const backupUrls = new Map<string, string>();
   for (const f of claim.invoiceFiles) backupUrls.set(f.id, await store.url(f.fileKey));
 
-  // Invoice-on-invoice drawdown position for THIS claim.
+  // Invoice-on-invoice drawdown position for THIS claim. claimHeadlineCents is
+  // the single client-facing basis (inc margin+GST) shared with the register,
+  // ledger, overview, and print — so "This claim" agrees across every page.
   const company = await getCompany();
+  const headline = claimHeadlineCents(claim, company);
   const drawdown = await projectDrawdown(projectId, company);
   const priorDrawnCents = drawdown.rows
     .filter((r) => r.claimNumber < claim.claimNumber && r.drawnToDateCents !== null)
