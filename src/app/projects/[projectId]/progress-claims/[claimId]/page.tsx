@@ -4,6 +4,8 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
 import { formatCents, sumCents } from "@/lib/money";
+import { getCompany } from "@/lib/company";
+import { projectDrawdown } from "@/lib/claims";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClaimLineForm } from "./ClaimLineForm";
 import { ReconUploadForm } from "./ReconUploadForm";
@@ -56,6 +58,21 @@ export default async function ClaimDetailPage({
   const invoiceUrl = claim.xeroInvoiceKey ? await store.url(claim.xeroInvoiceKey) : null;
   const backupUrls = new Map<string, string>();
   for (const f of claim.invoiceFiles) backupUrls.set(f.id, await store.url(f.fileKey));
+
+  // Invoice-on-invoice drawdown position for THIS claim.
+  const company = await getCompany();
+  const drawdown = await projectDrawdown(projectId, company);
+  const priorDrawnCents = drawdown.rows
+    .filter((r) => r.claimNumber < claim.claimNumber && r.drawnToDateCents !== null)
+    .reduce((acc, r) => acc + r.amountCents, 0);
+  const isApproved = claim.status === "APPROVED";
+  const position = [
+    { label: "Budget (estimate + approved variations)", value: drawdown.budgetCents },
+    { label: "Previously drawn (approved claims)", value: priorDrawnCents },
+    { label: "This claim", value: headline },
+    { label: isApproved ? "Drawn to date" : "Drawn to date (if approved)", value: priorDrawnCents + headline, strong: true },
+    { label: "Remaining to draw", value: drawdown.budgetCents - priorDrawnCents - headline, strong: true },
+  ];
 
   const summary = [
     { label: "Labour this period", value: claim.labourCents },
@@ -181,6 +198,24 @@ export default async function ClaimDetailPage({
           </div>
         </div>
       )}
+
+      {/* Invoice-on-invoice drawdown position */}
+      <div className="card">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">Drawdown position</h3>
+        <dl className="space-y-2 text-sm sm:max-w-md">
+          {position.map((s) => (
+            <div
+              key={s.label}
+              className={`flex items-center justify-between gap-6 ${
+                s.strong ? "border-t border-stone-200 pt-2 font-semibold" : ""
+              }`}
+            >
+              <dt className={s.strong ? "" : "text-stone-500"}>{s.label}</dt>
+              <dd className="tabular-nums">{formatCents(s.value)}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
 
       {/* Tax invoice (Xero) with payment details — what the client pays from */}
       <div className="card">

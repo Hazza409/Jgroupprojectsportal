@@ -1,5 +1,6 @@
 import { ClaimStatus } from "@prisma/client";
 import { db } from "./db";
+import { inclMarginGst, sumCents } from "./money";
 
 // ─────────────────────────────────────────────────────────────
 // Cost-code name matching. Real-world estimate vs reconciliation
@@ -137,6 +138,79 @@ export async function materializeClaimActuals(projectId: string, claimId: string
     });
   }
   return lines.length;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Invoice-on-invoice drawdown: each progress claim (invoice) draws
+// down the contract budget (estimate + approved variations, client-
+// facing incl margin+GST — same basis as the Overview). Cumulative
+// counts APPROVED claims only, in claim-number order.
+// ─────────────────────────────────────────────────────────────
+
+export interface DrawdownRow {
+  id: string;
+  claimNumber: number;
+  periodLabel: string | null;
+  status: ClaimStatus;
+  approvedAt: Date | null;
+  /** This claim's headline amount (inc GST — matches the claims register). */
+  amountCents: number;
+  /** Cumulative drawn incl. this claim — null while not approved. */
+  drawnToDateCents: number | null;
+  /** Budget remaining after this claim — null while not approved. */
+  remainingCents: number | null;
+}
+
+export interface ProjectDrawdown {
+  budgetCents: number; // estimate + approved variations (incl margin+GST)
+  drawnCents: number; // total of approved claims
+  remainingCents: number;
+  pct: number;
+  rows: DrawdownRow[]; // ascending claim number
+}
+
+export async function projectDrawdown(
+  projectId: string,
+  company: { marginPercent: number; gstPercent: number },
+): Promise<ProjectDrawdown> {
+  const [estimateLines, approvedVars, claims] = await Promise.all([
+    db.estimateLineItem.findMany({ where: { projectId }, select: { totalCents: true } }),
+    db.variation.findMany({ where: { projectId, status: "APPROVED" }, select: { totalCents: true } }),
+    db.progressClaim.findMany({
+      where: { projectId },
+      orderBy: { claimNumber: "asc" },
+      include: { lines: { select: { claimedAmountCents: true } } },
+    }),
+  ]);
+
+  const budgetCents =
+    inclMarginGst(sumCents(estimateLines.map((l) => l.totalCents)), company) +
+    inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)), company);
+
+  let drawn = 0;
+  const rows: DrawdownRow[] = claims.map((c) => {
+    const amountCents = c.totalCents > 0 ? c.totalCents : sumCents(c.lines.map((l) => l.claimedAmountCents));
+    const counts = c.status === ClaimStatus.APPROVED;
+    if (counts) drawn += amountCents;
+    return {
+      id: c.id,
+      claimNumber: c.claimNumber,
+      periodLabel: c.periodLabel,
+      status: c.status,
+      approvedAt: c.approvedAt,
+      amountCents,
+      drawnToDateCents: counts ? drawn : null,
+      remainingCents: counts ? budgetCents - drawn : null,
+    };
+  });
+
+  return {
+    budgetCents,
+    drawnCents: drawn,
+    remainingCents: budgetCents - drawn,
+    pct: budgetCents > 0 ? (drawn / budgetCents) * 100 : 0,
+    rows,
+  };
 }
 
 /**

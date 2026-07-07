@@ -2,9 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents } from "@/lib/money";
+import { formatCents, sumCents } from "@/lib/money";
 import { PrintButton } from "./PrintButton";
 import { getCompany } from "@/lib/company";
+import { projectDrawdown } from "@/lib/claims";
 
 const fmtDate = (d: Date | null) =>
   d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "long" }).format(d) : "—";
@@ -34,6 +35,21 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
     { label: "Subtotal (ex-GST)", value: claim.subtotalCents, strong: true },
     { label: "GST", value: claim.gstCents },
     { label: "Total claimed (inc GST)", value: claim.totalCents, strong: true },
+  ];
+
+  // Invoice-on-invoice contract position (budget = estimate + approved
+  // variations incl margin+GST; prior = approved claims before this one).
+  const drawdown = await projectDrawdown(claim.projectId, company);
+  const headline = claim.totalCents > 0 ? claim.totalCents : sumCents(claim.lines.map((l) => l.claimedAmountCents));
+  const priorDrawnCents = drawdown.rows
+    .filter((r) => r.claimNumber < claim.claimNumber && r.drawnToDateCents !== null)
+    .reduce((acc, r) => acc + r.amountCents, 0);
+  const position = [
+    { label: "Contract budget (incl approved variations)", value: drawdown.budgetCents },
+    { label: "Previously claimed (approved)", value: priorDrawnCents },
+    { label: "This claim", value: headline },
+    { label: "Claimed to date", value: priorDrawnCents + headline, strong: true },
+    { label: "Remaining", value: drawdown.budgetCents - priorDrawnCents - headline, strong: true },
   ];
 
   return (
@@ -118,6 +134,22 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
               <div
                 key={s.label}
                 className={`flex items-center justify-between ${s.strong ? "border-t border-neutral-300 pt-1.5 font-semibold" : ""}`}
+              >
+                <dt className={s.strong ? "" : "text-neutral-500"}>{s.label}</dt>
+                <dd className="tabular-nums">{formatCents(s.value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        {/* Contract position — invoice-on-invoice drawdown */}
+        <section className="mt-6 flex justify-end">
+          <dl className="w-96 space-y-1.5 border-t border-neutral-300 pt-3 text-sm">
+            <div className="pb-1 text-xs uppercase tracking-wide text-neutral-400">Contract position</div>
+            {position.map((s) => (
+              <div
+                key={s.label}
+                className={`flex items-center justify-between ${s.strong ? "border-t border-neutral-200 pt-1.5 font-semibold" : ""}`}
               >
                 <dt className={s.strong ? "" : "text-neutral-500"}>{s.label}</dt>
                 <dd className="tabular-nums">{formatCents(s.value)}</dd>
