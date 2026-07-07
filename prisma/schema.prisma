@@ -219,11 +219,12 @@ model CostCode {
   name        String
   createdAt   DateTime @default(now())
 
-  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  estimateLines EstimateLineItem[]
-  costActuals   CostActual[]
-  claimLines    ClaimLineItem[]
-  variations    Variation[]
+  project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  estimateLines  EstimateLineItem[]
+  costActuals    CostActual[]
+  claimLines     ClaimLineItem[]
+  variations     Variation[]
+  variationLines VariationLineItem[]
 
   @@unique([projectId, code])
   @@index([projectId])
@@ -423,10 +424,15 @@ model VariationLineItem {
   unit          String?
   unitCostCents Int    @default(0)
   totalCents    Int    @default(0)
+  // Which cost code this line adds to (Cost to Complete "Variations" column).
+  // Falls back to the parent variation's costCodeId when null.
+  costCodeId    String?
 
   variation Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  costCode  CostCode? @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
 
   @@index([variationId])
+  @@index([costCodeId])
 }
 
 model SubcontractorQuote {

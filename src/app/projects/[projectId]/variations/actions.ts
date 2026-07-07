@@ -44,7 +44,8 @@ export async function createVariation(projectId: string, formData: FormData) {
   });
 
   // Assign to a cost code — an explicit pick from the form, else auto-match the
-  // title (the Cost to Complete "Variations" column reads this).
+  // title. Set on BOTH the variation (default) and its line (the Cost to
+  // Complete "Variations" column reads line-level, falling back to variation).
   const pickedCode = String(formData.get("costCodeId") ?? "") || null;
   const costCodeId = pickedCode ?? matchCostCodeId(title, await projectCodeRefs(projectId));
 
@@ -65,6 +66,7 @@ export async function createVariation(projectId: string, formData: FormData) {
             unit: String(formData.get("unit") ?? "") || null,
             unitCostCents,
             totalCents: total,
+            costCodeId,
           },
         ],
       },
@@ -128,6 +130,9 @@ export async function importVariations(projectId: string, formData: FormData): P
     // means we must NOT race; create one variation at a time inside the tx.
     let next = (last?.variationNumber ?? 0) + 1;
     for (const v of parsed.variations) {
+      // Variation-level code = title match (the per-line default); each line
+      // then matches its own description, falling back to the variation code.
+      const varCode = matchCostCodeId(v.title, codes);
       await tx.variation.create({
         data: {
           projectId,
@@ -137,7 +142,7 @@ export async function importVariations(projectId: string, formData: FormData): P
           status: v.status,
           totalCents: v.totalCents,
           approvedAt: v.status === VariationStatus.APPROVED ? new Date() : null,
-          costCodeId: matchCostCodeId(v.title, codes), // for the CTC Variations column
+          costCodeId: varCode,
           lines: {
             create: v.lines.map((l) => ({
               description: l.description,
@@ -145,6 +150,7 @@ export async function importVariations(projectId: string, formData: FormData): P
               unit: l.unit,
               unitCostCents: l.unitCostCents,
               totalCents: l.totalCents,
+              costCodeId: matchCostCodeId(l.description, codes) ?? varCode,
             })),
           },
         },
@@ -161,15 +167,31 @@ export async function importVariations(projectId: string, formData: FormData): P
   };
 }
 
-// Builder assigns (or clears) the cost code a variation adds to — drives the
-// Cost to Complete "Variations" column. Empty string clears it.
-export async function setVariationCostCode(projectId: string, variationId: string, formData: FormData) {
+// Builder assigns each variation LINE to a cost code — drives the Cost to
+// Complete "Variations" column. The form carries one select per line named
+// `code_<lineId>`; empty clears that line. All updates scoped to this project.
+export async function setVariationLineCostCodes(projectId: string, variationId: string, formData: FormData) {
   const user = await assertProjectAccess(projectId);
   if (user.role !== Role.BUILDER) throw new AccessError("Only builders allocate variations");
-  const raw = String(formData.get("costCodeId") ?? "");
-  // Validate the code belongs to THIS project before assigning (no cross-project ids).
-  const costCodeId = raw ? (await db.costCode.findFirst({ where: { id: raw, projectId }, select: { id: true } }))?.id ?? null : null;
-  await db.variation.updateMany({ where: { id: variationId, projectId }, data: { costCodeId } });
+
+  // Line ids that actually belong to this variation + project (never trust the form).
+  const lines = await db.variationLineItem.findMany({
+    where: { variationId, variation: { projectId } },
+    select: { id: true },
+  });
+  const lineIds = new Set(lines.map((l) => l.id));
+  // Valid cost-code ids for this project.
+  const codes = await db.costCode.findMany({ where: { projectId }, select: { id: true } });
+  const codeIds = new Set(codes.map((c) => c.id));
+
+  for (const [key, val] of formData.entries()) {
+    if (!key.startsWith("code_")) continue;
+    const lineId = key.slice(5);
+    if (!lineIds.has(lineId)) continue;
+    const raw = String(val);
+    const costCodeId = raw && codeIds.has(raw) ? raw : null;
+    await db.variationLineItem.update({ where: { id: lineId }, data: { costCodeId } });
+  }
   revalidatePath(`/projects/${projectId}/variations/${variationId}`);
   revalidatePath(`/projects/${projectId}/cost-to-complete`);
 }

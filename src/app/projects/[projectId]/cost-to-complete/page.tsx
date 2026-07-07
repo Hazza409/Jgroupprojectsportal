@@ -38,7 +38,10 @@ export default async function CostToCompletePage({
     db.variation.findMany({
       where: { projectId, status: "APPROVED" },
       orderBy: { variationNumber: "asc" },
-      select: { id: true, variationNumber: true, title: true, totalCents: true, costCodeId: true },
+      select: {
+        id: true, variationNumber: true, title: true, totalCents: true, costCodeId: true,
+        lines: { select: { totalCents: true, costCodeId: true } },
+      },
     }),
     // Costs with no matching cost code (e.g. claim lines for variation work or
     // renamed items) — shown as an "Unallocated" row so money never disappears.
@@ -49,11 +52,21 @@ export default async function CostToCompletePage({
   ]);
 
   // Approved variations grouped by the cost code they add to (ex-margin base).
+  // Allocation is per LINE ITEM (a VO can span trades); a line with no code of
+  // its own falls back to the variation's code. A variation with no lines
+  // allocates its whole total by the variation code.
   const varBaseByCode = new Map<string, number>();
   let unallocatedVarBase = 0;
+  const addVar = (code: string | null, cents: number) => {
+    if (code) varBaseByCode.set(code, (varBaseByCode.get(code) ?? 0) + cents);
+    else unallocatedVarBase += cents;
+  };
   for (const v of approvedVars) {
-    if (v.costCodeId) varBaseByCode.set(v.costCodeId, (varBaseByCode.get(v.costCodeId) ?? 0) + v.totalCents);
-    else unallocatedVarBase += v.totalCents;
+    if (v.lines.length === 0) {
+      addVar(v.costCodeId, v.totalCents);
+    } else {
+      for (const l of v.lines) addVar(l.costCodeId ?? v.costCodeId, l.totalCents);
+    }
   }
 
   // Per-code rows grossed up for display. Revised = estimate + approved
@@ -84,7 +97,12 @@ export default async function CostToCompletePage({
     sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))) + unallocatedBase,
     company,
   );
-  const approvedVarTotal = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)), company);
+  // Derive from the same per-code distribution so the footer always equals the
+  // sum of the Variations column cells (allocated + unallocated).
+  const approvedVarTotal = inclMarginGst(
+    sumCents([...varBaseByCode.values()]) + unallocatedVarBase,
+    company,
+  );
 
   const revisedEstimate = estimateTotal + approvedVarTotal;
   const costToComplete = revisedEstimate - currentToDate;
