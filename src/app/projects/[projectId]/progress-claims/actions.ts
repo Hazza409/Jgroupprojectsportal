@@ -10,7 +10,7 @@ import { dollarsToCents, formatCents, sumCents } from "@/lib/money";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
 import { getCompany, companyShortName } from "@/lib/company";
-import { materializeClaimActuals } from "@/lib/claims";
+import { materializeClaimActuals, matchCostCodeId, projectCodeRefs } from "@/lib/claims";
 
 export interface ReconImportResult {
   ok: boolean;
@@ -138,9 +138,9 @@ export async function importReconSheet(
   const key = buildKey({ projectId, category: "claims", originalName: `${Date.now()}-${file.name}` });
   await store.put({ key, body: buf, contentType: file.type || "application/octet-stream" });
 
-  // Match budget-overview rows to cost codes by name (best effort).
-  const codes = await db.costCode.findMany({ where: { projectId }, select: { id: true, name: true } });
-  const byName = new Map(codes.map((c) => [c.name.trim().toLowerCase(), c.id]));
+  // Match budget-overview rows to cost codes — fuzzy (case/spacing/punctuation
+  // and small-typo tolerant), so "Fire Places"/"Fireplaces" etc. link up.
+  const codes = await projectCodeRefs(projectId);
 
   await db.$transaction(async (tx) => {
     // Replace mode — the sheet is the source of truth.
@@ -169,7 +169,7 @@ export async function importReconSheet(
       await tx.claimLineItem.createMany({
         data: parsed.budgetOverview.map((b) => ({
           claimId,
-          costCodeId: byName.get(b.name.trim().toLowerCase()) ?? null,
+          costCodeId: matchCostCodeId(b.name, codes),
           description: b.name,
           claimedAmountCents: b.currentCents,
           priorCents: b.priorCents,

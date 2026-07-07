@@ -6,6 +6,7 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { isConnected } from "@/lib/xero/tokens";
 import { XeroControls } from "./XeroControls";
 import { CurrentCostsImport } from "./CurrentCostsImport";
+import { rematchClaimCosts } from "./actions";
 
 // Cost to Complete — laid out like the J Group CTC workbook. EVERY figure on this
 // page is shown INCLUSIVE of builder's margin then GST (rates from Company settings) — no mixing
@@ -23,7 +24,7 @@ export default async function CostToCompletePage({
   const isBuilder = user.role === "BUILDER";
   const company = await getCompany();
 
-  const [xeroConnected, xeroConn, costCodes, approvedVars] = await Promise.all([
+  const [xeroConnected, xeroConn, costCodes, approvedVars, unallocatedActuals] = await Promise.all([
     isConnected(projectId),
     db.xeroConnection.findUnique({ where: { projectId }, select: { lastSyncedAt: true } }),
     db.costCode.findMany({
@@ -39,6 +40,9 @@ export default async function CostToCompletePage({
       orderBy: { variationNumber: "asc" },
       select: { id: true, variationNumber: true, title: true, totalCents: true },
     }),
+    // Costs with no matching cost code (e.g. claim lines for variation work or
+    // renamed items) — shown as an "Unallocated" row so money never disappears.
+    db.costActual.findMany({ where: { projectId, costCodeId: null }, select: { amountCents: true } }),
   ]);
 
   // Per-code rows grossed up for display.
@@ -48,10 +52,18 @@ export default async function CostToCompletePage({
     return { id: cc.id, code: cc.code, name: cc.name, estimate, current, variance: estimate - current };
   });
 
+  // Unallocated costs (no matching cost code) — kept visible so the page total
+  // reconciles with the Progress Claims register.
+  const unallocatedBase = sumCents(unallocatedActuals.map((a) => a.amountCents));
+  const unallocated = inclMarginGst(unallocatedBase, company);
+
   // Totals are grossed from the AGGREGATE base (not summed per-row) so they match
   // the Overview to the cent — single, unambiguous rounding.
   const estimateTotal = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.estimateLines.map((l) => l.totalCents))), company);
-  const currentToDate = inclMarginGst(sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))), company);
+  const currentToDate = inclMarginGst(
+    sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))) + unallocatedBase,
+    company,
+  );
   const approvedVarTotal = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)), company);
 
   const revisedEstimate = estimateTotal + approvedVarTotal;
@@ -87,8 +99,12 @@ export default async function CostToCompletePage({
       />
 
       {isBuilder && (
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-start gap-2">
           <CurrentCostsImport projectId={projectId} />
+          {/* Re-links approved claims' lines to cost codes (fuzzy) + re-posts them. */}
+          <form action={rematchClaimCosts.bind(null, projectId)}>
+            <button className="btn-ghost" type="submit">Re-match claim costs</button>
+          </form>
         </div>
       )}
 
@@ -160,6 +176,15 @@ export default async function CostToCompletePage({
                     </td>
                   </tr>
                 ))}
+                {unallocated !== 0 && (
+                  <tr>
+                    <td className="px-4 py-2 font-mono text-xs text-stone-400">—</td>
+                    <td className="px-4 py-2 text-stone-500">Unallocated (no matching cost code)</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">—</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatCents(unallocated)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">—</td>
+                  </tr>
+                )}
               </tbody>
               <tfoot className="border-t border-stone-200 bg-stone-50 font-semibold">
                 <tr>

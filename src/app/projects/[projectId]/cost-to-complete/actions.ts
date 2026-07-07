@@ -8,10 +8,22 @@ import { syncProjectActuals } from "@/lib/xero/sync";
 import { parseCostRowsBuffer } from "@/lib/excel/parseCurrentCosts";
 import { parseCtcWorkbookBuffer } from "@/lib/excel/parseCtcWorkbook";
 import { VariationStatus } from "@prisma/client";
+import { rematerializeProjectClaims } from "@/lib/claims";
 
 export interface SyncResult {
   ok: boolean;
   message: string;
+}
+
+// Builder-triggered re-match: re-links every approved claim's lines to cost
+// codes (fuzzy name matching) and re-posts them into the cost feed. Run after
+// fixing cost-code names or when claim lines show up as Unallocated.
+export async function rematchClaimCosts(projectId: string): Promise<void> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders re-match costs");
+  await rematerializeProjectClaims(projectId);
+  revalidatePath(`/projects/${projectId}/cost-to-complete`);
+  revalidatePath(`/projects/${projectId}`);
 }
 
 // Builder-triggered pull of actuals from Xero into CostActual (one-directional).
