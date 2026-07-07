@@ -223,6 +223,7 @@ model CostCode {
   estimateLines EstimateLineItem[]
   costActuals   CostActual[]
   claimLines    ClaimLineItem[]
+  variations    Variation[]
 
   @@unique([projectId, code])
   @@index([projectId])
@@ -397,16 +398,21 @@ model Variation {
   status         VariationStatus @default(DRAFT)
   // Cached sum of line items, in cents. Recomputed on line write.
   totalCents     Int             @default(0)
+  // Which cost code this variation adds to (for the Cost to Complete
+  // "Variations" column). Nullable — unallocated variations show separately.
+  costCodeId     String?
   approvedAt     DateTime?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
-  project Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lines   VariationLineItem[]
-  quotes  SubcontractorQuote[]
+  project  Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costCode CostCode?            @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+  lines    VariationLineItem[]
+  quotes   SubcontractorQuote[]
 
   @@unique([projectId, variationNumber])
   @@index([projectId])
+  @@index([costCodeId])
 }
 
 model VariationLineItem {

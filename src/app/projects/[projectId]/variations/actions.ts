@@ -10,6 +10,7 @@ import { dollarsToCents, lineTotalCents, formatCents, inclMarginGst } from "@/li
 import { getCompany, companyShortName } from "@/lib/company";
 import { parseVariationsBuffer } from "@/lib/excel/parseVariations";
 import { notifyBuilders, notifyProject } from "@/lib/email";
+import { matchCostCodeId, projectCodeRefs } from "@/lib/claims";
 
 export interface ImportResult {
   ok: boolean;
@@ -42,6 +43,11 @@ export async function createVariation(projectId: string, formData: FormData) {
     select: { variationNumber: true },
   });
 
+  // Assign to a cost code — an explicit pick from the form, else auto-match the
+  // title (the Cost to Complete "Variations" column reads this).
+  const pickedCode = String(formData.get("costCodeId") ?? "") || null;
+  const costCodeId = pickedCode ?? matchCostCodeId(title, await projectCodeRefs(projectId));
+
   await db.variation.create({
     data: {
       projectId,
@@ -50,6 +56,7 @@ export async function createVariation(projectId: string, formData: FormData) {
       description: String(formData.get("description") ?? "") || null,
       status: VariationStatus.DRAFT,
       totalCents: total,
+      costCodeId,
       lines: {
         create: [
           {
@@ -106,6 +113,7 @@ export async function importVariations(projectId: string, formData: FormData): P
     contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
+  const codes = await projectCodeRefs(projectId);
   await db.$transaction(async (tx) => {
     // Reset on replace: wipe existing variations first — but NEVER approved
     // ones. A client's approval (and its date) is a contract record; a re-import
@@ -129,6 +137,7 @@ export async function importVariations(projectId: string, formData: FormData): P
           status: v.status,
           totalCents: v.totalCents,
           approvedAt: v.status === VariationStatus.APPROVED ? new Date() : null,
+          costCodeId: matchCostCodeId(v.title, codes), // for the CTC Variations column
           lines: {
             create: v.lines.map((l) => ({
               description: l.description,
@@ -150,6 +159,19 @@ export async function importVariations(projectId: string, formData: FormData): P
     rowCount: parsed.variations.length,
     warnings: parsed.warnings,
   };
+}
+
+// Builder assigns (or clears) the cost code a variation adds to — drives the
+// Cost to Complete "Variations" column. Empty string clears it.
+export async function setVariationCostCode(projectId: string, variationId: string, formData: FormData) {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders allocate variations");
+  const raw = String(formData.get("costCodeId") ?? "");
+  // Validate the code belongs to THIS project before assigning (no cross-project ids).
+  const costCodeId = raw ? (await db.costCode.findFirst({ where: { id: raw, projectId }, select: { id: true } }))?.id ?? null : null;
+  await db.variation.updateMany({ where: { id: variationId, projectId }, data: { costCodeId } });
+  revalidatePath(`/projects/${projectId}/variations/${variationId}`);
+  revalidatePath(`/projects/${projectId}/cost-to-complete`);
 }
 
 export async function submitVariation(projectId: string, variationId: string) {

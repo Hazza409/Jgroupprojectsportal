@@ -38,7 +38,7 @@ export default async function CostToCompletePage({
     db.variation.findMany({
       where: { projectId, status: "APPROVED" },
       orderBy: { variationNumber: "asc" },
-      select: { id: true, variationNumber: true, title: true, totalCents: true },
+      select: { id: true, variationNumber: true, title: true, totalCents: true, costCodeId: true },
     }),
     // Costs with no matching cost code (e.g. claim lines for variation work or
     // renamed items) — shown as an "Unallocated" row so money never disappears.
@@ -48,19 +48,31 @@ export default async function CostToCompletePage({
     db.estimateLineItem.findMany({ where: { projectId, costCodeId: null }, select: { totalCents: true } }),
   ]);
 
-  // Per-code rows grossed up for display.
+  // Approved variations grouped by the cost code they add to (ex-margin base).
+  const varBaseByCode = new Map<string, number>();
+  let unallocatedVarBase = 0;
+  for (const v of approvedVars) {
+    if (v.costCodeId) varBaseByCode.set(v.costCodeId, (varBaseByCode.get(v.costCodeId) ?? 0) + v.totalCents);
+    else unallocatedVarBase += v.totalCents;
+  }
+
+  // Per-code rows grossed up for display. Revised = estimate + approved
+  // variations for that code; variance measures against the revised budget.
   const rows = costCodes.map((cc) => {
     const estimate = inclMarginGst(sumCents(cc.estimateLines.map((l) => l.totalCents)), company);
+    const variations = inclMarginGst(varBaseByCode.get(cc.id) ?? 0, company);
     const current = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)), company);
-    return { id: cc.id, code: cc.code, name: cc.name, estimate, current, variance: estimate - current };
+    const revised = estimate + variations;
+    return { id: cc.id, code: cc.code, name: cc.name, estimate, variations, revised, current, variance: revised - current };
   });
 
-  // Unallocated costs / estimate (no matching cost code) — kept visible so the
-  // page totals reconcile with the Overview, drawdown, and claims register.
+  // Unallocated costs / estimate / variations (no matching cost code) — kept
+  // visible so the page totals reconcile with the Overview, drawdown, register.
   const unallocatedBase = sumCents(unallocatedActuals.map((a) => a.amountCents));
   const unallocated = inclMarginGst(unallocatedBase, company);
   const unallocatedEstBase = sumCents(unallocatedEstLines.map((l) => l.totalCents));
   const unallocatedEst = inclMarginGst(unallocatedEstBase, company);
+  const unallocatedVar = inclMarginGst(unallocatedVarBase, company);
 
   // Totals are grossed from the AGGREGATE base (not summed per-row) so they match
   // the Overview to the cent — single, unambiguous rounding.
@@ -164,6 +176,8 @@ export default async function CostToCompletePage({
                   <th className="px-4 py-3">Code</th>
                   <th className="px-4 py-3">Cost Item</th>
                   <th className="px-4 py-3 text-right">Estimate</th>
+                  <th className="px-4 py-3 text-right">Variations</th>
+                  <th className="px-4 py-3 text-right">Revised</th>
                   <th className="px-4 py-3 text-right">Current to Date</th>
                   <th className="px-4 py-3 text-right">Variance</th>
                 </tr>
@@ -174,6 +188,10 @@ export default async function CostToCompletePage({
                     <td className="px-4 py-2 font-mono text-xs text-stone-400">{r.code}</td>
                     <td className="px-4 py-2">{r.name}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{formatCents(r.estimate)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">
+                      {r.variations !== 0 ? `+${formatCents(r.variations)}` : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatCents(r.revised)}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{formatCents(r.current)}</td>
                     <td
                       className={`px-4 py-2 text-right tabular-nums ${
@@ -184,15 +202,19 @@ export default async function CostToCompletePage({
                     </td>
                   </tr>
                 ))}
-                {(unallocated !== 0 || unallocatedEst !== 0) && (
+                {(unallocated !== 0 || unallocatedEst !== 0 || unallocatedVar !== 0) && (
                   <tr>
                     <td className="px-4 py-2 font-mono text-xs text-stone-400">—</td>
                     <td className="px-4 py-2 text-stone-500">Unallocated (no matching cost code)</td>
                     <td className="px-4 py-2 text-right tabular-nums text-stone-500">
                       {unallocatedEst !== 0 ? formatCents(unallocatedEst) : "—"}
                     </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">
+                      {unallocatedVar !== 0 ? `+${formatCents(unallocatedVar)}` : "—"}
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">{formatCents(unallocatedEst + unallocatedVar)}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{unallocated !== 0 ? formatCents(unallocated) : "—"}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">{formatCents(unallocatedEst - unallocated)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">{formatCents(unallocatedEst + unallocatedVar - unallocated)}</td>
                   </tr>
                 )}
               </tbody>
@@ -200,8 +222,10 @@ export default async function CostToCompletePage({
                 <tr>
                   <td colSpan={2} className="px-4 py-3">Total</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatCents(estimateTotal)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{approvedVarTotal !== 0 ? `+${formatCents(approvedVarTotal)}` : "—"}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatCents(revisedEstimate)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatCents(currentToDate)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCents(estimateTotal - currentToDate)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatCents(revisedEstimate - currentToDate)}</td>
                 </tr>
               </tfoot>
             </table>

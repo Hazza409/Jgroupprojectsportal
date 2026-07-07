@@ -6,7 +6,7 @@ import { storage } from "@/lib/storage";
 import { formatCents, inclMarginGst } from "@/lib/money";
 import { getCompany } from "@/lib/company";
 import { StatusBadge } from "@/components/StatusBadge";
-import { submitVariation, decideVariation, attachQuote } from "../actions";
+import { submitVariation, decideVariation, attachQuote, setVariationCostCode } from "../actions";
 
 export default async function VariationDetailPage({
   params,
@@ -20,9 +20,16 @@ export default async function VariationDetailPage({
 
   const v = await db.variation.findFirst({
     where: { id: variationId, projectId },
-    include: { lines: true, quotes: true },
+    include: { lines: true, quotes: true, costCode: { select: { code: true, name: true } } },
   });
   if (!v) notFound();
+
+  // Cost codes for the allocation picker (which CTC code this variation adds to).
+  const costCodes = await db.costCode.findMany({
+    where: { projectId },
+    orderBy: { code: "asc" },
+    select: { id: true, code: true, name: true },
+  });
 
   // Resolve download URLs for quote files (scope already enforced above).
   const store = await storage();
@@ -49,6 +56,23 @@ export default async function VariationDetailPage({
           <StatusBadge status={v.status} />
         </div>
       </div>
+
+      {/* Cost-code allocation — feeds the Cost to Complete "Variations" column */}
+      {isBuilder && (
+        <form action={setVariationCostCode.bind(null, projectId, variationId)} className="mb-5 flex flex-wrap items-center gap-2 text-sm">
+          <label className="text-stone-500">Adds to cost code:</label>
+          <select name="costCodeId" defaultValue={v.costCodeId ?? ""} className="rounded-md border border-stone-300 bg-transparent px-2 py-1 text-sm">
+            <option value="">— Unallocated —</option>
+            {costCodes.map((c) => (
+              <option key={c.id} value={c.id}>{c.code} · {c.name}</option>
+            ))}
+          </select>
+          <button type="submit" className="btn-ghost">Save</button>
+        </form>
+      )}
+      {!isBuilder && v.costCode && (
+        <p className="mb-5 text-sm text-stone-500">Cost code: {v.costCode.code} · {v.costCode.name}</p>
+      )}
 
       {/* Line-item breakdown */}
       <div className="card overflow-x-auto p-0">

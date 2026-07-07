@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { assertProjectAccess } from "@/lib/scope";
+import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { createVariation } from "../actions";
 
@@ -8,6 +9,12 @@ export default async function NewVariationPage({ params }: { params: { projectId
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   if (user.role !== "BUILDER") redirect(`/projects/${projectId}/variations`);
+
+  const costCodes = await db.costCode.findMany({
+    where: { projectId },
+    orderBy: { code: "asc" },
+    select: { id: true, code: true, name: true },
+  });
 
   return (
     <div>
@@ -29,6 +36,15 @@ export default async function NewVariationPage({ params }: { params: { projectId
         <div className="sm:col-span-2">
           <label className="label">Description (optional)</label>
           <input name="description" className="input" />
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label">Adds to cost code (optional — auto-matched from the title if left blank)</label>
+          <select name="costCodeId" className="input" defaultValue="">
+            <option value="">— Auto-match / Unallocated —</option>
+            {costCodes.map((c) => (
+              <option key={c.id} value={c.id}>{c.code} · {c.name}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="label">Line description</label>
