@@ -80,9 +80,12 @@ export default async function ProjectOverview({ params }: { params: { projectId:
 
       {showConstruction && (
       <>
-      <p className="text-xs text-stone-400">
-        All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-stone-400">
+          All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
+        </p>
+        <a className="btn-ghost shrink-0" href={`/api/projects/${projectId}/export`}>Export all to Excel</a>
+      </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (
           <div key={s.label} className="card">

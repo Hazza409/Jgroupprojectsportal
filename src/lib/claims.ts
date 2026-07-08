@@ -188,6 +188,119 @@ export async function materializeClaimActuals(projectId: string, claimId: string
 }
 
 // ─────────────────────────────────────────────────────────────
+// Cost to Complete: per-cost-code Estimate + Variations + Current.
+// One shared computation so the CTC page AND the Excel export show
+// identical numbers. All *Cents values are client-facing (incl
+// margin + GST). Per-row figures are grossed individually; totals
+// are grossed from the aggregate base (single rounding) — so a total
+// can differ from the naive sum of rows by at most a cent, exactly
+// as the on-screen table has always behaved.
+// ─────────────────────────────────────────────────────────────
+
+export interface CtcRow {
+  id: string;
+  code: string;
+  name: string;
+  estimateCents: number;
+  variationsCents: number;
+  revisedCents: number;
+  currentCents: number;
+  varianceCents: number;
+}
+
+export interface CostToComplete {
+  rows: CtcRow[];
+  // Amounts with no matching cost code, kept visible so totals reconcile.
+  unallocated: { estimateCents: number; variationsCents: number; currentCents: number };
+  totals: {
+    estimateCents: number;
+    variationsCents: number;
+    revisedCents: number;
+    currentCents: number;
+    costToCompleteCents: number;
+  };
+}
+
+export async function computeCostToComplete(
+  projectId: string,
+  company: { marginPercent: number; gstPercent: number },
+): Promise<CostToComplete> {
+  const [costCodes, approvedVars, unallocatedActuals, unallocatedEstLines] = await Promise.all([
+    db.costCode.findMany({
+      where: { projectId },
+      orderBy: { code: "asc" },
+      include: {
+        estimateLines: { select: { totalCents: true } },
+        costActuals: { select: { amountCents: true } },
+      },
+    }),
+    db.variation.findMany({
+      where: { projectId, status: "APPROVED" },
+      orderBy: { variationNumber: "asc" },
+      select: { id: true, totalCents: true, costCodeId: true, lines: { select: { totalCents: true, costCodeId: true } } },
+    }),
+    db.costActual.findMany({ where: { projectId, costCodeId: null }, select: { amountCents: true } }),
+    db.estimateLineItem.findMany({ where: { projectId, costCodeId: null }, select: { totalCents: true } }),
+  ]);
+
+  // Approved variations grouped by the cost code each LINE adds to (a VO can
+  // span trades); a line with no code falls back to the variation's code; a
+  // variation with no lines allocates its whole total by the variation code.
+  const varBaseByCode = new Map<string, number>();
+  let unallocatedVarBase = 0;
+  const addVar = (code: string | null, cents: number) => {
+    if (code) varBaseByCode.set(code, (varBaseByCode.get(code) ?? 0) + cents);
+    else unallocatedVarBase += cents;
+  };
+  for (const v of approvedVars) {
+    if (v.lines.length === 0) addVar(v.costCodeId, v.totalCents);
+    else for (const l of v.lines) addVar(l.costCodeId ?? v.costCodeId, l.totalCents);
+  }
+
+  const rows: CtcRow[] = costCodes.map((cc) => {
+    const estimateCents = inclMarginGst(sumCents(cc.estimateLines.map((l) => l.totalCents)), company);
+    const variationsCents = inclMarginGst(varBaseByCode.get(cc.id) ?? 0, company);
+    const currentCents = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)), company);
+    const revisedCents = estimateCents + variationsCents;
+    return {
+      id: cc.id, code: cc.code, name: cc.name,
+      estimateCents, variationsCents, revisedCents, currentCents,
+      varianceCents: revisedCents - currentCents,
+    };
+  });
+
+  const unallocatedEstBase = sumCents(unallocatedEstLines.map((l) => l.totalCents));
+  const unallocatedActualBase = sumCents(unallocatedActuals.map((a) => a.amountCents));
+
+  const estimateTotal = inclMarginGst(
+    sumCents(costCodes.flatMap((cc) => cc.estimateLines.map((l) => l.totalCents))) + unallocatedEstBase,
+    company,
+  );
+  const variationsTotal = inclMarginGst(sumCents([...varBaseByCode.values()]) + unallocatedVarBase, company);
+  const currentTotal = inclMarginGst(
+    sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))) + unallocatedActualBase,
+    company,
+  );
+  const revisedTotal = estimateTotal + variationsTotal;
+
+  return {
+    rows,
+    unallocated: {
+      estimateCents: inclMarginGst(unallocatedEstBase, company),
+      variationsCents: inclMarginGst(unallocatedVarBase, company),
+      currentCents: inclMarginGst(unallocatedActualBase, company),
+    },
+    totals: {
+      estimateCents: estimateTotal,
+      variationsCents: variationsTotal,
+      revisedCents: revisedTotal,
+      currentCents: currentTotal,
+      costToCompleteCents: revisedTotal - currentTotal,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
 // Invoice-on-invoice drawdown: each progress claim (invoice) draws
 // down the contract budget (estimate + approved variations, client-
 // facing incl margin+GST — same basis as the Overview). Cumulative

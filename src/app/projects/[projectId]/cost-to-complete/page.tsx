@@ -1,7 +1,8 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
+import { formatCents, inclMarginGst } from "@/lib/money";
 import { getCompany, companyShortName } from "@/lib/company";
+import { computeCostToComplete } from "@/lib/claims";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { isConnected } from "@/lib/xero/tokens";
 import { XeroControls } from "./XeroControls";
@@ -24,88 +25,33 @@ export default async function CostToCompletePage({
   const isBuilder = user.role === "BUILDER";
   const company = await getCompany();
 
-  const [xeroConnected, xeroConn, costCodes, approvedVars, unallocatedActuals, unallocatedEstLines] = await Promise.all([
+  const [xeroConnected, xeroConn, ctc, approvedVars] = await Promise.all([
     isConnected(projectId),
     db.xeroConnection.findUnique({ where: { projectId }, select: { lastSyncedAt: true } }),
-    db.costCode.findMany({
-      where: { projectId },
-      orderBy: { code: "asc" },
-      include: {
-        estimateLines: { select: { totalCents: true } },
-        costActuals: { select: { amountCents: true } },
-      },
-    }),
+    // Shared computation — identical numbers to the Excel export (see claims.ts).
+    computeCostToComplete(projectId, company),
+    // For the side panel only (title + amount per approved variation).
     db.variation.findMany({
       where: { projectId, status: "APPROVED" },
       orderBy: { variationNumber: "asc" },
-      select: {
-        id: true, variationNumber: true, title: true, totalCents: true, costCodeId: true,
-        lines: { select: { totalCents: true, costCodeId: true } },
-      },
+      select: { id: true, title: true, totalCents: true },
     }),
-    // Costs with no matching cost code (e.g. claim lines for variation work or
-    // renamed items) — shown as an "Unallocated" row so money never disappears.
-    db.costActual.findMany({ where: { projectId, costCodeId: null }, select: { amountCents: true } }),
-    // Estimate lines with no cost code — included in the total (and their own
-    // row) so the CTC estimate reconciles with the Overview and drawdown budget.
-    db.estimateLineItem.findMany({ where: { projectId, costCodeId: null }, select: { totalCents: true } }),
   ]);
 
-  // Approved variations grouped by the cost code they add to (ex-margin base).
-  // Allocation is per LINE ITEM (a VO can span trades); a line with no code of
-  // its own falls back to the variation's code. A variation with no lines
-  // allocates its whole total by the variation code.
-  const varBaseByCode = new Map<string, number>();
-  let unallocatedVarBase = 0;
-  const addVar = (code: string | null, cents: number) => {
-    if (code) varBaseByCode.set(code, (varBaseByCode.get(code) ?? 0) + cents);
-    else unallocatedVarBase += cents;
-  };
-  for (const v of approvedVars) {
-    if (v.lines.length === 0) {
-      addVar(v.costCodeId, v.totalCents);
-    } else {
-      for (const l of v.lines) addVar(l.costCodeId ?? v.costCodeId, l.totalCents);
-    }
-  }
-
-  // Per-code rows grossed up for display. Revised = estimate + approved
-  // variations for that code; variance measures against the revised budget.
-  const rows = costCodes.map((cc) => {
-    const estimate = inclMarginGst(sumCents(cc.estimateLines.map((l) => l.totalCents)), company);
-    const variations = inclMarginGst(varBaseByCode.get(cc.id) ?? 0, company);
-    const current = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)), company);
-    const revised = estimate + variations;
-    return { id: cc.id, code: cc.code, name: cc.name, estimate, variations, revised, current, variance: revised - current };
-  });
-
-  // Unallocated costs / estimate / variations (no matching cost code) — kept
-  // visible so the page totals reconcile with the Overview, drawdown, register.
-  const unallocatedBase = sumCents(unallocatedActuals.map((a) => a.amountCents));
-  const unallocated = inclMarginGst(unallocatedBase, company);
-  const unallocatedEstBase = sumCents(unallocatedEstLines.map((l) => l.totalCents));
-  const unallocatedEst = inclMarginGst(unallocatedEstBase, company);
-  const unallocatedVar = inclMarginGst(unallocatedVarBase, company);
-
-  // Totals are grossed from the AGGREGATE base (not summed per-row) so they match
-  // the Overview to the cent — single, unambiguous rounding.
-  const estimateTotal = inclMarginGst(
-    sumCents(costCodes.flatMap((cc) => cc.estimateLines.map((l) => l.totalCents))) + unallocatedEstBase,
-    company,
-  );
-  const currentToDate = inclMarginGst(
-    sumCents(costCodes.flatMap((cc) => cc.costActuals.map((a) => a.amountCents))) + unallocatedBase,
-    company,
-  );
-  // Derive from the same per-code distribution so the footer always equals the
-  // sum of the Variations column cells (allocated + unallocated).
-  const approvedVarTotal = inclMarginGst(
-    sumCents([...varBaseByCode.values()]) + unallocatedVarBase,
-    company,
-  );
-
-  const revisedEstimate = estimateTotal + approvedVarTotal;
-  const costToComplete = revisedEstimate - currentToDate;
+  // Aliases so the table markup below stays unchanged (all values incl margin+GST).
+  const rows = ctc.rows.map((r) => ({
+    id: r.id, code: r.code, name: r.name,
+    estimate: r.estimateCents, variations: r.variationsCents, revised: r.revisedCents,
+    current: r.currentCents, variance: r.varianceCents,
+  }));
+  const unallocated = ctc.unallocated.currentCents;
+  const unallocatedEst = ctc.unallocated.estimateCents;
+  const unallocatedVar = ctc.unallocated.variationsCents;
+  const estimateTotal = ctc.totals.estimateCents;
+  const approvedVarTotal = ctc.totals.variationsCents;
+  const revisedEstimate = ctc.totals.revisedCents;
+  const currentToDate = ctc.totals.currentCents;
+  const costToComplete = ctc.totals.costToCompleteCents;
   const hasActuals = currentToDate !== 0;
 
   const summary = [
@@ -136,15 +82,16 @@ export default async function CostToCompletePage({
         }
       />
 
-      {isBuilder && (
-        <div className="mb-4 flex flex-wrap items-start gap-2">
-          <CurrentCostsImport projectId={projectId} />
-          {/* Re-links approved claims' lines to cost codes (fuzzy) + re-posts them. */}
+      <div className="mb-4 flex flex-wrap items-start gap-2">
+        {isBuilder && <CurrentCostsImport projectId={projectId} />}
+        {isBuilder && (
+          /* Re-links approved claims' lines to cost codes (fuzzy) + re-posts them. */
           <form action={rematchClaimCosts.bind(null, projectId)}>
             <button className="btn-ghost" type="submit">Re-match claim costs</button>
           </form>
-        </div>
-      )}
+        )}
+        <a className="btn-ghost" href={`/api/projects/${projectId}/export`}>Export to Excel</a>
+      </div>
 
       {/* Unambiguous: every figure on this page is grossed up. */}
       <div className="mb-4 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
