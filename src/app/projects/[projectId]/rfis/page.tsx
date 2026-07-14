@@ -54,7 +54,7 @@ export default async function RfisPage({ params }: { params: { projectId: string
                   <p className="font-medium">
                     <span className="text-stone-400">RFI #{r.number}</span> · {r.subject}
                   </p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-stone-500">{r.question}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-base font-semibold text-ink">{r.question}</p>
                   {r.dueDate && r.status === "OPEN" && (
                     <p className="mt-1 text-xs text-stone-400">Response needed by {fmtDate(r.dueDate)}</p>
                   )}

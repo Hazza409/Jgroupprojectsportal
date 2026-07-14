@@ -715,7 +715,13 @@ model ProjectUpdate {
   id          String   @id @default(cuid())
   projectId   String
   title       String
-  body        String
+  // Structured fortnightly-summary sections (all optional). `body` remains for
+  // general notes and for updates created before the structured format existed.
+  tradesOnSite   String?
+  worksCompleted String?
+  upcomingWorks  String?
+  delaysNotes    String?
+  body        String   @default("")
   createdById String?
   createdAt   DateTime @default(now())
 

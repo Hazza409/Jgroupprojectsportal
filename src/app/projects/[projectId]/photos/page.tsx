@@ -1,8 +1,8 @@
-/* eslint-disable @next/next/no-img-element */
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { LightboxImage } from "@/components/LightboxImage";
 import { uploadPhotos, deletePhoto, createPhotoFolder, deletePhotoFolder } from "./actions";
 
 export default async function PhotosPage({ params }: { params: { projectId: string } }) {
@@ -92,10 +92,10 @@ export default async function PhotosPage({ params }: { params: { projectId: stri
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {g.photos.map((p) => (
                   <figure key={p.id} className="group relative overflow-hidden rounded-lg border border-stone-200 bg-panel">
-                    <img src={p.url} alt={p.caption ?? p.originalName} className="aspect-square w-full object-cover" />
+                    <LightboxImage src={p.url} alt={p.caption ?? p.originalName} caption={p.caption} className="aspect-square w-full object-cover" />
                     {p.caption && <figcaption className="p-2 text-xs text-stone-500">{p.caption}</figcaption>}
                     {isBuilder && (
-                      <form action={deletePhoto.bind(null, projectId, p.id)} className="absolute right-1 top-1 opacity-0 group-hover:opacity-100">
+                      <form action={deletePhoto.bind(null, projectId, p.id)} className="absolute right-1 top-1 z-10 opacity-0 group-hover:opacity-100">
                         <button className="rounded bg-base/90 px-2 py-0.5 text-xs text-red-700 dark:text-red-300 ring-1 ring-red-500/30 dark:ring-red-400/30" type="submit">Delete</button>
                       </form>
                     )}

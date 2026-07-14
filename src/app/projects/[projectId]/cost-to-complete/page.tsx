@@ -134,32 +134,43 @@ export default async function CostToCompletePage({
         {rows.length === 0 ? (
           <div className="card text-stone-500">No cost codes. Import an estimate first.</div>
         ) : (
-          <div className="card overflow-x-auto p-0">
-            <table className="w-full text-sm">
+          <div className="card p-0">
+            {/* table-fixed + colgroup keeps all 7 columns inside the card width
+                so the whole table is visible without horizontal scrolling. */}
+            <table className="w-full table-fixed text-xs">
+              <colgroup>
+                <col className="w-[9%]" />
+                <col className="w-[16%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+              </colgroup>
               <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
                 <tr>
-                  <th className="px-4 py-3">Code</th>
-                  <th className="px-4 py-3">Cost Item</th>
-                  <th className="px-4 py-3 text-right">Estimate</th>
-                  <th className="px-4 py-3 text-right">Variations</th>
-                  <th className="px-4 py-3 text-right">Revised</th>
-                  <th className="px-4 py-3 text-right">Current to Date</th>
-                  <th className="px-4 py-3 text-right">Variance</th>
+                  <th className="px-2 py-2.5">Code</th>
+                  <th className="px-2 py-2.5">Cost Item</th>
+                  <th className="px-2 py-2.5 text-right">Estimate</th>
+                  <th className="px-2 py-2.5 text-right">Variations</th>
+                  <th className="px-2 py-2.5 text-right">Revised</th>
+                  <th className="px-2 py-2.5 text-right">Current</th>
+                  <th className="px-2 py-2.5 text-right">Variance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="divide-y divide-stone-100 align-top">
                 {rows.map((r) => (
                   <tr key={r.id}>
-                    <td className="px-4 py-2 font-mono text-xs text-stone-400">{r.code}</td>
-                    <td className="px-4 py-2">{r.name}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{formatCents(r.estimate)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">
+                    <td className="px-2 py-2 font-mono text-xs text-stone-400 whitespace-nowrap">{r.code}</td>
+                    <td className="px-2 py-2 break-words">{r.name}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.estimate)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-stone-500">
                       {r.variations !== 0 ? `+${formatCents(r.variations)}` : "—"}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums">{formatCents(r.revised)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{formatCents(r.current)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.revised)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.current)}</td>
                     <td
-                      className={`px-4 py-2 text-right tabular-nums ${
+                      className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${
                         r.variance < 0 ? "text-red-700 dark:text-red-300" : "text-stone-500"
                       }`}
                     >
@@ -169,28 +180,28 @@ export default async function CostToCompletePage({
                 ))}
                 {(unallocated !== 0 || unallocatedEst !== 0 || unallocatedVar !== 0) && (
                   <tr>
-                    <td className="px-4 py-2 font-mono text-xs text-stone-400">—</td>
-                    <td className="px-4 py-2 text-stone-500">Unallocated (no matching cost code)</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">
+                    <td className="px-2 py-2 font-mono text-xs text-stone-400">—</td>
+                    <td className="px-2 py-2 text-stone-500 break-words">Unallocated (no matching cost code)</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-stone-500">
                       {unallocatedEst !== 0 ? formatCents(unallocatedEst) : "—"}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-stone-500">
                       {unallocatedVar !== 0 ? `+${formatCents(unallocatedVar)}` : "—"}
                     </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">{formatCents(unallocatedEst + unallocatedVar)}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{unallocated !== 0 ? formatCents(unallocated) : "—"}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-stone-500">{formatCents(unallocatedEst + unallocatedVar - unallocated)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-stone-500">{formatCents(unallocatedEst + unallocatedVar)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{unallocated !== 0 ? formatCents(unallocated) : "—"}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-stone-500">{formatCents(unallocatedEst + unallocatedVar - unallocated)}</td>
                   </tr>
                 )}
               </tbody>
               <tfoot className="border-t border-stone-200 bg-stone-50 font-semibold">
                 <tr>
-                  <td colSpan={2} className="px-4 py-3">Total</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCents(estimateTotal)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{approvedVarTotal !== 0 ? `+${formatCents(approvedVarTotal)}` : "—"}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCents(revisedEstimate)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCents(currentToDate)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatCents(revisedEstimate - currentToDate)}</td>
+                  <td colSpan={2} className="px-2 py-2.5">Total</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(estimateTotal)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{approvedVarTotal !== 0 ? `+${formatCents(approvedVarTotal)}` : "—"}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(revisedEstimate)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(currentToDate)}</td>
+                  <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(revisedEstimate - currentToDate)}</td>
                 </tr>
               </tfoot>
             </table>

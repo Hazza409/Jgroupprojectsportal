@@ -18,13 +18,28 @@ async function builderOnly(projectId: string) {
   return user;
 }
 
-// Builder posts a fortnightly summary entry.
+// Builder posts a fortnightly summary entry. Structured sections (trades on
+// site / works completed / upcoming / delays) are all optional; at least one of
+// them or the general notes must be filled so an update is never empty.
 export async function createUpdate(projectId: string, formData: FormData) {
   const user = await builderOnly(projectId);
   const title = String(formData.get("title") ?? "").trim();
+  const str = (k: string) => {
+    const v = String(formData.get(k) ?? "").trim();
+    return v.length ? v : null;
+  };
+  const tradesOnSite = str("tradesOnSite");
+  const worksCompleted = str("worksCompleted");
+  const upcomingWorks = str("upcomingWorks");
+  const delaysNotes = str("delaysNotes");
   const body = String(formData.get("body") ?? "").trim();
-  if (!title || !body) throw new Error("Title and summary are required");
-  await db.projectUpdate.create({ data: { projectId, title, body, createdById: user.id } });
+  if (!title) throw new Error("Title is required");
+  if (!tradesOnSite && !worksCompleted && !upcomingWorks && !delaysNotes && !body) {
+    throw new Error("Fill in at least one section of the summary");
+  }
+  await db.projectUpdate.create({
+    data: { projectId, title, tradesOnSite, worksCompleted, upcomingWorks, delaysNotes, body, createdById: user.id },
+  });
 
   // Tell the client(s) + PM there's a new site update to read.
   const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });

@@ -167,31 +167,93 @@ export async function importVariations(projectId: string, formData: FormData): P
   };
 }
 
-// Builder assigns each variation LINE to a cost code — drives the Cost to
-// Complete "Variations" column. The form carries one select per line named
-// `code_<lineId>`; empty clears that line. All updates scoped to this project.
-export async function setVariationLineCostCodes(projectId: string, variationId: string, formData: FormData) {
-  const user = await assertProjectAccess(projectId);
-  if (user.role !== Role.BUILDER) throw new AccessError("Only builders allocate variations");
+// Keep the cached variation.totalCents in step with its line items.
+async function recomputeVariationTotal(variationId: string) {
+  const lines = await db.variationLineItem.findMany({ where: { variationId }, select: { totalCents: true } });
+  const totalCents = lines.reduce((a, l) => a + l.totalCents, 0);
+  await db.variation.update({ where: { id: variationId }, data: { totalCents } });
+}
 
-  // Line ids that actually belong to this variation + project (never trust the form).
+// Save the line grid: cost-code allocation (allowed anytime — drives the Cost
+// to Complete "Variations" column even after approval) and line descriptions
+// (DRAFT only — descriptions are part of the VO's scope). The form carries one
+// `code_<lineId>` and one `desc_<lineId>` per line. All updates scoped to the
+// project; ids from the form are validated against the DB.
+export async function saveVariationLines(projectId: string, variationId: string, formData: FormData) {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit variations");
+
+  const variation = await db.variation.findFirst({ where: { id: variationId, projectId }, select: { status: true } });
+  if (!variation) throw new Error("Variation not found");
+  const isDraft = variation.status === VariationStatus.DRAFT;
+
   const lines = await db.variationLineItem.findMany({
     where: { variationId, variation: { projectId } },
     select: { id: true },
   });
   const lineIds = new Set(lines.map((l) => l.id));
-  // Valid cost-code ids for this project.
   const codes = await db.costCode.findMany({ where: { projectId }, select: { id: true } });
   const codeIds = new Set(codes.map((c) => c.id));
 
-  for (const [key, val] of formData.entries()) {
-    if (!key.startsWith("code_")) continue;
-    const lineId = key.slice(5);
-    if (!lineIds.has(lineId)) continue;
-    const raw = String(val);
-    const costCodeId = raw && codeIds.has(raw) ? raw : null;
-    await db.variationLineItem.update({ where: { id: lineId }, data: { costCodeId } });
+  for (const lineId of lineIds) {
+    const rawCode = String(formData.get(`code_${lineId}`) ?? "");
+    const data: { costCodeId: string | null; description?: string } = {
+      costCodeId: rawCode && codeIds.has(rawCode) ? rawCode : null,
+    };
+    // Only re-scope descriptions while the VO is still a draft.
+    if (isDraft) {
+      const desc = String(formData.get(`desc_${lineId}`) ?? "").trim();
+      if (desc) data.description = desc;
+    }
+    await db.variationLineItem.update({ where: { id: lineId }, data });
   }
+  revalidatePath(`/projects/${projectId}/variations/${variationId}`);
+  revalidatePath(`/projects/${projectId}/cost-to-complete`);
+}
+
+// Add a line item to a DRAFT variation (with a description). Auto-matches a cost
+// code from the description and recomputes the variation total.
+export async function addVariationLine(projectId: string, variationId: string, formData: FormData) {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit variations");
+  const variation = await db.variation.findFirst({ where: { id: variationId, projectId }, select: { status: true } });
+  if (!variation) throw new Error("Variation not found");
+  if (variation.status !== VariationStatus.DRAFT) throw new Error("Only draft variations can be edited");
+
+  const description = String(formData.get("description") ?? "").trim();
+  if (!description) throw new Error("Line description is required");
+  const qty = Number(formData.get("quantity") ?? 1) || 1;
+  const unitCostCents = dollarsToCents(String(formData.get("unitCost") ?? "0"));
+  const totalCents = lineTotalCents(qty, unitCostCents);
+  const costCodeId = matchCostCodeId(description, await projectCodeRefs(projectId));
+
+  await db.variationLineItem.create({
+    data: {
+      variationId,
+      description,
+      quantity: qty,
+      unit: String(formData.get("unit") ?? "") || null,
+      unitCostCents,
+      totalCents,
+      costCodeId,
+    },
+  });
+  await recomputeVariationTotal(variationId);
+  revalidatePath(`/projects/${projectId}/variations/${variationId}`);
+  revalidatePath(`/projects/${projectId}/cost-to-complete`);
+}
+
+// Remove a line item from a DRAFT variation and recompute the total.
+export async function deleteVariationLine(projectId: string, variationId: string, lineId: string) {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit variations");
+  const line = await db.variationLineItem.findFirst({
+    where: { id: lineId, variationId, variation: { projectId, status: VariationStatus.DRAFT } },
+    select: { id: true },
+  });
+  if (!line) throw new Error("Line not found or variation not editable");
+  await db.variationLineItem.delete({ where: { id: line.id } });
+  await recomputeVariationTotal(variationId);
   revalidatePath(`/projects/${projectId}/variations/${variationId}`);
   revalidatePath(`/projects/${projectId}/cost-to-complete`);
 }
