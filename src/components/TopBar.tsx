@@ -23,9 +23,9 @@ export async function TopBar({ user }: { user: SessionUser }) {
         </Link>
         <div className="flex items-center gap-4">
           <ThemeToggle />
-          <span className="text-sm text-stone-500">
+          <Link href="/account/password" className="text-sm text-stone-500 hover:text-ink" title="Account settings">
             {user.name} · <span className="font-medium text-stone-700">{user.role}</span>
-          </span>
+          </Link>
           <SignOutButton />
         </div>
       </div>
