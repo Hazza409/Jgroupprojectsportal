@@ -5,6 +5,7 @@ import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { TopBar } from "@/components/TopBar";
 import { ProjectNav } from "@/components/ProjectNav";
+import { CompanyMark } from "@/components/CompanyMark";
 import { getCompany, companyShortName } from "@/lib/company";
 
 // Module slugs grouped by the client-view they belong to. Used to enforce the
@@ -77,13 +78,17 @@ export default async function ProjectLayout({
           </span>
         </div>
         <div className="grid gap-6 md:grid-cols-[220px_1fr]">
-          <aside className="md:sticky md:top-6 md:self-start">
+          <aside className="space-y-6 md:sticky md:top-6 md:self-start">
             <ProjectNav
               projectId={project.id}
               clientView={project.clientView}
               isBuilder={isBuilder}
               contactsLabel={`${companyShortName(company)} Contacts`}
             />
+            {/* Brand mark, bottom-left of the sidebar. */}
+            <div className="px-3 pt-2">
+              <CompanyMark company={company} className="h-8 w-8 text-stone-400" imgClassName="h-8 w-auto opacity-70" />
+            </div>
           </aside>
           <section className="min-w-0">{children}</section>
         </div>

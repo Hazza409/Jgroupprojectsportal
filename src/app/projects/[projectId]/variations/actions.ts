@@ -174,18 +174,18 @@ async function recomputeVariationTotal(variationId: string) {
   await db.variation.update({ where: { id: variationId }, data: { totalCents } });
 }
 
-// Save the line grid: cost-code allocation (allowed anytime — drives the Cost
-// to Complete "Variations" column even after approval) and line descriptions
-// (DRAFT only — descriptions are part of the VO's scope). The form carries one
-// `code_<lineId>` and one `desc_<lineId>` per line. All updates scoped to the
-// project; ids from the form are validated against the DB.
+// Save the line grid: cost-code allocation and each line's description box.
+// Both are allowed at any status (descriptions are informational and clarify
+// scope for the client; cost codes drive the Cost to Complete "Variations"
+// column even after approval). Amounts and adding/removing lines stay draft-
+// only (see add/deleteVariationLine). The form carries one `code_<lineId>` and
+// one `desc_<lineId>` per line; ids from the form are validated against the DB.
 export async function saveVariationLines(projectId: string, variationId: string, formData: FormData) {
   const user = await assertProjectAccess(projectId);
   if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit variations");
 
-  const variation = await db.variation.findFirst({ where: { id: variationId, projectId }, select: { status: true } });
+  const variation = await db.variation.findFirst({ where: { id: variationId, projectId }, select: { id: true } });
   if (!variation) throw new Error("Variation not found");
-  const isDraft = variation.status === VariationStatus.DRAFT;
 
   const lines = await db.variationLineItem.findMany({
     where: { variationId, variation: { projectId } },
@@ -200,11 +200,8 @@ export async function saveVariationLines(projectId: string, variationId: string,
     const data: { costCodeId: string | null; description?: string } = {
       costCodeId: rawCode && codeIds.has(rawCode) ? rawCode : null,
     };
-    // Only re-scope descriptions while the VO is still a draft.
-    if (isDraft) {
-      const desc = String(formData.get(`desc_${lineId}`) ?? "").trim();
-      if (desc) data.description = desc;
-    }
+    const desc = String(formData.get(`desc_${lineId}`) ?? "").trim();
+    if (desc) data.description = desc; // keep the existing description if left blank
     await db.variationLineItem.update({ where: { id: lineId }, data });
   }
   revalidatePath(`/projects/${projectId}/variations/${variationId}`);

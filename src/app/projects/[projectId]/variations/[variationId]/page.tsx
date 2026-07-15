@@ -63,16 +63,17 @@ export default async function VariationDetailPage({
         </div>
       </div>
 
-      {/* Line-item breakdown — each line has a description + a cost code (which
-          feeds the Cost to Complete "Variations" column). Builders edit inline;
-          the whole table is one form so all lines save together. Descriptions
-          are editable while the VO is a draft; cost codes stay editable after. */}
+      {/* Line-item breakdown — each line has a description box + a cost code
+          (which feeds the Cost to Complete "Variations" column). Builders edit
+          inline; the whole table is one form so all lines save together.
+          Descriptions + cost codes are editable at any status; adding/removing
+          lines and amounts are draft-only. */}
       <form action={saveVariationLines.bind(null, projectId, variationId)}>
         <div className="card p-0">
           <table className="w-full table-fixed text-sm">
             <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
               <tr>
-                <th className="w-[42%] px-3 py-2.5">Line item</th>
+                <th className="w-[42%] px-3 py-2.5">Description</th>
                 <th className="w-[28%] px-3 py-2.5">Cost code</th>
                 <th className="w-[8%] px-3 py-2.5 text-right">Qty</th>
                 <th className="w-[10%] px-3 py-2.5">Unit</th>
@@ -86,21 +87,24 @@ export default async function VariationDetailPage({
                 v.lines.map((l) => (
                   <tr key={l.id}>
                     <td className="px-3 py-2">
-                      {canEdit ? (
+                      {isBuilder ? (
                         <>
-                          <input
+                          <textarea
                             name={`desc_${l.id}`}
                             defaultValue={l.description}
-                            className="input !py-1 w-full text-sm"
-                            placeholder="Line description"
+                            rows={2}
+                            className="input !py-1.5 w-full resize-y text-sm"
+                            placeholder="Describe this line item…"
                           />
-                          <button
-                            type="submit"
-                            formAction={deleteVariationLine.bind(null, projectId, variationId, l.id)}
-                            className="mt-1 text-xs text-red-700 hover:text-red-500 dark:text-red-300"
-                          >
-                            Remove line
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="submit"
+                              formAction={deleteVariationLine.bind(null, projectId, variationId, l.id)}
+                              className="mt-1 text-xs text-red-700 hover:text-red-500 dark:text-red-300"
+                            >
+                              Remove line
+                            </button>
+                          )}
                         </>
                       ) : (
                         <span className="break-words">{l.description || "Line item"}</span>
@@ -150,9 +154,7 @@ export default async function VariationDetailPage({
         {isBuilder && v.lines.length > 0 && (
           <div className="mt-2 flex items-center gap-2">
             <button type="submit" className="btn-ghost">Save changes</button>
-            <span className="text-xs text-stone-400">
-              {canEdit ? "Saves line descriptions + cost-code allocations." : "Saves cost-code allocations for Cost to Complete."}
-            </span>
+            <span className="text-xs text-stone-400">Saves each line&apos;s description + cost-code allocation.</span>
           </div>
         )}
       </form>
