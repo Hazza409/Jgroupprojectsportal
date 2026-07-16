@@ -86,15 +86,11 @@ export default async function ProjectLayout({
               isBuilder={isBuilder}
               contactsLabel={`${companyShortName(company)} Contacts`}
             />
-            {/* Full brand lockup (mark + wording + tagline), bottom-left. */}
-            <div className="flex flex-col items-start gap-3 px-3 pt-6">
-              <CompanyMark company={company} className="h-16 w-16 text-ink" imgClassName="h-20 w-auto" />
-              <div className="flex flex-col leading-none">
-                <span className="wordmark text-2xl text-ink">{company.name}</span>
-                {company.tagline && (
-                  <span className="mt-1.5 text-[11px] uppercase tracking-[0.28em] text-stone-500">{company.tagline}</span>
-                )}
-              </div>
+            {/* Quiet brand signature, bottom-left (Jake §1.1: our name is the
+                signature — small and understated, not a masthead). */}
+            <div className="flex items-center gap-2 px-3 pt-4 opacity-60">
+              <CompanyMark company={company} className="h-5 w-5 text-stone-400" imgClassName="h-5 w-auto" />
+              <span className="wordmark text-xs text-stone-400">{company.name}</span>
             </div>
           </aside>
           <section className="min-w-0">{children}</section>
