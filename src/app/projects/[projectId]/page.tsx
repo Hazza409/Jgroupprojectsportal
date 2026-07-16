@@ -3,7 +3,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
 import { getCompany } from "@/lib/company";
-import { claimHeadlineCents } from "@/lib/claims";
+import { claimHeadlineCents, computeCostToComplete } from "@/lib/claims";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClientViewControl } from "@/components/ClientViewControl";
 
@@ -32,6 +32,10 @@ export default async function ProjectOverview({ params }: { params: { projectId:
       db.calendarEvent.count({ where: { projectId } }),
       db.photo.count({ where: { projectId } }),
     ]);
+
+  // Cost to Complete headline figures, surfaced on the overview (same shared
+  // computation as the Cost to Complete page, so they always agree).
+  const ctc = await computeCostToComplete(projectId, company);
 
   // All figures shown inclusive of builder's margin + GST (matches Cost to Complete).
   const estimateTotal = inclMarginGst(sumCents(estimateLines.map((l) => l.totalCents)), company);
@@ -111,6 +115,29 @@ export default async function ProjectOverview({ params }: { params: { projectId:
         </p>
       </div>
 
+      {/* Cost to Complete summary — surfaced here so the numbers are on the
+          overview without clicking through. Full breakdown on the CTC page. */}
+      <div className="card">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">Cost to Complete</h2>
+          <Link href={`/projects/${projectId}/cost-to-complete`} className="text-sm text-stone-500 hover:text-ink">
+            View breakdown →
+          </Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            { label: "Current to Date", value: ctc.totals.currentCents },
+            { label: "Revised Estimate", value: ctc.totals.revisedCents },
+            { label: "Cost to Complete", value: ctc.totals.costToCompleteCents },
+          ].map((s) => (
+            <div key={s.label}>
+              <p className="text-xs uppercase tracking-wide text-stone-400">{s.label}</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums">{formatCents(s.value)}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Pending variations awaiting pricing / client approval. */}
       <div className="card">
         <div className="mb-3 flex items-center justify-between">
@@ -126,7 +153,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
             {pendingVars.map((v) => (
               <li key={v.id} className="flex items-center justify-between gap-4 py-2">
                 <span className="min-w-0 truncate text-sm">
-                  <span className="text-stone-400">VO #{v.variationNumber}</span> · {v.title}
+                  {v.title} <span className="text-stone-400">· #{v.variationNumber}</span>
                 </span>
                 <span className="flex shrink-0 items-center gap-3">
                   <span className="text-sm tabular-nums">
