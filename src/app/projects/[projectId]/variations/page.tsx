@@ -60,17 +60,17 @@ export default async function VariationsPage({ params }: { params: { projectId: 
         <div className="card p-0">
           <table className="w-full table-fixed text-xs sm:text-sm">
             <colgroup>
-              <col className="w-[8%]" />
-              <col className="w-[40%]" />
+              <col className="w-[42%]" />
+              <col className="w-[9%]" />
               <col className="w-[9%]" />
               <col className="w-[15%]" />
-              <col className="w-[18%]" />
-              <col className="w-[10%]" />
+              <col className="w-[16%]" />
+              <col className="w-[9%]" />
             </colgroup>
             <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
               <tr>
-                <th className="px-3 py-3">VO #</th>
-                <th className="px-3 py-3">Title</th>
+                <th className="px-3 py-3">Variation</th>
+                <th className="px-3 py-3">Ref</th>
                 <th className="px-3 py-3">Lines</th>
                 <th className="px-3 py-3">Status</th>
                 <th className="px-3 py-3 text-right">Amount</th>
@@ -80,8 +80,8 @@ export default async function VariationsPage({ params }: { params: { projectId: 
             <tbody className="divide-y divide-stone-100 align-top">
               {variations.map((v) => (
                 <tr key={v.id} className="hover:bg-stone-50">
-                  <td className="px-3 py-3 tabular-nums">{v.variationNumber}</td>
                   <td className="px-3 py-3 font-medium break-words">{v.title}</td>
+                  <td className="px-3 py-3 tabular-nums text-stone-500">#{v.variationNumber}</td>
                   <td className="px-3 py-3 tabular-nums text-stone-500">{v._count.lines}</td>
                   <td className="px-3 py-3"><StatusBadge status={v.status} /></td>
                   <td className="px-3 py-3 text-right tabular-nums whitespace-nowrap">

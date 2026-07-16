@@ -52,8 +52,9 @@ export default async function VariationDetailPage({
 
       <div className="mt-2 mb-5 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">VO #{v.variationNumber} · {v.title}</h2>
-          {v.description && <p className="mt-0.5 text-sm text-stone-500">{v.description}</p>}
+          <h2 className="text-lg font-semibold">{v.title}</h2>
+          <p className="mt-0.5 text-xs uppercase tracking-wide text-stone-400">Variation #{v.variationNumber}</p>
+          {v.description && <p className="mt-1 text-sm text-stone-500">{v.description}</p>}
         </div>
         <div className="flex items-center gap-3">
           <span className="font-semibold tabular-nums">

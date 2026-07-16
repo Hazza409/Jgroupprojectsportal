@@ -31,6 +31,8 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
   { key: "X-DNS-Prefetch-Control", value: "off" },
+  // Private portal — keep it out of every search index (Jake 6.2).
+  { key: "X-Robots-Tag", value: "noindex, nofollow" },
 ];
 
 /** @type {import('next').NextConfig} */

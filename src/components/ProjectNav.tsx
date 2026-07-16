@@ -17,7 +17,7 @@ const SECTIONS: Section[] = [
       { slug: "cost-to-complete", label: "Cost to Complete" },
       { slug: "progress-claims", label: "Progress Claims" },
       { slug: "variations", label: "Variations" },
-      { slug: "rfis", label: "RFIs" },
+      { slug: "rfis", label: "Questions & Answers" },
       { slug: "schedule", label: "Schedule" },
       { slug: "calendar", label: "Calendar" },
       { slug: "updates", label: "Fortnightly Summary" },

@@ -70,8 +70,9 @@ export default async function ProjectLayout({
       <div className="mx-auto max-w-7xl px-6 py-6">
         <div className="mb-6 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold">{project.name}</h1>
-            <p className="text-sm text-stone-500">{project.address ?? "No address"}</p>
+            {/* The client's project is the masthead/hero (Jake 1.1). */}
+            <h1 className="text-3xl font-semibold tracking-tight">{project.name}</h1>
+            <p className="mt-0.5 text-sm text-stone-500">{project.address ?? "No address"}</p>
           </div>
           <span className="badge bg-stone-100 text-stone-600 ring-1 ring-stone-200">
             {isBuilder ? `Client sees: ${viewLabel}` : viewLabel}

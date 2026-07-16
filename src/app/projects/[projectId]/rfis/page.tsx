@@ -19,7 +19,7 @@ export default async function RfisPage({ params }: { params: { projectId: string
   return (
     <div>
       <ModuleHeader
-        title="RFIs"
+        title="Questions & Answers"
         description={isBuilder ? "Raise design questions for the client to answer." : `Design questions from ${companyShortName(company)} — please answer.`}
       />
 
@@ -38,13 +38,13 @@ export default async function RfisPage({ params }: { params: { projectId: string
             <textarea name="question" rows={3} required className="input resize-y" placeholder="What's the question for the client?" />
           </div>
           <div className="sm:col-span-2">
-            <button className="btn-primary" type="submit">Raise RFI</button>
+            <button className="btn-primary" type="submit">Raise question</button>
           </div>
         </form>
       )}
 
       {rfis.length === 0 ? (
-        <div className="card text-stone-500">No RFIs yet.</div>
+        <div className="card text-stone-500">No questions yet.</div>
       ) : (
         <div className="space-y-3">
           {rfis.map((r) => (
@@ -52,7 +52,7 @@ export default async function RfisPage({ params }: { params: { projectId: string
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-medium">
-                    <span className="text-stone-400">RFI #{r.number}</span> · {r.subject}
+                    <span className="text-stone-400">Query #{r.number}</span> · {r.subject}
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-base font-semibold text-ink">{r.question}</p>
                   {r.dueDate && r.status === "OPEN" && (
