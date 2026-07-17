@@ -90,6 +90,11 @@ enum RfiStatus {
   CLOSED // builder closed it out
 }
 
+enum RfiKind {
+  QUESTION // a design question
+  DECISION // a decision/selection the client must make (Jake §4.3)
+}
+
 // ─────────────────────────── Company ─────────────────────────
 // White-label branding + commercial settings (SAAS-PLAN M1). One row today
 // (J Group, seeded by migration); becomes the tenant anchor in M2 when
@@ -696,6 +701,11 @@ model Rfi {
   subject      String
   question     String
   status       RfiStatus @default(OPEN)
+  kind         RfiKind   @default(QUESTION)
+  // Decision-only fields (kind = DECISION): the options offered to the client
+  // and the cost/time impact if they answer late. dueDate = needed-by date.
+  optionsProvided String?
+  impactIfLate    String?
   answer       String?
   dueDate      DateTime?
   raisedById   String? // builder (loose ref)
@@ -703,10 +713,25 @@ model Rfi {
   answeredAt   DateTime?
   createdAt    DateTime  @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  attachments RfiAttachment[]
 
   @@unique([projectId, number])
   @@index([projectId])
+}
+
+// Supporting files (drawings, photos, PDFs) attached to a question/decision.
+model RfiAttachment {
+  id           String   @id @default(cuid())
+  rfiId        String
+  fileKey      String
+  originalName String
+  contentType  String?
+  createdAt    DateTime @default(now())
+
+  rfi Rfi @relation(fields: [rfiId], references: [id], onDelete: Cascade)
+
+  @@index([rfiId])
 }
 
 // ════════════════════ Fortnightly summary ═══════════════════
