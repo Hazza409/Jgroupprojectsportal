@@ -4,6 +4,18 @@ import { storage } from "@/lib/storage";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { uploadDocument, deleteDocument } from "./actions";
 
+// Friendly labels for the document-type enum.
+const KIND_LABELS: Record<string, string> = {
+  ARCHITECTURAL: "Architectural drawing",
+  INTERIOR: "Interior design",
+  CONTRACT: "Contract",
+  INSURANCE: "Insurance",
+  WARRANTY: "Warranty",
+  COMPLIANCE: "Compliance certificate",
+  PERMIT: "Permit / approval",
+  OTHER: "Other",
+};
+
 export default async function DocumentsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
@@ -16,21 +28,26 @@ export default async function DocumentsPage({ params }: { params: { projectId: s
   return (
     <div>
       <ModuleHeader
-        title="Drawings & Design"
-        description="Architectural and interior design documents (PDF / image)."
+        title="Documents & Drawings"
+        description="Project documents shared with the client — drawings, contract, insurances, warranties, compliance certificates (PDF / image)."
       />
 
       {isBuilder && (
         <form action={uploadDocument.bind(null, projectId)} className="card mb-6 grid gap-3 sm:grid-cols-2">
           <div>
             <label className="label">Title</label>
-            <input name="title" className="input" placeholder="Ground floor plan — Rev C" />
+            <input name="title" className="input" placeholder="e.g. Ground floor plan — Rev C, or Public liability certificate" />
           </div>
           <div>
             <label className="label">Type</label>
             <select name="kind" className="input">
-              <option value="ARCHITECTURAL">Architectural</option>
-              <option value="INTERIOR">Interior</option>
+              <option value="ARCHITECTURAL">Architectural drawing</option>
+              <option value="INTERIOR">Interior design</option>
+              <option value="CONTRACT">Contract</option>
+              <option value="INSURANCE">Insurance</option>
+              <option value="WARRANTY">Warranty</option>
+              <option value="COMPLIANCE">Compliance certificate</option>
+              <option value="PERMIT">Permit / approval</option>
               <option value="OTHER">Other</option>
             </select>
           </div>
@@ -39,13 +56,13 @@ export default async function DocumentsPage({ params }: { params: { projectId: s
             <input type="file" name="file" accept=".pdf,image/*" required className="text-sm" />
           </div>
           <div className="sm:col-span-2">
-            <button className="btn-primary" type="submit">Upload drawing</button>
+            <button className="btn-primary" type="submit">Upload document</button>
           </div>
         </form>
       )}
 
       {withUrls.length === 0 ? (
-        <div className="card text-stone-500">No drawings uploaded yet.</div>
+        <div className="card text-stone-500">No documents uploaded yet.</div>
       ) : (
         <div className="space-y-2">
           {withUrls.map((d) => (
@@ -54,7 +71,7 @@ export default async function DocumentsPage({ params }: { params: { projectId: s
                 <a href={d.url} target="_blank" rel="noreferrer" className="font-medium text-brand underline">
                   {d.title}
                 </a>
-                <p className="text-xs text-stone-400">{d.kind} · {d.originalName}</p>
+                <p className="text-xs text-stone-400">{KIND_LABELS[d.kind] ?? d.kind} · {d.originalName}</p>
               </div>
               {isBuilder && (
                 <form action={deleteDocument.bind(null, projectId, d.id)}>

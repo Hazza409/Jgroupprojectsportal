@@ -36,6 +36,11 @@ enum VariationStatus {
 enum DesignDocKind {
   ARCHITECTURAL
   INTERIOR
+  CONTRACT
+  INSURANCE
+  WARRANTY
+  COMPLIANCE
+  PERMIT
   OTHER
 }
 

@@ -22,7 +22,7 @@ const SECTIONS: Section[] = [
       { slug: "calendar", label: "Calendar" },
       { slug: "updates", label: "Fortnightly Summary" },
       { slug: "photos", label: "Photos" },
-      { slug: "documents", label: "Drawings & Design" },
+      { slug: "documents", label: "Documents & Drawings" },
     ],
   },
   {
