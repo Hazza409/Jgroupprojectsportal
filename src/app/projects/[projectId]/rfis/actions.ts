@@ -102,12 +102,17 @@ export async function deleteRfiAttachment(projectId: string, attachmentId: strin
   refresh(projectId);
 }
 
-// Client answers an open RFI. (Builders raise/close, not answer.)
+// Client answers an open item. (Builders raise/close, not answer.) For a
+// decision with options, the client picks one (selectedOption) plus an optional
+// note; for a plain question they type a free-text answer.
 export async function answerRfi(projectId: string, rfiId: string, formData: FormData) {
   const user = await assertProjectAccess(projectId);
-  if (user.role === Role.BUILDER) throw new AccessError("RFIs are answered by the client");
-  const answer = String(formData.get("answer") ?? "").trim();
-  if (!answer) throw new Error("Answer is required");
+  if (user.role === Role.BUILDER) throw new AccessError("Questions are answered by the client");
+  const selected = String(formData.get("selectedOption") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim();
+  const freeText = String(formData.get("answer") ?? "").trim();
+  const answer = selected ? (note ? `${selected} — ${note}` : selected) : freeText;
+  if (!answer) throw new Error("Please choose an option or type a response");
   await db.rfi.updateMany({
     where: { id: rfiId, projectId, status: RfiStatus.OPEN },
     data: { answer, status: RfiStatus.ANSWERED, answeredById: user.id, answeredAt: new Date() },

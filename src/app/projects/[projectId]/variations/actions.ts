@@ -24,30 +24,45 @@ function refresh(projectId: string, variationId?: string) {
   if (variationId) revalidatePath(`/projects/${projectId}/variations/${variationId}`);
 }
 
-// Builder creates a variation with one or more line items. For the scaffold the
-// form posts a single line (description + qty + unit cost); the total is derived.
+// Builder creates a variation with one or MORE line items. The form posts
+// parallel arrays (lineDescription[], quantity[], unit[], unitCost[]) — one
+// entry per row — which we zip into line items. Empty rows are skipped.
 export async function createVariation(projectId: string, formData: FormData) {
   const user = await assertProjectAccess(projectId);
   if (user.role !== Role.BUILDER) throw new AccessError("Only builders create variations");
 
   const title = String(formData.get("title") ?? "").trim();
   if (!title) throw new Error("Title required");
-  const lineDesc = String(formData.get("lineDescription") ?? title).trim();
-  const qty = Number(formData.get("quantity") ?? 1) || 1;
-  const unitCostCents = dollarsToCents(String(formData.get("unitCost") ?? "0"));
-  const total = lineTotalCents(qty, unitCostCents);
+
+  const codes = await projectCodeRefs(projectId);
+  const pickedCode = String(formData.get("costCodeId") ?? "") || null;
+  // Variation-level code = explicit pick, else auto-match the title. Each line
+  // falls back to this when its own description doesn't match a code.
+  const varCode = pickedCode ?? matchCostCodeId(title, codes);
+
+  // Zip the parallel row arrays into line items.
+  const descs = formData.getAll("lineDescription").map((v) => String(v).trim());
+  const qtys = formData.getAll("quantity").map((v) => String(v));
+  const units = formData.getAll("unit").map((v) => String(v).trim());
+  const costs = formData.getAll("unitCost").map((v) => String(v));
+  const lines = descs
+    .map((description, i) => {
+      const qty = Number(qtys[i] ?? 1) || 1;
+      const unitCostCents = dollarsToCents(costs[i] ?? "0");
+      return { description, qty, unit: units[i] || null, unitCostCents, totalCents: lineTotalCents(qty, unitCostCents) };
+    })
+    // Keep rows that have either a description or a cost.
+    .filter((l) => l.description || l.unitCostCents !== 0);
+  // Always at least one line — fall back to the title as a single line.
+  if (lines.length === 0) lines.push({ description: title, qty: 1, unit: null, unitCostCents: 0, totalCents: 0 });
+
+  const totalCents = lines.reduce((a, l) => a + l.totalCents, 0);
 
   const last = await db.variation.findFirst({
     where: { projectId },
     orderBy: { variationNumber: "desc" },
     select: { variationNumber: true },
   });
-
-  // Assign to a cost code — an explicit pick from the form, else auto-match the
-  // title. Set on BOTH the variation (default) and its line (the Cost to
-  // Complete "Variations" column reads line-level, falling back to variation).
-  const pickedCode = String(formData.get("costCodeId") ?? "") || null;
-  const costCodeId = pickedCode ?? matchCostCodeId(title, await projectCodeRefs(projectId));
 
   await db.variation.create({
     data: {
@@ -56,19 +71,17 @@ export async function createVariation(projectId: string, formData: FormData) {
       title,
       description: String(formData.get("description") ?? "") || null,
       status: VariationStatus.DRAFT,
-      totalCents: total,
-      costCodeId,
+      totalCents,
+      costCodeId: varCode,
       lines: {
-        create: [
-          {
-            description: lineDesc,
-            quantity: qty,
-            unit: String(formData.get("unit") ?? "") || null,
-            unitCostCents,
-            totalCents: total,
-            costCodeId,
-          },
-        ],
+        create: lines.map((l) => ({
+          description: l.description || title,
+          quantity: l.qty,
+          unit: l.unit,
+          unitCostCents: l.unitCostCents,
+          totalCents: l.totalCents,
+          costCodeId: matchCostCodeId(l.description, codes) ?? varCode,
+        })),
       },
     },
   });

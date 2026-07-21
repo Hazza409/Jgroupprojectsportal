@@ -67,8 +67,8 @@ export default async function RfisPage({ params }: { params: { projectId: string
             <input type="file" name="files" accept=".pdf,image/*" multiple className="text-sm" />
           </div>
           <div>
-            <label className="label">Options offered <span className="text-stone-400">(decisions only)</span></label>
-            <textarea name="optionsProvided" rows={2} className="input resize-y" placeholder="e.g. Option A: honed marble; Option B: quartz…" />
+            <label className="label">Options offered <span className="text-stone-400">(decisions — one per line)</span></label>
+            <textarea name="optionsProvided" rows={3} className="input resize-y" placeholder={"Honed marble\nQuartz — Caesarstone\nPorcelain"} />
           </div>
           <div>
             <label className="label">Cost / time impact if late <span className="text-stone-400">(decisions only)</span></label>
@@ -86,6 +86,9 @@ export default async function RfisPage({ params }: { params: { projectId: string
         <div className="space-y-3">
           {withUrls.map((r) => {
             const isDecision = r.kind === "DECISION";
+            const options = r.optionsProvided
+              ? r.optionsProvided.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+              : [];
             return (
             <div key={r.id} className="card">
               <div className="flex items-start justify-between gap-3">
@@ -99,8 +102,13 @@ export default async function RfisPage({ params }: { params: { projectId: string
                     )}
                   </p>
                   <p className="mt-1 whitespace-pre-wrap text-base font-semibold text-ink">{r.question}</p>
-                  {isDecision && r.optionsProvided && (
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-stone-600"><span className="text-stone-400">Options:</span> {r.optionsProvided}</p>
+                  {isDecision && options.length > 0 && (
+                    <div className="mt-1 text-sm text-stone-600">
+                      <span className="text-stone-400">Options:</span>
+                      <ul className="mt-0.5 list-disc pl-5">
+                        {options.map((o, i) => <li key={i}>{o}</li>)}
+                      </ul>
+                    </div>
                   )}
                   {isDecision && r.impactIfLate && (
                     <p className="mt-1 text-sm text-stone-600"><span className="text-stone-400">If late:</span> {r.impactIfLate}</p>
@@ -137,13 +145,29 @@ export default async function RfisPage({ params }: { params: { projectId: string
 
               {/* Client answers an open item */}
               {!isBuilder && r.status === "OPEN" && (
-                <form action={answerRfi.bind(null, projectId, r.id)} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-                  <div className="grow">
-                    <label className="label">{isDecision ? "Your decision" : "Your answer"}</label>
-                    <textarea name="answer" rows={2} required className="input resize-y" placeholder={isDecision ? "Tell us which option / your decision…" : "Type your response…"} />
-                  </div>
-                  <button className="btn-primary" type="submit">Submit</button>
-                </form>
+                isDecision && options.length > 0 ? (
+                  <form action={answerRfi.bind(null, projectId, r.id)} className="mt-3 space-y-2">
+                    <label className="label">Choose an option</label>
+                    <div className="space-y-1.5">
+                      {options.map((o, i) => (
+                        <label key={i} className="flex items-center gap-2 text-sm">
+                          <input type="radio" name="selectedOption" value={o} required className="accent-brand" />
+                          {o}
+                        </label>
+                      ))}
+                    </div>
+                    <textarea name="note" rows={2} className="input resize-y" placeholder="Add a note (optional)…" />
+                    <button className="btn-primary" type="submit">Submit decision</button>
+                  </form>
+                ) : (
+                  <form action={answerRfi.bind(null, projectId, r.id)} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <div className="grow">
+                      <label className="label">{isDecision ? "Your decision" : "Your answer"}</label>
+                      <textarea name="answer" rows={2} required className="input resize-y" placeholder={isDecision ? "Tell us your decision…" : "Type your response…"} />
+                    </div>
+                    <button className="btn-primary" type="submit">Submit</button>
+                  </form>
+                )
               )}
 
               {/* Builder actions */}
