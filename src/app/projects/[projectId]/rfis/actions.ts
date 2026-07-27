@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { notifyProject } from "@/lib/email";
 import { getCompany, companyShortName } from "@/lib/company";
+import { recordDecision } from "@/lib/audit";
+import { DecisionAction, DecisionSubject } from "@prisma/client";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/rfis`);
@@ -113,9 +115,28 @@ export async function answerRfi(projectId: string, rfiId: string, formData: Form
   const freeText = String(formData.get("answer") ?? "").trim();
   const answer = selected ? (note ? `${selected} — ${note}` : selected) : freeText;
   if (!answer) throw new Error("Please choose an option or type a response");
+
+  const rfi = await db.rfi.findFirst({
+    where: { id: rfiId, projectId, status: RfiStatus.OPEN },
+    select: { id: true, number: true, subject: true, kind: true },
+  });
+  if (!rfi) throw new Error("Not found or already answered");
+
   await db.rfi.updateMany({
     where: { id: rfiId, projectId, status: RfiStatus.OPEN },
     data: { answer, status: RfiStatus.ANSWERED, answeredById: user.id, answeredAt: new Date() },
+  });
+
+  // ── Evidence: the client's response, attributed and timestamped (Jake §2).
+  await recordDecision({
+    projectId,
+    subjectType: DecisionSubject.QUERY,
+    subjectId: rfiId,
+    subjectRef: `${rfi.kind === RfiKind.DECISION ? "Decision" : "Query"} #${rfi.number}`,
+    subjectTitle: rfi.subject,
+    action: DecisionAction.ANSWERED,
+    actor: user,
+    detail: answer,
   });
   refresh(projectId);
 }

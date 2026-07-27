@@ -3,7 +3,9 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
 import { getCompany } from "@/lib/company";
-import { claimHeadlineCents, computeCostToComplete } from "@/lib/claims";
+import { computeCostToComplete, projectDrawdown } from "@/lib/claims";
+import { logView } from "@/lib/audit";
+import { fmtDate } from "@/lib/dates";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClientViewControl } from "@/components/ClientViewControl";
 
@@ -37,17 +39,29 @@ export default async function ProjectOverview({ params }: { params: { projectId:
   // computation as the Cost to Complete page, so they always agree).
   const ctc = await computeCostToComplete(projectId, company);
 
-  // All figures shown inclusive of builder's margin + GST (matches Cost to Complete).
-  const estimateTotal = inclMarginGst(sumCents(estimateLines.map((l) => l.totalCents)), company);
-  const approvedVariations = inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)), company);
+  // Movement in the two headline forecast figures since the last statement.
+  const costMovementCents =
+    project.forecastFinalCostCents != null && project.forecastFinalCostPrevCents != null
+      ? project.forecastFinalCostCents - project.forecastFinalCostPrevCents
+      : null;
+  const dateMovementDays =
+    project.forecastCompletionDate && project.forecastCompletionPrevDate
+      ? Math.round(
+          (project.forecastCompletionDate.getTime() - project.forecastCompletionPrevDate.getTime()) / 86_400_000,
+        )
+      : null;
 
-  // Drawn down = what the client has APPROVED across progress claims — the
-  // client-facing headline (recon total inc GST from a sheet, else the line sum
-  // grossed to inc margin+GST). claimHeadlineCents keeps this identical to the
-  // register, ledger, claim detail, and printed invoice.
-  const claimedTotal = sumCents(approvedClaims.map((c) => claimHeadlineCents(c, company)));
-  const budgetBase = estimateTotal + approvedVariations;
-  const drawnPct = budgetBase > 0 ? (claimedTotal / budgetBase) * 100 : 0;
+  await logView(projectId, user, `/projects/${projectId}`, "Project overview");
+
+  // ONE source of truth for every figure on this page — the same computations
+  // the Cost to Complete page and the claims ledger use, so nothing can differ
+  // by a cent (Jake §6). Never re-derive money locally here.
+  const drawdown = await projectDrawdown(projectId, company);
+  const estimateTotal = ctc.totals.estimateCents;
+  const approvedVariations = ctc.totals.variationsCents;
+  const claimedTotal = drawdown.drawnCents;
+  const budgetBase = drawdown.budgetCents;
+  const drawnPct = drawdown.pct;
 
   const stats = [
     { label: "Original estimate", value: formatCents(estimateTotal) },
@@ -117,6 +131,51 @@ export default async function ProjectOverview({ params }: { params: { projectId:
           {formatCents(claimedTotal)} of {formatCents(budgetBase)} across {approvedClaims.length} approved claim{approvedClaims.length === 1 ? "" : "s"}
         </p>
       </div>
+
+      {/* THE TWO HEADLINE NUMBERS (Jake §3) — the questions the client is
+          actually holding. Both are entered by hand from Nick & Andrew's
+          fortnightly figures; the portal never calculates them. */}
+      {(project.forecastFinalCostCents != null || project.forecastCompletionDate) && (
+        <div className="card border-brand/30">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-semibold">Forecast</h2>
+            {project.forecastUpdatedAt && (
+              <span className="text-xs text-stone-400">Confirmed {fmtDate(project.forecastUpdatedAt)}</span>
+            )}
+          </div>
+          <div className="grid gap-6 sm:grid-cols-2">
+            {project.forecastFinalCostCents != null && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-stone-400">Forecast final cost</p>
+                <p className="mt-1 text-3xl font-semibold tabular-nums">{formatCents(project.forecastFinalCostCents)}</p>
+                {costMovementCents !== null && (
+                  <p className={`mt-1 text-sm ${costMovementCents > 0 ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300"}`}>
+                    {costMovementCents > 0 ? "▲" : "▼"} {formatCents(Math.abs(costMovementCents))} since last statement
+                  </p>
+                )}
+                {project.forecastFinalCostNote && (
+                  <p className="mt-1 text-sm text-stone-500">{project.forecastFinalCostNote}</p>
+                )}
+              </div>
+            )}
+            {project.forecastCompletionDate && (
+              <div>
+                <p className="text-xs uppercase tracking-wide text-stone-400">Forecast completion</p>
+                <p className="mt-1 text-3xl font-semibold">{fmtDate(project.forecastCompletionDate)}</p>
+                {dateMovementDays !== null && dateMovementDays !== 0 && (
+                  <p className={`mt-1 text-sm ${dateMovementDays > 0 ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300"}`}>
+                    {dateMovementDays > 0 ? "▲" : "▼"} {Math.abs(dateMovementDays)} day{Math.abs(dateMovementDays) === 1 ? "" : "s"}{" "}
+                    {dateMovementDays > 0 ? "later" : "earlier"} than last statement
+                  </p>
+                )}
+                {project.forecastCompletionNote && (
+                  <p className="mt-1 text-sm text-stone-500">{project.forecastCompletionNote}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Cost to Complete summary — surfaced here so the numbers are on the
           overview without clicking through. Full breakdown on the CTC page. */}

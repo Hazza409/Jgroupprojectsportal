@@ -11,6 +11,8 @@ import { getCompany, companyShortName } from "@/lib/company";
 import { parseVariationsBuffer } from "@/lib/excel/parseVariations";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { matchCostCodeId, projectCodeRefs } from "@/lib/claims";
+import { recordDecision, contentFingerprint, AUTHORITY_STATEMENT } from "@/lib/audit";
+import { DecisionAction, DecisionSubject } from "@prisma/client";
 
 export interface ImportResult {
   ok: boolean;
@@ -301,11 +303,46 @@ export async function submitVariation(projectId: string, variationId: string) {
 // Client approves/rejects a submitted variation.
 export async function decideVariation(projectId: string, variationId: string, approve: boolean) {
   const user = await assertProjectAccess(projectId);
+
+  // Capture the EXACT version being decided on, before the status changes, so
+  // the ledger proves what was in front of the client when they clicked.
+  const before = await db.variation.findFirst({
+    where: { id: variationId, projectId, status: VariationStatus.SUBMITTED },
+    include: { lines: { orderBy: { id: "asc" }, select: { description: true, quantity: true, totalCents: true } } },
+  });
+  if (!before) throw new Error("Variation is not awaiting a decision");
+  const company = await getCompany();
+  const approvedAmount = inclMarginGst(before.totalCents, company);
+  const versionHash = contentFingerprint({
+    title: before.title,
+    totalCents: before.totalCents,
+    lines: before.lines,
+  });
+
   await db.variation.update({
     where: { id: variationId, projectId, status: VariationStatus.SUBMITTED },
     data: approve
       ? { status: VariationStatus.APPROVED, approvedAt: new Date() }
       : { status: VariationStatus.REJECTED },
+  });
+
+  // ── Evidence: append an immutable record of this decision (Jake §2).
+  await recordDecision({
+    projectId,
+    subjectType: DecisionSubject.VARIATION,
+    subjectId: variationId,
+    subjectRef: `Variation #${before.variationNumber}`,
+    subjectTitle: before.title,
+    action: approve ? DecisionAction.APPROVED : DecisionAction.REJECTED,
+    actor: user,
+    amountCents: approvedAmount,
+    versionHash,
+    detail:
+      user.role === Role.BUILDER
+        ? "Recorded by J Group on the client's behalf (decision received outside the portal)."
+        : approve
+          ? AUTHORITY_STATEMENT
+          : null,
   });
 
   // Notify the J Group team when a variation is approved.
@@ -315,7 +352,6 @@ export async function decideVariation(projectId: string, variationId: string, ap
       include: { project: { select: { name: true } } },
     });
     if (v) {
-      const company = await getCompany();
       await notifyBuilders(
         `Variation approved — ${v.project.name}`,
         [

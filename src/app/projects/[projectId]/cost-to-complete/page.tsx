@@ -64,7 +64,11 @@ export default async function CostToCompletePage({
     <div>
       <ModuleHeader
         title="Cost to Complete"
-        description="Estimate vs current cost to date, per cost code. Current costs sync one-directionally from Xero."
+        description={
+          isBuilder
+            ? "Estimate vs current cost to date, per cost code. Current costs sync one-directionally from Xero."
+            : "Your budget against costs incurred to date, by trade."
+        }
         action={
           isBuilder ? (
             <XeroControls

@@ -23,7 +23,10 @@ export default async function WarrantiesPage({ params }: { params: { projectId: 
     <div>
       <Link href={`/projects/${projectId}/handover`} className="text-sm text-stone-500 hover:text-ink">← Handover</Link>
       <div className="mt-2">
-        <ModuleHeader title="Warranties" description="Warranty register — issuer, item and expiry tracked as structured fields." />
+        <ModuleHeader
+          title="Warranties"
+          description={isBuilder ? "Warranty register — issuer, item and expiry." : "Warranties on your home — what's covered, by whom, and when each expires."}
+        />
       </div>
 
       {isBuilder && (

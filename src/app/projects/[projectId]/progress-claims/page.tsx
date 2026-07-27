@@ -2,7 +2,7 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getCompany, companyShortName } from "@/lib/company";
 import { projectDrawdown, claimHeadlineCents } from "@/lib/claims";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -14,8 +14,10 @@ export default async function ProgressClaimsPage({ params }: { params: { project
   const isBuilder = user.role === "BUILDER";
   const company = await getCompany();
 
+  // Drafts are the builder's workspace — a client only ever sees ISSUED claims
+  // (submitted onward). Enforced here, not just hidden in the UI.
   const claims = await db.progressClaim.findMany({
-    where: { projectId },
+    where: isBuilder ? { projectId } : { projectId, status: { not: "DRAFT" } },
     orderBy: { claimNumber: "desc" },
     include: { lines: { select: { claimedAmountCents: true } }, _count: { select: { reconLines: true } } },
   });
@@ -25,7 +27,11 @@ export default async function ProgressClaimsPage({ params }: { params: { project
     <div>
       <ModuleHeader
         title="Progress Claims"
-        description="Builder builds a claim from cost codes + reconciliation sheet, submits; client approves."
+        description={
+          isBuilder
+            ? "Build a claim from cost codes + reconciliation sheet, then submit for client approval."
+            : `Progress claims issued by ${companyShortName(company)} for your review and approval.`
+        }
         action={
           isBuilder ? (
             <form action={createClaim.bind(null, projectId)}>
@@ -51,10 +57,13 @@ export default async function ProgressClaimsPage({ params }: { params: { project
                   <p className="font-medium">
                     Claim #{c.claimNumber}{c.periodLabel ? ` · ${c.periodLabel}` : ""} · {formatCents(total)}
                   </p>
-                  <p className="text-xs text-stone-400">
-                    {c._count.reconLines > 0 ? `from reconciliation sheet · ${c._count.reconLines} invoices` : `${c.lines.length} line item(s)`}
-                    {c.xeroInvoiceId ? " · pushed to Xero" : ""}
-                  </p>
+                  {/* Internal build detail (source sheet, Xero push) is builder-only. */}
+                  {isBuilder && (
+                    <p className="text-xs text-stone-400">
+                      {c._count.reconLines > 0 ? `from reconciliation sheet · ${c._count.reconLines} invoices` : `${c.lines.length} line item(s)`}
+                      {c.xeroInvoiceId ? " · pushed to Xero" : ""}
+                    </p>
+                  )}
                 </div>
                 <StatusBadge status={c.status} />
               </Link>
@@ -63,27 +72,30 @@ export default async function ProgressClaimsPage({ params }: { params: { project
         </div>
       )}
 
-      <p className="mt-4 text-xs text-stone-400">
-        Open a claim to add line items, attach the reconciliation sheet, and submit for approval.
-      </p>
+      {isBuilder && (
+        <p className="mt-4 text-xs text-stone-400">
+          Open a claim to add line items, attach the reconciliation sheet, and submit for approval.
+        </p>
+      )}
 
       {/* Invoice-on-invoice contract drawdown */}
       {drawdown.rows.length > 0 && (
         <div className="mt-8">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">Contract drawdown</h3>
+          {/* Cost-plus wording (Jake §4): "budget", never a fixed contract facility. */}
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">Budget drawdown</h3>
           <div className="mb-4 grid gap-4 sm:grid-cols-3">
             <div className="card">
-              <p className="text-xs uppercase tracking-wide text-stone-400">Budget (estimate + approved variations)</p>
+              <p className="text-xs uppercase tracking-wide text-stone-400">Current budget (estimate + approved variations)</p>
               <p className="mt-2 text-xl font-semibold tabular-nums">{formatCents(drawdown.budgetCents)}</p>
             </div>
             <div className="card">
-              <p className="text-xs uppercase tracking-wide text-stone-400">Drawn to date (approved)</p>
+              <p className="text-xs uppercase tracking-wide text-stone-400">Invoiced to date (approved)</p>
               <p className="mt-2 text-xl font-semibold tabular-nums">
                 {formatCents(drawdown.drawnCents)} <span className="text-sm font-normal text-stone-400">· {drawdown.pct.toFixed(1)}%</span>
               </p>
             </div>
             <div className="card">
-              <p className="text-xs uppercase tracking-wide text-stone-400">Remaining to draw</p>
+              <p className="text-xs uppercase tracking-wide text-stone-400">Remaining against current budget</p>
               <p className="mt-2 text-xl font-semibold tabular-nums">{formatCents(drawdown.remainingCents)}</p>
             </div>
           </div>
@@ -95,7 +107,7 @@ export default async function ProgressClaimsPage({ params }: { params: { project
                   <th className="px-4 py-3">Period</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Amount</th>
-                  <th className="px-4 py-3 text-right">Drawn to date</th>
+                  <th className="px-4 py-3 text-right">Invoiced to date</th>
                   <th className="px-4 py-3 text-right">Remaining</th>
                 </tr>
               </thead>

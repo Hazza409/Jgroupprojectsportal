@@ -100,6 +100,79 @@ enum RfiKind {
   DECISION // a decision/selection the client must make (Jake §4.3)
 }
 
+// ─────────────────────────────────────────────────────────────
+// EVIDENCE LAYER. Once live, the portal is the record — for us and
+// against us. Every client decision is written here as an immutable
+// row: who, exactly when, exactly what (amount + content fingerprint).
+// Rows are APPEND-ONLY. Never update or delete one; corrections are a
+// new row with a note (visible correction, never a silent edit).
+// ─────────────────────────────────────────────────────────────
+
+enum DecisionAction {
+  APPROVED // client authorised (variation / claim)
+  REJECTED // client declined
+  ACKNOWLEDGED // client confirmed receipt — NOT approval
+  ANSWERED // client responded to a query/decision
+}
+
+enum DecisionSubject {
+  VARIATION
+  CLAIM
+  UPDATE // fortnightly summary
+  QUERY // Q&A item
+}
+
+model DecisionRecord {
+  id          String          @id @default(cuid())
+  projectId   String
+  subjectType DecisionSubject
+  subjectId   String
+  // Human reference frozen at the time of the action ("Variation #4"), so the
+  // record still reads correctly if the subject is later renamed.
+  subjectRef  String
+  subjectTitle String?
+  action      DecisionAction
+
+  // WHO — denormalised on purpose: the record must survive a user being
+  // renamed, deactivated or deleted.
+  actorId    String?
+  actorName  String
+  actorEmail String
+  actorRole  Role
+
+  // WHAT exactly was decided, frozen at the moment of the click.
+  amountCents Int?
+  // Fingerprint of the approved content — proves which version was approved.
+  versionHash String?
+  // The authority statement shown, the answer given, or an acknowledgement note.
+  detail      String?
+
+  occurredAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, occurredAt])
+  @@index([subjectType, subjectId])
+}
+
+// Internal-only analytics: which client-side users viewed what, and when.
+// Never surfaced to clients (Jake §2).
+model ViewLog {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String?
+  userName  String
+  userEmail String
+  userRole  Role
+  path      String
+  label     String?
+  viewedAt  DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, viewedAt])
+}
+
 // ─────────────────────────── Company ─────────────────────────
 // White-label branding + commercial settings (SAAS-PLAN M1). One row today
 // (J Group, seeded by migration); becomes the tenant anchor in M2 when
@@ -185,6 +258,21 @@ model Project {
   phase         ProjectPhase @default(BUILD)
   // What the client currently sees (builder-controlled). See ProjectClientView.
   clientView    ProjectClientView @default(CONSTRUCTION)
+
+  // ── The two headline numbers (Jake §3) ──────────────────────
+  // BOTH ARE ENTERED BY HAND from Nick & Andrew's fortnightly figures.
+  // The portal must NEVER calculate or infer these. Previous values are kept
+  // so the dashboard can show movement since the last statement.
+  forecastFinalCostCents     Int?
+  forecastFinalCostPrevCents Int?
+  forecastFinalCostNote      String?
+  forecastCompletionDate     DateTime?
+  forecastCompletionPrevDate DateTime?
+  forecastCompletionNote     String?
+  // When the fortnightly figures were last confirmed, and by whom.
+  forecastUpdatedAt          DateTime?
+  forecastUpdatedBy          String?
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -211,6 +299,8 @@ model Project {
   // RFIs + fortnightly updates
   rfis              Rfi[]
   updates           ProjectUpdate[]
+  decisionRecords   DecisionRecord[]
+  viewLogs          ViewLog[]
   // Client-facing "who to contact at J Group" list
   contacts          ProjectContact[]
   // Subcontractor directory (shown in Handover), Excel/CSV uploadable

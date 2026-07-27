@@ -11,6 +11,8 @@ import { notifyBuilders, notifyProject } from "@/lib/email";
 import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
 import { getCompany, companyShortName } from "@/lib/company";
 import { materializeClaimActuals, matchCostCodeId, projectCodeRefs, claimHeadlineCents } from "@/lib/claims";
+import { recordDecision, contentFingerprint, hasAcknowledged, AUTHORITY_STATEMENT, ACKNOWLEDGEMENT_STATEMENT } from "@/lib/audit";
+import { DecisionAction, DecisionSubject } from "@prisma/client";
 
 export interface ReconImportResult {
   ok: boolean;
@@ -349,12 +351,45 @@ export async function submitClaim(projectId: string, claimId: string) {
 // invoice push is a separate, guarded, human-triggered step (invoicePush.ts).
 export async function decideClaim(projectId: string, claimId: string, approve: boolean) {
   const user = await assertProjectAccess(projectId);
+
+  // Freeze the exact version being decided on, before the status changes.
+  const before = await db.progressClaim.findFirst({
+    where: { id: claimId, projectId, status: ClaimStatus.SUBMITTED },
+    include: { lines: { orderBy: { id: "asc" }, select: { description: true, claimedAmountCents: true } } },
+  });
+  if (!before) throw new Error("Claim is not awaiting a decision");
+  const decidedAmount = claimHeadlineCents(before, await getCompany());
+  const versionHash = contentFingerprint({
+    claimNumber: before.claimNumber,
+    totalCents: before.totalCents,
+    lines: before.lines,
+  });
+
   const claim = await db.progressClaim.update({
     where: { id: claimId, projectId, status: ClaimStatus.SUBMITTED },
     data: approve
       ? { status: ClaimStatus.APPROVED, approvedAt: new Date() }
       : { status: ClaimStatus.REJECTED },
     include: { lines: { select: { claimedAmountCents: true } }, project: { select: { name: true } } },
+  });
+
+  // ── Evidence: immutable record of who approved exactly what, and when.
+  await recordDecision({
+    projectId,
+    subjectType: DecisionSubject.CLAIM,
+    subjectId: claimId,
+    subjectRef: `Progress Claim #${before.claimNumber}`,
+    subjectTitle: before.periodLabel,
+    action: approve ? DecisionAction.APPROVED : DecisionAction.REJECTED,
+    actor: user,
+    amountCents: decidedAmount,
+    versionHash,
+    detail:
+      user.role === Role.BUILDER
+        ? "Recorded by J Group on the client's behalf (decision received outside the portal)."
+        : approve
+          ? AUTHORITY_STATEMENT
+          : null,
   });
 
   if (approve) {
@@ -372,5 +407,33 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
       `Open the ${companyShortName(await getCompany())} dashboard — the Xero invoice push is a separate, manual step.`,
     ]);
   }
+  refresh(projectId, claimId);
+}
+
+/**
+ * Client acknowledges receipt of an issued claim (Jake §2). Acknowledgement is
+ * RECEIPT, not approval — it proves the client saw the claim, nothing more.
+ * Recorded once per user, immutably.
+ */
+export async function acknowledgeClaim(projectId: string, claimId: string) {
+  const user = await assertProjectAccess(projectId);
+  const claim = await db.progressClaim.findFirst({
+    where: { id: claimId, projectId, status: { not: ClaimStatus.DRAFT } },
+    select: { id: true, claimNumber: true, periodLabel: true, totalCents: true },
+  });
+  if (!claim) throw new Error("Claim not found");
+  if (await hasAcknowledged(DecisionSubject.CLAIM, claimId, user.id)) return; // once only
+
+  await recordDecision({
+    projectId,
+    subjectType: DecisionSubject.CLAIM,
+    subjectId: claimId,
+    subjectRef: `Progress Claim #${claim.claimNumber}`,
+    subjectTitle: claim.periodLabel,
+    action: DecisionAction.ACKNOWLEDGED,
+    actor: user,
+    amountCents: claim.totalCents || null,
+    detail: ACKNOWLEDGEMENT_STATEMENT,
+  });
   refresh(projectId, claimId);
 }

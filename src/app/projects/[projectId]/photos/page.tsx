@@ -26,7 +26,10 @@ export default async function PhotosPage({ params }: { params: { projectId: stri
 
   return (
     <div className="space-y-6">
-      <ModuleHeader title="Photo Library" description="Site photos grouped into albums for the client." />
+      <ModuleHeader
+        title="Photo Library"
+        description={isBuilder ? "Site photos grouped into albums for the client." : "Photos from site, grouped into albums."}
+      />
 
       {isBuilder && (
         <div className="space-y-3">

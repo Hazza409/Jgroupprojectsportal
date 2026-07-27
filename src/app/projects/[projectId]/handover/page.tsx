@@ -28,7 +28,7 @@ export default async function HandoverHub({ params }: { params: { projectId: str
 
   return (
     <div>
-      <ModuleHeader title="Handover" description="Document repositories for project handover." />
+      <ModuleHeader title="Handover" description="Everything handed over with your completed home — manuals, certificates and warranties." />
       <div className="grid gap-4 sm:grid-cols-2">
         {cards.map((c) => (
           <Link key={c.href} href={`/projects/${projectId}/${c.href}`} className="card hover:shadow-md">

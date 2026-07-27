@@ -3,10 +3,10 @@ import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { LightboxImage } from "@/components/LightboxImage";
-import { createUpdate, addUpdatePhotos, deleteUpdatePhoto, deleteUpdate } from "./actions";
+import { createUpdate, addUpdatePhotos, deleteUpdatePhoto, deleteUpdate, acknowledgeUpdate } from "./actions";
 import { getCompany, companyShortName } from "@/lib/company";
-
-const fmtDate = (d: Date) => new Intl.DateTimeFormat("en-AU", { dateStyle: "long" }).format(d);
+import { ACKNOWLEDGEMENT_STATEMENT, logView } from "@/lib/audit";
+import { fmtDate, fmtDateTime } from "@/lib/dates";
 
 // Fortnightly Summary — dated site-update entries (written summary + photos),
 // authored by the builder and shown to the client. (Moved out of progress claims.)
@@ -22,12 +22,21 @@ export default async function UpdatesPage({ params }: { params: { projectId: str
     include: { photos: { orderBy: { createdAt: "asc" } } },
   });
   const store = await storage();
+  // Acknowledgements for these summaries (immutable receipts, Jake §2).
+  const acks = await db.decisionRecord.findMany({
+    where: { subjectType: "UPDATE", action: "ACKNOWLEDGED", subjectId: { in: updates.map((u) => u.id) } },
+    orderBy: { occurredAt: "asc" },
+    select: { subjectId: true, actorId: true, actorName: true, occurredAt: true },
+  });
   const withUrls = await Promise.all(
     updates.map(async (u) => ({
       ...u,
       photos: await Promise.all(u.photos.map(async (p) => ({ ...p, url: await store.url(p.fileKey) }))),
+      acks: acks.filter((a) => a.subjectId === u.id),
     })),
   );
+
+  await logView(projectId, user, `/projects/${projectId}/updates`, "Fortnightly summaries");
 
   return (
     <div>
@@ -124,6 +133,24 @@ export default async function UpdatesPage({ params }: { params: { projectId: str
                   <button className="btn-ghost !px-3 !py-1.5 text-xs" type="submit">Add photos</button>
                 </form>
               )}
+
+              {/* Acknowledgement — receipt, NOT approval (Jake §2). */}
+              <div className="mt-3 border-t border-stone-100 pt-3">
+                {u.acks.length > 0 && (
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                    ✓ Acknowledged by {u.acks.map((a) => `${a.actorName} (${fmtDateTime(a.occurredAt)})`).join(", ")}
+                  </p>
+                )}
+                {!isBuilder && !u.acks.some((a) => a.actorId === user.id) && (
+                  <form action={acknowledgeUpdate.bind(null, projectId, u.id)}>
+                    <button className="btn-ghost" type="submit">Acknowledge receipt</button>
+                    <span className="ml-2 text-xs text-stone-400">{ACKNOWLEDGEMENT_STATEMENT}</span>
+                  </form>
+                )}
+                {isBuilder && u.acks.length === 0 && (
+                  <p className="text-xs text-stone-400">Not yet acknowledged by the client.</p>
+                )}
+              </div>
             </div>
           ))}
         </div>

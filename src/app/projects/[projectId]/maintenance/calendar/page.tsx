@@ -32,7 +32,7 @@ export default async function MaintenanceCalendarPage({ params }: { params: { pr
       <div className="mt-2">
         <ModuleHeader
           title="Maintenance Calendar"
-          description="Scheduled maintenance and service bookings. Add items via Maintenance Schedule or Service & Bookings."
+          description="Scheduled maintenance and service visits for your home."
         />
       </div>
 

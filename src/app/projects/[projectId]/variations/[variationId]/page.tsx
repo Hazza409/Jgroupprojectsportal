@@ -7,6 +7,8 @@ import { formatCents, inclMarginGst } from "@/lib/money";
 import { getCompany } from "@/lib/company";
 import { StatusBadge } from "@/components/StatusBadge";
 import { submitVariation, decideVariation, attachQuote, saveVariationLines, addVariationLine, deleteVariationLine } from "../actions";
+import { AUTHORITY_STATEMENT, logView } from "@/lib/audit";
+import { fmtDateTime } from "@/lib/dates";
 
 export default async function VariationDetailPage({
   params,
@@ -26,6 +28,9 @@ export default async function VariationDetailPage({
     },
   });
   if (!v) notFound();
+  // A DRAFT variation is internal — a client must not reach it by deep link
+  // either (the register hides it; this is the actual boundary). Jake §1.
+  if (!isBuilder && v.status === "DRAFT") notFound();
 
   // Cost codes for the per-line allocation pickers (which CTC code each line adds to).
   const costCodes = await db.costCode.findMany({
@@ -33,6 +38,16 @@ export default async function VariationDetailPage({
     orderBy: { code: "asc" },
     select: { id: true, code: true, name: true },
   });
+
+  // Immutable decision history for this variation.
+  const decisions = await db.decisionRecord.findMany({
+    where: { subjectType: "VARIATION", subjectId: variationId },
+    orderBy: { occurredAt: "asc" },
+  });
+
+  // Internal-only: record that a client opened this variation (Jake §2) — so
+  // "I never saw variation #14" is answerable with a log.
+  await logView(projectId, user, `/projects/${projectId}/variations/${variationId}`, `Variation #${v.variationNumber}`);
 
   // Resolve download URLs for quote files (scope already enforced above).
   const store = await storage();
@@ -207,17 +222,47 @@ export default async function VariationDetailPage({
             <button className="btn-primary" type="submit">Submit for approval</button>
           </form>
         )}
-        {v.status === "SUBMITTED" && (
-          <>
+      </div>
+
+      {/* Approval — the client's own click is the record (Jake §2). The
+          authority statement is what turns that click into acceptance. */}
+      {v.status === "SUBMITTED" && (
+        <div className="card mt-4">
+          <div className="flex flex-wrap items-center gap-3">
             <form action={decideVariation.bind(null, projectId, v.id, true)}>
-              <button className="btn-primary" type="submit">Approve</button>
+              <button className="btn-primary" type="submit">
+                {isBuilder ? "Record client approval" : `Approve — ${formatCents(inclTotal)}`}
+              </button>
             </form>
             <form action={decideVariation.bind(null, projectId, v.id, false)}>
-              <button className="btn-ghost" type="submit">Reject</button>
+              <button className="btn-ghost" type="submit">{isBuilder ? "Record rejection" : "Reject"}</button>
             </form>
-          </>
-        )}
-      </div>
+          </div>
+          <p className="mt-2 text-xs text-stone-500">
+            {isBuilder
+              ? "Recording a decision here is logged against your name as received outside the portal. The client's own click is the stronger record."
+              : AUTHORITY_STATEMENT}
+          </p>
+        </div>
+      )}
+
+      {/* Decision history for this variation — immutable, builder + client. */}
+      {decisions.length > 0 && (
+        <div className="card mt-4">
+          <p className="text-xs uppercase tracking-wide text-stone-400">Decision record</p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {decisions.map((d) => (
+              <li key={d.id} className="text-stone-600">
+                <span className="font-medium text-ink">{d.action === "APPROVED" ? "Approved" : d.action === "REJECTED" ? "Rejected" : d.action}</span>
+                {" by "}{d.actorName}
+                {" · "}{fmtDateTime(d.occurredAt)}
+                {d.amountCents != null && ` · ${formatCents(d.amountCents)}`}
+                {d.versionHash && <span className="ml-1 font-mono text-[10px] text-stone-400">v{d.versionHash}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {isBuilder && (
         <form

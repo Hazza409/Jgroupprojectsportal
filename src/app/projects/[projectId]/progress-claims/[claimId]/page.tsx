@@ -43,6 +43,8 @@ export default async function ClaimDetailPage({
     },
   });
   if (!claim) notFound();
+  // A DRAFT claim hasn't been issued — internal only, no client deep link. Jake §1.
+  if (!isBuilder && claim.status === "DRAFT") notFound();
 
   const costCodes = await db.costCode.findMany({
     where: { projectId },

@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { notifyProject } from "@/lib/email";
 import { getCompany, companyShortName } from "@/lib/company";
+import { recordDecision, hasAcknowledged, ACKNOWLEDGEMENT_STATEMENT } from "@/lib/audit";
+import { DecisionAction, DecisionSubject } from "@prisma/client";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/updates`);
@@ -90,5 +92,32 @@ export async function deleteUpdate(projectId: string, updateId: string) {
   const store = await storage();
   await Promise.all(update.photos.map((p) => store.delete(p.fileKey).catch(() => {})));
   await db.projectUpdate.delete({ where: { id: update.id } }); // cascades UpdatePhoto rows
+  refresh(projectId);
+}
+
+/**
+ * Client acknowledges a fortnightly summary (Jake §2). Receipt, NOT approval —
+ * a client who has acknowledged every statement cannot later claim they didn't
+ * see the budget move. Recorded once per user, immutably.
+ */
+export async function acknowledgeUpdate(projectId: string, updateId: string) {
+  const user = await assertProjectAccess(projectId);
+  const update = await db.projectUpdate.findFirst({
+    where: { id: updateId, projectId },
+    select: { id: true, title: true },
+  });
+  if (!update) throw new Error("Update not found");
+  if (await hasAcknowledged(DecisionSubject.UPDATE, updateId, user.id)) return; // once only
+
+  await recordDecision({
+    projectId,
+    subjectType: DecisionSubject.UPDATE,
+    subjectId: updateId,
+    subjectRef: "Fortnightly summary",
+    subjectTitle: update.title,
+    action: DecisionAction.ACKNOWLEDGED,
+    actor: user,
+    detail: ACKNOWLEDGEMENT_STATEMENT,
+  });
   refresh(projectId);
 }

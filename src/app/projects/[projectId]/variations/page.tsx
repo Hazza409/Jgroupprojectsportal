@@ -13,8 +13,10 @@ export default async function VariationsPage({ params }: { params: { projectId: 
   const isBuilder = user.role === "BUILDER";
   const company = await getCompany();
 
+  // DRAFT variations are the builder's workspace and must never reach a client
+  // (Jake §1). Enforced in the query, not just hidden in the UI.
   const variations = await db.variation.findMany({
-    where: { projectId },
+    where: isBuilder ? { projectId } : { projectId, status: { not: "DRAFT" } },
     orderBy: { variationNumber: "desc" },
     select: {
       id: true,
@@ -30,7 +32,11 @@ export default async function VariationsPage({ params }: { params: { projectId: 
     <div>
       <ModuleHeader
         title="Variation Register"
-        description="Click a variation to see its line-item breakdown and approve it."
+        description={
+          isBuilder
+            ? "Price variations and submit them for client approval. Drafts stay internal until submitted."
+            : "Changes to the scope of works. Open a variation to see the breakdown and approve it."
+        }
         action={
           isBuilder ? (
             <Link href={`/api/templates/variations`} className="btn-ghost">Blank template</Link>
@@ -39,8 +45,9 @@ export default async function VariationsPage({ params }: { params: { projectId: 
       />
 
       <div className="mb-6 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
+        {/* TODO(Andrew): margin disclosure wording to be locked (Jake §4). */}
         Variation prices include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
-        Subcontractor quotes are the underlying supplier cost.
+        {isBuilder && " Subcontractor quotes are the underlying supplier cost."}
       </div>
 
       {isBuilder && (

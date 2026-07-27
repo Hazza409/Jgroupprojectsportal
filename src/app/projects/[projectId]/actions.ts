@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
+import { dollarsToCents } from "@/lib/money";
 import { validatePassword } from "@/lib/password";
 
 export interface SimpleResult { ok: boolean; message: string }
@@ -103,4 +104,57 @@ export async function setClientView(projectId: string, view: ProjectClientView) 
   if (!CLIENT_VIEWS.includes(view)) throw new Error("Invalid client view");
   await db.project.update({ where: { id: projectId }, data: { clientView: view } });
   revalidatePath(`/projects/${projectId}`, "layout");
+}
+
+/**
+ * Record the fortnightly forecast figures (Jake §3).
+ *
+ * BOTH NUMBERS COME FROM NICK & ANDREW — the portal must never calculate or
+ * infer them. This action only stores what a builder types in, rolling the
+ * previous value into *Prev so the dashboard can show movement since the last
+ * statement.
+ */
+export async function setForecasts(projectId: string, formData: FormData): Promise<SimpleResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) return { ok: false, message: "Builder access required." };
+
+  const current = await db.project.findUnique({
+    where: { id: projectId },
+    select: { forecastFinalCostCents: true, forecastCompletionDate: true },
+  });
+  if (!current) return { ok: false, message: "Project not found." };
+
+  const costRaw = String(formData.get("forecastFinalCost") ?? "").trim();
+  const dateRaw = String(formData.get("forecastCompletionDate") ?? "").trim();
+  const costNote = String(formData.get("forecastFinalCostNote") ?? "").trim() || null;
+  const dateNote = String(formData.get("forecastCompletionNote") ?? "").trim() || null;
+
+  const nextCost = costRaw ? dollarsToCents(costRaw) : null;
+  const nextDate = dateRaw ? new Date(dateRaw) : null;
+  if (dateRaw && Number.isNaN(nextDate!.getTime())) return { ok: false, message: "Completion date is not a valid date." };
+
+  // Only roll the previous value when the figure actually moved — otherwise a
+  // re-save would wipe the movement baseline.
+  const costMoved = nextCost !== null && nextCost !== current.forecastFinalCostCents;
+  const dateMoved =
+    nextDate !== null &&
+    (current.forecastCompletionDate === null || nextDate.getTime() !== current.forecastCompletionDate.getTime());
+
+  await db.project.update({
+    where: { id: projectId },
+    data: {
+      forecastFinalCostCents: nextCost,
+      forecastFinalCostPrevCents: costMoved ? current.forecastFinalCostCents : undefined,
+      forecastFinalCostNote: costNote,
+      forecastCompletionDate: nextDate,
+      forecastCompletionPrevDate: dateMoved ? current.forecastCompletionDate : undefined,
+      forecastCompletionNote: dateNote,
+      forecastUpdatedAt: new Date(),
+      forecastUpdatedBy: user.name,
+    },
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/settings`);
+  return { ok: true, message: "Forecast figures updated." };
 }

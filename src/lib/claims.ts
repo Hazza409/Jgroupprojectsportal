@@ -253,8 +253,17 @@ export async function computeCostToComplete(
     else unallocatedVarBase += cents;
   };
   for (const v of approvedVars) {
-    if (v.lines.length === 0) addVar(v.costCodeId, v.totalCents);
-    else for (const l of v.lines) addVar(l.costCodeId ?? v.costCodeId, l.totalCents);
+    if (v.lines.length === 0) {
+      addVar(v.costCodeId, v.totalCents);
+      continue;
+    }
+    for (const l of v.lines) addVar(l.costCodeId ?? v.costCodeId, l.totalCents);
+    // The variation's own total is authoritative (a recon/imported VO can have
+    // a headline that doesn't equal its line sum). Park any difference in
+    // Unallocated so the column ALWAYS sums to the total — no drifting cents.
+    const lineSum = sumCents(v.lines.map((l) => l.totalCents));
+    const remainder = v.totalCents - lineSum;
+    if (remainder !== 0) unallocatedVarBase += remainder;
   }
 
   const rows: CtcRow[] = costCodes.map((cc) => {
@@ -333,9 +342,11 @@ export async function projectDrawdown(
   projectId: string,
   company: { marginPercent: number; gstPercent: number },
 ): Promise<ProjectDrawdown> {
-  const [estimateLines, approvedVars, claims] = await Promise.all([
-    db.estimateLineItem.findMany({ where: { projectId }, select: { totalCents: true } }),
-    db.variation.findMany({ where: { projectId, status: "APPROVED" }, select: { totalCents: true } }),
+  const [ctc, claims] = await Promise.all([
+    // ONE source of truth for the budget: the exact same computation the Cost
+    // to Complete page uses. Previously this rounded separately and could
+    // disagree with CTC by a cent — which a QS will circle in red (Jake §6).
+    computeCostToComplete(projectId, company),
     db.progressClaim.findMany({
       where: { projectId },
       orderBy: { claimNumber: "asc" },
@@ -343,9 +354,7 @@ export async function projectDrawdown(
     }),
   ]);
 
-  const budgetCents =
-    inclMarginGst(sumCents(estimateLines.map((l) => l.totalCents)), company) +
-    inclMarginGst(sumCents(approvedVars.map((v) => v.totalCents)), company);
+  const budgetCents = ctc.totals.revisedCents;
 
   let drawn = 0;
   const rows: DrawdownRow[] = claims.map((c) => {

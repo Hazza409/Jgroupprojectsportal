@@ -29,7 +29,11 @@ export default async function DocumentsPage({ params }: { params: { projectId: s
     <div>
       <ModuleHeader
         title="Documents & Drawings"
-        description="Project documents shared with the client — drawings, contract, insurances, warranties, compliance certificates (PDF / image)."
+        description={
+          isBuilder
+            ? "Documents shared with the client — drawings, contract, insurances, warranties, compliance certificates (PDF / image)."
+            : "Drawings, contract documents, insurances, warranties and compliance certificates for your project."
+        }
       />
 
       {isBuilder && (

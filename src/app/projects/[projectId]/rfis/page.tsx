@@ -5,8 +5,8 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createRfi, answerRfi, closeRfi, deleteRfi, addRfiAttachments, deleteRfiAttachment } from "./actions";
 import { getCompany, companyShortName } from "@/lib/company";
-
-const fmtDate = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium" }).format(d) : null);
+import { logView } from "@/lib/audit";
+import { fmtDateShort, fmtDateTime, isOverdue, daysOverdue } from "@/lib/dates";
 
 // Questions & Answers — the builder raises design questions or decisions the
 // client must make; the client answers. Supporting files can be attached.
@@ -22,12 +22,21 @@ export default async function RfisPage({ params }: { params: { projectId: string
     include: { attachments: { orderBy: { createdAt: "asc" } } },
   });
   const store = await storage();
+  // Who answered, and exactly when — from the immutable ledger (Jake §2).
+  const answerRecords = await db.decisionRecord.findMany({
+    where: { subjectType: "QUERY", action: "ANSWERED", subjectId: { in: rfis.map((r) => r.id) } },
+    orderBy: { occurredAt: "asc" },
+    select: { subjectId: true, actorName: true, occurredAt: true },
+  });
   const withUrls = await Promise.all(
     rfis.map(async (r) => ({
       ...r,
       attachments: await Promise.all(r.attachments.map(async (a) => ({ ...a, url: await store.url(a.fileKey) }))),
+      answeredBy: answerRecords.filter((a) => a.subjectId === r.id).at(-1) ?? null,
     })),
   );
+
+  await logView(projectId, user, `/projects/${projectId}/rfis`, "Questions & Answers");
 
   return (
     <div>
@@ -89,6 +98,7 @@ export default async function RfisPage({ params }: { params: { projectId: string
             const options = r.optionsProvided
               ? r.optionsProvided.split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
               : [];
+            const overdue = r.status === "OPEN" && isOverdue(r.dueDate);
             return (
             <div key={r.id} className="card">
               <div className="flex items-start justify-between gap-3">
@@ -113,8 +123,18 @@ export default async function RfisPage({ params }: { params: { projectId: string
                   {isDecision && r.impactIfLate && (
                     <p className="mt-1 text-sm text-stone-600"><span className="text-stone-400">If late:</span> {r.impactIfLate}</p>
                   )}
-                  {r.dueDate && r.status === "OPEN" && (
-                    <p className="mt-1 text-xs text-stone-400">Needed by {fmtDate(r.dueDate)}</p>
+                  {r.dueDate && r.status === "OPEN" && !overdue && (
+                    <p className="mt-1 text-xs text-stone-400">Needed by {fmtDateShort(r.dueDate)}</p>
+                  )}
+                  {/* Overdue escalation — state the consequence, which builds the
+                      client-side delay record automatically (Jake §2). */}
+                  {overdue && (
+                    <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-sm text-red-700 dark:text-red-300">
+                      <p className="font-semibold">
+                        Overdue — was needed by {fmtDateShort(r.dueDate)} ({daysOverdue(r.dueDate)} day{daysOverdue(r.dueDate) === 1 ? "" : "s"} ago)
+                      </p>
+                      {r.impactIfLate && <p className="mt-0.5">Impact: {r.impactIfLate}</p>}
+                    </div>
                   )}
                 </div>
                 <StatusBadge status={r.status} />
@@ -140,6 +160,12 @@ export default async function RfisPage({ params }: { params: { projectId: string
                 <div className="mt-3 rounded-md border border-stone-200 bg-stone-50 p-3">
                   <p className="text-xs uppercase tracking-wide text-stone-400">Client response</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm">{r.answer}</p>
+                  {/* Attribution — who answered and exactly when (Jake §2). */}
+                  {r.answeredBy && (
+                    <p className="mt-1.5 text-xs text-stone-400">
+                      — {r.answeredBy.actorName} · {fmtDateTime(r.answeredBy.occurredAt)}
+                    </p>
+                  )}
                 </div>
               )}
 
