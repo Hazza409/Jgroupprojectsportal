@@ -94,6 +94,22 @@ export function SettingsForm({ company, logoUrl }: { company: Company; logoUrl: 
           </div>
         </div>
 
+        <h2 className="pt-2 text-sm font-semibold uppercase tracking-wide text-stone-500">Fortnightly sign-off</h2>
+        <div>
+          <label className="label" htmlFor="forecastApprovers">Approvers (emails, comma-separated)</label>
+          <input
+            id="forecastApprovers"
+            name="forecastApprovers"
+            className="input"
+            placeholder="nick@jgroupprojects.com, andrew@jgroupprojects.com"
+            defaultValue={company.forecastApprovers ?? ""}
+          />
+          <p className="mt-1 text-xs text-stone-400">
+            Every person listed here must sign off a project&apos;s forecast figures before they publish to the client.
+            Editing the figures after a sign-off voids it and requires re-signing. Leave blank and nothing can publish.
+          </p>
+        </div>
+
         <div className="flex items-center gap-3">
           <button type="submit" className="btn-primary" disabled={pending}>
             {pending ? "Saving…" : "Save settings"}
