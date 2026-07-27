@@ -54,6 +54,14 @@ export async function updateCompany(formData: FormData): Promise<SettingsResult>
     return { ok: false, message: "GST must be between 0 and 50%." };
   }
 
+  // Who must sign off the fortnightly figures before anything publishes to a
+  // client. Normalised to lowercase, comma-separated.
+  const forecastApprovers = String(formData.get("forecastApprovers") ?? "")
+    .split(/[,;\n]/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .join(", ");
+
   await db.company.update({
     where: { id: company.id },
     data: {
@@ -66,6 +74,7 @@ export async function updateCompany(formData: FormData): Promise<SettingsResult>
       brandColorLight: normaliseHex(brandColorLight),
       marginPercent,
       gstPercent,
+      forecastApprovers: forecastApprovers || null,
     },
   });
 
