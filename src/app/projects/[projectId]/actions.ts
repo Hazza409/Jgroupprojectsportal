@@ -6,6 +6,8 @@ import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { dollarsToCents } from "@/lib/money";
+import { forecastRevision, forecastGate } from "@/lib/forecast";
+import { getCompany } from "@/lib/company";
 import { validatePassword } from "@/lib/password";
 
 export interface SimpleResult { ok: boolean; message: string }
@@ -118,12 +120,6 @@ export async function setForecasts(projectId: string, formData: FormData): Promi
   const user = await assertProjectAccess(projectId);
   if (user.role !== Role.BUILDER) return { ok: false, message: "Builder access required." };
 
-  const current = await db.project.findUnique({
-    where: { id: projectId },
-    select: { forecastFinalCostCents: true, forecastCompletionDate: true },
-  });
-  if (!current) return { ok: false, message: "Project not found." };
-
   const costRaw = String(formData.get("forecastFinalCost") ?? "").trim();
   const dateRaw = String(formData.get("forecastCompletionDate") ?? "").trim();
   const costNote = String(formData.get("forecastFinalCostNote") ?? "").trim() || null;
@@ -133,28 +129,132 @@ export async function setForecasts(projectId: string, formData: FormData): Promi
   const nextDate = dateRaw ? new Date(dateRaw) : null;
   if (dateRaw && Number.isNaN(nextDate!.getTime())) return { ok: false, message: "Completion date is not a valid date." };
 
-  // Only roll the previous value when the figure actually moved — otherwise a
-  // re-save would wipe the movement baseline.
-  const costMoved = nextCost !== null && nextCost !== current.forecastFinalCostCents;
-  const dateMoved =
-    nextDate !== null &&
-    (current.forecastCompletionDate === null || nextDate.getTime() !== current.forecastCompletionDate.getTime());
+  // Staged only — NOT client-visible. Publishing happens on full sign-off.
+  // The revision fingerprint changes with the figures, which voids any
+  // signatures already given against the previous revision.
+  const revision = forecastRevision({
+    finalCostCents: nextCost,
+    completionDate: nextDate,
+    costNote,
+    dateNote,
+  });
 
   await db.project.update({
     where: { id: projectId },
     data: {
-      forecastFinalCostCents: nextCost,
-      forecastFinalCostPrevCents: costMoved ? current.forecastFinalCostCents : undefined,
-      forecastFinalCostNote: costNote,
-      forecastCompletionDate: nextDate,
-      forecastCompletionPrevDate: dateMoved ? current.forecastCompletionDate : undefined,
-      forecastCompletionNote: dateNote,
+      pendingForecastFinalCostCents: nextCost,
+      pendingForecastFinalCostNote: costNote,
+      pendingForecastCompletionDate: nextDate,
+      pendingForecastCompletionNote: dateNote,
+      pendingForecastUpdatedAt: new Date(),
+      pendingForecastUpdatedBy: user.name,
+      pendingForecastRevision: revision,
+    },
+  });
+
+  revalidatePath(`/projects/${projectId}/settings`);
+  const gate = await forecastGate(projectId, await getCompany());
+  return {
+    ok: true,
+    message: gate.blockedReason
+      ? `Figures staged. ${gate.blockedReason}`
+      : `Figures staged — awaiting sign-off from ${gate.outstanding.join(", ")}. The client still sees the last published figures.`,
+  };
+}
+
+/**
+ * An approver signs off the CURRENT pending revision. When the last required
+ * approver signs, the figures publish to the client in the same step — that
+ * signature is the authority to publish, so nothing can sit "signed but
+ * unpublished".
+ */
+export async function signOffForecast(projectId: string): Promise<SimpleResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) return { ok: false, message: "Builder access required." };
+
+  const gate = await forecastGate(projectId, await getCompany());
+  if (!gate.hasPending) return { ok: false, message: "There are no staged figures to sign off." };
+  if (gate.blockedReason) return { ok: false, message: gate.blockedReason };
+  if (!gate.required.includes(user.email.toLowerCase())) {
+    return { ok: false, message: "You are not a configured sign-off approver for the fortnightly figures." };
+  }
+
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: {
+      pendingForecastFinalCostCents: true,
+      pendingForecastFinalCostNote: true,
+      pendingForecastCompletionDate: true,
+      pendingForecastCompletionNote: true,
+      pendingForecastRevision: true,
+      forecastFinalCostCents: true,
+      forecastCompletionDate: true,
+    },
+  });
+
+  // Idempotent: signing twice is a no-op rather than an error.
+  await db.forecastSignoff.upsert({
+    where: {
+      projectId_revision_signedByEmail: {
+        projectId,
+        revision: project.pendingForecastRevision!,
+        signedByEmail: user.email.toLowerCase(),
+      },
+    },
+    create: {
+      projectId,
+      revision: project.pendingForecastRevision!,
+      signedById: user.id,
+      signedByName: user.name,
+      signedByEmail: user.email.toLowerCase(),
+      finalCostCents: project.pendingForecastFinalCostCents,
+      completionDate: project.pendingForecastCompletionDate,
+    },
+    update: {},
+  });
+
+  const after = await forecastGate(projectId, await getCompany());
+  if (!after.complete) {
+    revalidatePath(`/projects/${projectId}/settings`);
+    return { ok: true, message: `Signed off. Still awaiting: ${after.outstanding.join(", ")}.` };
+  }
+
+  // Fully signed → publish. Roll the current published figures into *Prev so
+  // the client sees the movement since the last statement.
+  const costMoved =
+    project.pendingForecastFinalCostCents !== null &&
+    project.pendingForecastFinalCostCents !== project.forecastFinalCostCents;
+  const dateMoved =
+    project.pendingForecastCompletionDate !== null &&
+    (project.forecastCompletionDate === null ||
+      project.pendingForecastCompletionDate.getTime() !== project.forecastCompletionDate.getTime());
+
+  await db.project.update({
+    where: { id: projectId },
+    data: {
+      forecastFinalCostCents: project.pendingForecastFinalCostCents,
+      forecastFinalCostPrevCents: costMoved ? project.forecastFinalCostCents : undefined,
+      forecastFinalCostNote: project.pendingForecastFinalCostNote,
+      forecastCompletionDate: project.pendingForecastCompletionDate,
+      forecastCompletionPrevDate: dateMoved ? project.forecastCompletionDate : undefined,
+      forecastCompletionNote: project.pendingForecastCompletionNote,
       forecastUpdatedAt: new Date(),
-      forecastUpdatedBy: user.name,
+      forecastUpdatedBy: after.signed.map((s) => s.name).join(" & "),
+      // Clear the staging area — this revision is now the published truth.
+      pendingForecastFinalCostCents: null,
+      pendingForecastFinalCostNote: null,
+      pendingForecastCompletionDate: null,
+      pendingForecastCompletionNote: null,
+      pendingForecastUpdatedAt: null,
+      pendingForecastUpdatedBy: null,
+      pendingForecastRevision: null,
     },
   });
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/settings`);
-  return { ok: true, message: "Forecast figures updated." };
+  return {
+    ok: true,
+    message: `Signed off by all approvers (${after.signed.map((s) => s.name).join(", ")}) — figures are now published to the client.`,
+  };
 }
