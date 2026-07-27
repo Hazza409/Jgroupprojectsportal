@@ -155,6 +155,31 @@ model DecisionRecord {
   @@index([subjectType, subjectId])
 }
 
+/// One approver's sign-off on ONE revision of the fortnightly figures.
+/// Publishing requires a row here for EVERY configured approver against the
+/// project's current pendingForecastRevision — so editing the figures after a
+/// sign-off silently invalidates it (the revision hash no longer matches).
+model ForecastSignoff {
+  id        String @id @default(cuid())
+  projectId String
+  /// Which revision of the pending figures was signed.
+  revision  String
+
+  signedById   String?
+  signedByName String
+  signedByEmail String
+  signedAt     DateTime @default(now())
+
+  /// Snapshot of exactly what was signed, so the record stands alone.
+  finalCostCents Int?
+  completionDate DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, revision, signedByEmail])
+  @@index([projectId, revision])
+}
+
 // Internal-only analytics: which client-side users viewed what, and when.
 // Never surfaced to clients (Jake §2).
 model ViewLog {
@@ -197,6 +222,10 @@ model Company {
   // Commercial defaults used in progress-claim maths.
   marginPercent Float @default(12.5) // builder's margin %
   gstPercent    Float @default(10) // Australian GST
+  // Comma-separated emails who must ALL sign off the fortnightly figures before
+  // anything publishes to a client (Jake: "nothing publishes without Nick and
+  // Andrew's fortnightly sign-off"). Empty = publishing is blocked.
+  forecastApprovers String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -261,17 +290,30 @@ model Project {
 
   // ── The two headline numbers (Jake §3) ──────────────────────
   // BOTH ARE ENTERED BY HAND from Nick & Andrew's fortnightly figures.
-  // The portal must NEVER calculate or infer these. Previous values are kept
-  // so the dashboard can show movement since the last statement.
+  // The portal must NEVER calculate or infer these.
+  //
+  // PUBLISHED set — what the CLIENT sees. Only ever written by publishing a
+  // fully signed-off revision, so an in-progress edit can't leak to the client
+  // and the last published figure stays visible until the new one is signed.
   forecastFinalCostCents     Int?
   forecastFinalCostPrevCents Int?
   forecastFinalCostNote      String?
   forecastCompletionDate     DateTime?
   forecastCompletionPrevDate DateTime?
   forecastCompletionNote     String?
-  // When the fortnightly figures were last confirmed, and by whom.
-  forecastUpdatedAt          DateTime?
+  forecastUpdatedAt          DateTime? // when it was PUBLISHED
   forecastUpdatedBy          String?
+
+  // PENDING set — internal working figures awaiting sign-off. Never client-visible.
+  pendingForecastFinalCostCents Int?
+  pendingForecastFinalCostNote  String?
+  pendingForecastCompletionDate DateTime?
+  pendingForecastCompletionNote String?
+  pendingForecastUpdatedAt      DateTime?
+  pendingForecastUpdatedBy      String?
+  // Fingerprint of the pending figures. Any edit changes it, which invalidates
+  // every sign-off already given — you cannot sign A and publish B.
+  pendingForecastRevision       String?
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -301,6 +343,7 @@ model Project {
   updates           ProjectUpdate[]
   decisionRecords   DecisionRecord[]
   viewLogs          ViewLog[]
+  forecastSignoffs  ForecastSignoff[]
   // Client-facing "who to contact at J Group" list
   contacts          ProjectContact[]
   // Subcontractor directory (shown in Handover), Excel/CSV uploadable
