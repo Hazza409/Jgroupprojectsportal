@@ -5,7 +5,9 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { ClientAccessCard } from "@/components/ClientAccessCard";
 import { ForecastCard } from "@/components/ForecastCard";
 import { getCompany, companyShortName } from "@/lib/company";
-import { fmtDateTime, toDateInputValue } from "@/lib/dates";
+import { fmtDate, fmtDateTime, toDateInputValue } from "@/lib/dates";
+import { forecastGate } from "@/lib/forecast";
+import { formatCents } from "@/lib/money";
 
 // Project settings — builder only. Home for client access + project administration.
 export default async function ProjectSettingsPage({ params }: { params: { projectId: string } }) {
@@ -26,24 +28,42 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
     select: {
       forecastFinalCostCents: true,
       forecastCompletionDate: true,
-      forecastFinalCostNote: true,
-      forecastCompletionNote: true,
       forecastUpdatedAt: true,
       forecastUpdatedBy: true,
+      pendingForecastFinalCostCents: true,
+      pendingForecastCompletionDate: true,
+      pendingForecastFinalCostNote: true,
+      pendingForecastCompletionNote: true,
     },
   });
+  const gate = await forecastGate(projectId, company);
+
+  const publishedBits = [
+    project.forecastFinalCostCents != null ? formatCents(project.forecastFinalCostCents) : null,
+    project.forecastCompletionDate ? `completion ${fmtDate(project.forecastCompletionDate)}` : null,
+  ].filter(Boolean);
 
   return (
     <div className="space-y-6">
       <ModuleHeader title="Settings" description={`Project administration. Visible to ${companyShortName(company)} staff only.`} />
       <ForecastCard
         projectId={projectId}
-        currentCostDollars={project.forecastFinalCostCents != null ? (project.forecastFinalCostCents / 100).toFixed(2) : ""}
-        currentDate={toDateInputValue(project.forecastCompletionDate)}
-        costNote={project.forecastFinalCostNote ?? ""}
-        dateNote={project.forecastCompletionNote ?? ""}
-        updatedAt={project.forecastUpdatedAt ? fmtDateTime(project.forecastUpdatedAt) : null}
-        updatedBy={project.forecastUpdatedBy}
+        pendingCostDollars={project.pendingForecastFinalCostCents != null ? (project.pendingForecastFinalCostCents / 100).toFixed(2) : ""}
+        pendingDate={toDateInputValue(project.pendingForecastCompletionDate)}
+        pendingCostNote={project.pendingForecastFinalCostNote ?? ""}
+        pendingDateNote={project.pendingForecastCompletionNote ?? ""}
+        publishedSummary={publishedBits.length ? publishedBits.join(" · ") : null}
+        publishedAt={project.forecastUpdatedAt ? fmtDateTime(project.forecastUpdatedAt) : null}
+        publishedBy={project.forecastUpdatedBy}
+        gate={{
+          required: gate.required,
+          signed: gate.signed.map((s) => ({ email: s.email, name: s.name, at: fmtDateTime(s.at) })),
+          outstanding: gate.outstanding,
+          complete: gate.complete,
+          hasPending: gate.hasPending,
+          blockedReason: gate.blockedReason,
+        }}
+        canSign={gate.required.includes(user.email.toLowerCase())}
       />
       <ClientAccessCard projectId={projectId} clients={clientMembers} />
     </div>
