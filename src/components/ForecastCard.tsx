@@ -2,76 +2,141 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setForecasts, type SimpleResult } from "@/app/projects/[projectId]/actions";
+import { setForecasts, signOffForecast, type SimpleResult } from "@/app/projects/[projectId]/actions";
 
-// Builder-only entry for the two headline forecast figures (Jake §3).
-// These are TYPED IN from Nick & Andrew's fortnightly figures — the portal
-// never calculates them.
+export interface ForecastGateView {
+  required: string[];
+  signed: { email: string; name: string; at: string }[];
+  outstanding: string[];
+  complete: boolean;
+  hasPending: boolean;
+  blockedReason: string | null;
+}
+
+// Builder-only entry + sign-off for the two headline forecast figures.
+// Figures are TYPED IN from Nick & Andrew's fortnightly numbers (the portal
+// never calculates them) and are STAGED until every approver signs — nothing
+// reaches the client before that.
 export function ForecastCard({
   projectId,
-  currentCostDollars,
-  currentDate,
-  costNote,
-  dateNote,
-  updatedAt,
-  updatedBy,
+  pendingCostDollars,
+  pendingDate,
+  pendingCostNote,
+  pendingDateNote,
+  publishedSummary,
+  publishedAt,
+  publishedBy,
+  gate,
+  canSign,
 }: {
   projectId: string;
-  currentCostDollars: string;
-  currentDate: string;
-  costNote: string;
-  dateNote: string;
-  updatedAt: string | null;
-  updatedBy: string | null;
+  pendingCostDollars: string;
+  pendingDate: string;
+  pendingCostNote: string;
+  pendingDateNote: string;
+  publishedSummary: string | null;
+  publishedAt: string | null;
+  publishedBy: string | null;
+  gate: ForecastGateView;
+  canSign: boolean;
 }) {
   const [result, setResult] = useState<SimpleResult | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+  function run(fn: () => Promise<SimpleResult>) {
     startTransition(async () => {
-      const res = await setForecasts(projectId, fd);
+      const res = await fn();
       setResult(res);
-      if (res.ok) router.refresh();
+      router.refresh();
     });
   }
 
   return (
-    <form onSubmit={onSubmit} className="card space-y-3">
+    <div className="card space-y-4">
       <div>
         <h3 className="font-semibold">Fortnightly forecast figures</h3>
         <p className="mt-0.5 text-xs text-stone-500">
-          Enter the figures confirmed by Nick and Andrew. The portal never calculates these — it shows exactly what is
-          entered here, with the movement since the previous statement.
+          Enter the figures confirmed by Nick and Andrew — the portal never calculates these. Figures are staged here
+          and only reach the client once <strong>every approver has signed off</strong>.
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="label">Forecast final cost ($, incl GST)</label>
-          <input
-            name="forecastFinalCost"
-            type="number"
-            step="0.01"
-            defaultValue={currentCostDollars}
-            className="input"
-            placeholder="0.00"
-          />
+      {/* What the client can see right now. */}
+      <div className="rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-sm">
+        <span className="text-xs uppercase tracking-wide text-stone-400">Currently published to client</span>
+        <p className="mt-0.5">{publishedSummary ?? "Nothing published yet — the client sees no forecast."}</p>
+        {publishedAt && (
+          <p className="text-xs text-stone-400">
+            Published {publishedAt}
+            {publishedBy ? ` · signed off by ${publishedBy}` : ""}
+          </p>
+        )}
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          run(() => setForecasts(projectId, fd));
+        }}
+        className="space-y-3"
+      >
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="label">Forecast final cost ($, incl GST)</label>
+            <input name="forecastFinalCost" type="number" step="0.01" defaultValue={pendingCostDollars} className="input" placeholder="0.00" />
+          </div>
+          <div>
+            <label className="label">Forecast completion date</label>
+            <input name="forecastCompletionDate" type="date" defaultValue={pendingDate} className="input" />
+          </div>
+          <div>
+            <label className="label">Reason for cost movement (optional)</label>
+            <input name="forecastFinalCostNote" defaultValue={pendingCostNote} className="input" placeholder="e.g. Stone selection uplift" />
+          </div>
+          <div>
+            <label className="label">Reason for date movement (optional)</label>
+            <input name="forecastCompletionNote" defaultValue={pendingDateNote} className="input" placeholder="e.g. 2 weeks weather delay" />
+          </div>
         </div>
-        <div>
-          <label className="label">Forecast completion date</label>
-          <input name="forecastCompletionDate" type="date" defaultValue={currentDate} className="input" />
-        </div>
-        <div>
-          <label className="label">Reason for cost movement (optional)</label>
-          <input name="forecastFinalCostNote" defaultValue={costNote} className="input" placeholder="e.g. Stone selection uplift" />
-        </div>
-        <div>
-          <label className="label">Reason for date movement (optional)</label>
-          <input name="forecastCompletionNote" defaultValue={dateNote} className="input" placeholder="e.g. 2 weeks weather delay" />
-        </div>
+        <button type="submit" className="btn-ghost" disabled={pending}>
+          {pending ? "Saving…" : "Stage figures for sign-off"}
+        </button>
+      </form>
+
+      {/* The gate. */}
+      <div className="border-t border-stone-200 pt-3">
+        {gate.blockedReason ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300">⚠ {gate.blockedReason}</p>
+        ) : !gate.hasPending ? (
+          <p className="text-xs text-stone-400">
+            No figures staged. Approvers: {gate.required.join(", ")}.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-wide text-stone-400">Sign-off required before publishing</p>
+            <ul className="space-y-1 text-sm">
+              {gate.required.map((email) => {
+                const sig = gate.signed.find((s) => s.email === email);
+                return (
+                  <li key={email} className={sig ? "text-emerald-700 dark:text-emerald-300" : "text-stone-500"}>
+                    {sig ? `✓ ${sig.name} — signed ${sig.at}` : `○ ${email} — awaiting sign-off`}
+                  </li>
+                );
+              })}
+            </ul>
+            {canSign ? (
+              <button type="button" className="btn-primary" disabled={pending} onClick={() => run(() => signOffForecast(projectId))}>
+                {pending ? "Signing…" : "Sign off these figures"}
+              </button>
+            ) : (
+              <p className="text-xs text-stone-400">
+                You are not a configured approver, so you cannot sign these off.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {result && (
@@ -79,18 +144,6 @@ export function ForecastCard({
           {result.message}
         </p>
       )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" className="btn-primary" disabled={pending}>
-          {pending ? "Saving…" : "Save forecast figures"}
-        </button>
-        {updatedAt && (
-          <span className="text-xs text-stone-400">
-            Last confirmed {updatedAt}
-            {updatedBy ? ` by ${updatedBy}` : ""}
-          </span>
-        )}
-      </div>
-    </form>
+    </div>
   );
 }
