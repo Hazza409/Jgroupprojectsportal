@@ -77,6 +77,10 @@ export const authOptions: NextAuthOptions = {
             data: { failedLoginAttempts: 0, lockedUntil: null },
           });
         }
+        // Internal-only: record client sign-ins (Jake §2). Never blocks login.
+        const { logClientLogin } = await import("@/lib/audit");
+        await logClientLogin({ id: user.id, name: user.name, email: user.email, role: user.role });
+
         return { id: user.id, email: user.email, name: user.name, role: user.role };
       },
     }),

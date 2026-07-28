@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ClientAccessCard } from "@/components/ClientAccessCard";
 import { ForecastCard } from "@/components/ForecastCard";
+import { ClientActivityCard } from "@/components/ClientActivityCard";
 import { getCompany, companyShortName } from "@/lib/company";
 import { fmtDate, fmtDateTime, toDateInputValue } from "@/lib/dates";
 import { forecastGate } from "@/lib/forecast";
@@ -61,11 +62,13 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
           outstanding: gate.outstanding,
           complete: gate.complete,
           hasPending: gate.hasPending,
-          blockedReason: gate.blockedReason,
+          warning: gate.warning,
+          unconfigured: gate.unconfigured,
         }}
-        canSign={gate.required.includes(user.email.toLowerCase())}
+        canSign={gate.unconfigured || gate.required.includes(user.email.toLowerCase())}
       />
       <ClientAccessCard projectId={projectId} clients={clientMembers} />
+      <ClientActivityCard projectId={projectId} />
     </div>
   );
 }

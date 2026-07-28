@@ -156,8 +156,8 @@ export async function setForecasts(projectId: string, formData: FormData): Promi
   const gate = await forecastGate(projectId, await getCompany());
   return {
     ok: true,
-    message: gate.blockedReason
-      ? `Figures staged. ${gate.blockedReason}`
+    message: gate.unconfigured
+      ? "Figures staged — sign off below to publish them to the client."
       : `Figures staged — awaiting sign-off from ${gate.outstanding.join(", ")}. The client still sees the last published figures.`,
   };
 }
@@ -174,8 +174,9 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
 
   const gate = await forecastGate(projectId, await getCompany());
   if (!gate.hasPending) return { ok: false, message: "There are no staged figures to sign off." };
-  if (gate.blockedReason) return { ok: false, message: gate.blockedReason };
-  if (!gate.required.includes(user.email.toLowerCase())) {
+  // When named approvers ARE configured, only they may sign. When none are
+  // configured the control isn't enforced (the UI says so) and any builder may.
+  if (!gate.unconfigured && !gate.required.includes(user.email.toLowerCase())) {
     return { ok: false, message: "You are not a configured sign-off approver for the fortnightly figures." };
   }
 

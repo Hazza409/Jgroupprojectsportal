@@ -88,9 +88,9 @@ export async function buildProjectWorkbook(projectId: string, company: Company):
     ["Current cost to date", d(ctc.totals.currentCents)],
     ["Cost to complete", d(ctc.totals.costToCompleteCents)],
     [],
-    ["Contract budget (drawdown)", d(drawdown.budgetCents)],
-    ["Drawn down (approved claims)", d(drawdown.drawnCents)],
-    ["Remaining to draw", d(drawdown.remainingCents)],
+    ["Current budget", d(drawdown.budgetCents)],
+    ["Invoiced to date (approved claims)", d(drawdown.drawnCents)],
+    ["Remaining against current budget", d(drawdown.remainingCents)],
   ]);
 
   // ── Cost to Complete ──

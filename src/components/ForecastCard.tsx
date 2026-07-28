@@ -10,7 +10,8 @@ export interface ForecastGateView {
   outstanding: string[];
   complete: boolean;
   hasPending: boolean;
-  blockedReason: string | null;
+  warning: string | null;
+  unconfigured: boolean;
 }
 
 // Builder-only entry + sign-off for the two headline forecast figures.
@@ -107,24 +108,33 @@ export function ForecastCard({
 
       {/* The gate. */}
       <div className="border-t border-stone-200 pt-3">
-        {gate.blockedReason ? (
-          <p className="text-sm text-amber-700 dark:text-amber-300">⚠ {gate.blockedReason}</p>
-        ) : !gate.hasPending ? (
+        {gate.warning && <p className="mb-2 text-sm text-amber-700 dark:text-amber-300">⚠ {gate.warning}</p>}
+        {!gate.hasPending ? (
           <p className="text-xs text-stone-400">
-            No figures staged. Approvers: {gate.required.join(", ")}.
+            No figures staged.{gate.required.length > 0 ? ` Approvers: ${gate.required.join(", ")}.` : ""}
           </p>
         ) : (
           <div className="space-y-2">
             <p className="text-xs uppercase tracking-wide text-stone-400">Sign-off required before publishing</p>
             <ul className="space-y-1 text-sm">
-              {gate.required.map((email) => {
-                const sig = gate.signed.find((s) => s.email === email);
-                return (
-                  <li key={email} className={sig ? "text-emerald-700 dark:text-emerald-300" : "text-stone-500"}>
-                    {sig ? `✓ ${sig.name} — signed ${sig.at}` : `○ ${email} — awaiting sign-off`}
-                  </li>
-                );
-              })}
+              {gate.unconfigured ? (
+                gate.signed.length > 0 ? (
+                  gate.signed.map((s) => (
+                    <li key={s.email} className="text-emerald-700 dark:text-emerald-300">✓ {s.name} — signed {s.at}</li>
+                  ))
+                ) : (
+                  <li className="text-stone-500">○ Awaiting a staff sign-off</li>
+                )
+              ) : (
+                gate.required.map((email) => {
+                  const sig = gate.signed.find((s) => s.email === email);
+                  return (
+                    <li key={email} className={sig ? "text-emerald-700 dark:text-emerald-300" : "text-stone-500"}>
+                      {sig ? `✓ ${sig.name} — signed ${sig.at}` : `○ ${email} — awaiting sign-off`}
+                    </li>
+                  );
+                })
+              )}
             </ul>
             {canSign ? (
               <button type="button" className="btn-primary" disabled={pending} onClick={() => run(() => signOffForecast(projectId))}>

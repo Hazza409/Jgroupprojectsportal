@@ -49,10 +49,10 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
     .filter((r) => r.claimNumber < claim.claimNumber && r.drawnToDateCents !== null)
     .reduce((acc, r) => acc + r.amountCents, 0);
   const position = [
-    { label: "Contract budget (incl approved variations)", value: drawdown.budgetCents },
-    { label: "Previously claimed (approved)", value: priorDrawnCents },
+    { label: "Current budget (incl approved variations)", value: drawdown.budgetCents },
+    { label: "Previously invoiced (approved)", value: priorDrawnCents },
     { label: "This claim", value: headline },
-    { label: "Claimed to date", value: priorDrawnCents + headline, strong: true },
+    { label: "Invoiced to date", value: priorDrawnCents + headline, strong: true },
     { label: "Remaining", value: drawdown.budgetCents - priorDrawnCents - headline, strong: true },
   ];
 

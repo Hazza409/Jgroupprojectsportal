@@ -66,7 +66,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
   const stats = [
     { label: "Original estimate", value: formatCents(estimateTotal) },
     { label: "Estimate + approved variations", value: formatCents(budgetBase) },
-    { label: "Drawn down (approved claims)", value: formatCents(claimedTotal) },
+    { label: "Invoiced to date (approved claims)", value: formatCents(claimedTotal) },
     { label: "Approved variations", value: formatCents(approvedVariations) },
   ];
 
@@ -120,7 +120,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
       <div className="card">
         <div className="flex items-end justify-between">
           <p className="text-xs uppercase tracking-wide text-stone-400">
-            Drawn down · approved progress claims
+            Budget drawdown · approved progress claims
           </p>
           <p className="text-2xl font-semibold">{drawnPct.toFixed(1)}%</p>
         </div>

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { ClaimStatus, Role } from "@prisma/client";
+import { ClaimStatus, Role, ClaimPaymentStatus } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
@@ -435,5 +435,63 @@ export async function acknowledgeClaim(projectId: string, claimId: string) {
     amountCents: claim.totalCents || null,
     detail: ACKNOWLEDGEMENT_STATEMENT,
   });
+  refresh(projectId, claimId);
+}
+
+/** Builder sets where a claim sits commercially (Jake §5). */
+export async function setClaimPayment(projectId: string, claimId: string, formData: FormData) {
+  await builderOnly(projectId);
+  const raw = String(formData.get("paymentStatus") ?? "");
+  const status = (["NOT_INVOICED", "INVOICED", "PAID"] as const).includes(raw as never)
+    ? (raw as ClaimPaymentStatus)
+    : ClaimPaymentStatus.NOT_INVOICED;
+  const reference = String(formData.get("paymentReference") ?? "").trim() || null;
+
+  const existing = await db.progressClaim.findFirst({
+    where: { id: claimId, projectId },
+    select: { invoicedAt: true, paidAt: true },
+  });
+  if (!existing) throw new Error("Claim not found");
+
+  await db.progressClaim.update({
+    where: { id: claimId },
+    data: {
+      paymentStatus: status,
+      paymentReference: reference,
+      // Stamp the first time each state is reached; don't overwrite history.
+      invoicedAt: status === ClaimPaymentStatus.NOT_INVOICED ? null : (existing.invoicedAt ?? new Date()),
+      paidAt: status === ClaimPaymentStatus.PAID ? (existing.paidAt ?? new Date()) : null,
+    },
+  });
+  refresh(projectId, claimId);
+}
+
+/** Builder adds a labour line: hours by ROLE at an agreed rate (Jake §5). */
+export async function addClaimLabour(projectId: string, claimId: string, formData: FormData) {
+  await builderOnly(projectId);
+  const claim = await db.progressClaim.findFirst({ where: { id: claimId, projectId }, select: { id: true } });
+  if (!claim) throw new Error("Claim not found");
+
+  const role = String(formData.get("role") ?? "").trim();
+  if (!role) throw new Error("Role is required");
+  const hours = Number(formData.get("hours") ?? 0) || 0;
+  const rateCents = dollarsToCents(String(formData.get("rate") ?? "0"));
+  // Money stays integer cents; hours may be fractional.
+  const amountCents = Math.round(hours * rateCents);
+
+  const last = await db.claimLabourEntry.findFirst({
+    where: { claimId },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true },
+  });
+  await db.claimLabourEntry.create({
+    data: { claimId, role, hours, rateCents, amountCents, sortOrder: (last?.sortOrder ?? 0) + 1 },
+  });
+  refresh(projectId, claimId);
+}
+
+export async function deleteClaimLabour(projectId: string, claimId: string, entryId: string) {
+  await builderOnly(projectId);
+  await db.claimLabourEntry.deleteMany({ where: { id: entryId, claim: { id: claimId, projectId } } });
   refresh(projectId, claimId);
 }

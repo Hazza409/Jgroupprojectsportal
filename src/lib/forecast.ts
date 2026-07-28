@@ -52,12 +52,18 @@ export interface ForecastGate {
   signed: { email: string; name: string; at: Date }[];
   /** Required emails still outstanding. */
   outstanding: string[];
-  /** True when every required approver has signed the current revision. */
+  /** True when the sign-off requirement is satisfied for the current revision. */
   complete: boolean;
   /** True when there are pending figures at all. */
   hasPending: boolean;
-  /** Set when the gate can't operate — e.g. no approvers configured. */
-  blockedReason: string | null;
+  /**
+   * Set when no named approvers are configured. The two-person control is NOT
+   * being enforced in that state — any staff sign-off publishes — so this is
+   * surfaced prominently rather than silently blocking forever.
+   */
+  warning: string | null;
+  /** True when no named approvers are configured. */
+  unconfigured: boolean;
   revision: string | null;
 }
 
@@ -95,16 +101,20 @@ export async function forecastGate(
   const signedSet = new Set(signed.map((s) => s.email));
   const outstanding = required.filter((e) => !signedSet.has(e));
 
+  const unconfigured = required.length === 0;
   return {
     required,
     signed,
     outstanding,
-    complete: hasPending && required.length > 0 && outstanding.length === 0,
+    // Configured: every named approver must sign. Unconfigured: any one staff
+    // sign-off publishes — otherwise the figures could never reach the client
+    // at all, which is worse than an unenforced control that says so loudly.
+    complete: hasPending && (unconfigured ? signed.length > 0 : outstanding.length === 0),
     hasPending,
-    blockedReason:
-      required.length === 0
-        ? "No sign-off approvers are configured. Set them in Company settings — until then nothing can publish to a client."
-        : null,
+    unconfigured,
+    warning: unconfigured
+      ? "No named approvers are configured, so the two-person sign-off is NOT being enforced — any staff member can publish. Set Nick and Andrew in Company settings to enforce it."
+      : null,
     revision,
   };
 }

@@ -114,3 +114,42 @@ export async function logView(projectId: string, user: SessionUser, path: string
     // Swallow — analytics must never take down a page.
   }
 }
+
+/**
+ * Record a CLIENT sign-in against every project they can reach (Jake §2:
+ * "client-side logins"). Clients typically hold one project, so this stays
+ * small. Best-effort — never block or fail a sign-in.
+ */
+export async function logClientLogin(user: { id: string; name: string; email: string; role: Role }) {
+  if (user.role === Role.BUILDER) return;
+  try {
+    const memberships = await db.projectMembership.findMany({
+      where: { userId: user.id },
+      select: { projectId: true },
+    });
+    if (memberships.length === 0) return;
+    await db.viewLog.createMany({
+      data: memberships.map((m) => ({
+        projectId: m.projectId,
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        userRole: user.role,
+        path: "/login",
+        label: "Signed in",
+      })),
+    });
+  } catch {
+    // Never let analytics break authentication.
+  }
+}
+
+/** Acknowledgements for a claim, including actorId so the UI can tell whether
+ *  the CURRENT user has already acknowledged it. */
+export async function acknowledgementsForClaim(claimId: string) {
+  return db.decisionRecord.findMany({
+    where: { subjectType: DecisionSubject.CLAIM, subjectId: claimId, action: DecisionAction.ACKNOWLEDGED },
+    orderBy: { occurredAt: "asc" },
+    select: { actorId: true, actorName: true, occurredAt: true },
+  });
+}
