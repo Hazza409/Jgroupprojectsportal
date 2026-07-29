@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { createWarranty, deleteWarranty } from "../actions";
+import { DateField } from "@/components/DateField";
 
 const fmtDate = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium" }).format(d) : "—");
 
@@ -41,7 +42,7 @@ export default async function WarrantiesPage({ params }: { params: { projectId: 
           </div>
           <div>
             <label className="label">Expiry date</label>
-            <input name="expiryDate" type="date" className="input" />
+            <DateField name="expiryDate" />
           </div>
           <div>
             <label className="label">Certificate (optional)</label>

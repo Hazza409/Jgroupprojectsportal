@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { CalendarGrid } from "@/components/CalendarGrid";
 import { createEvent, deleteEvent, respondToEvent } from "./actions";
+import { DateField } from "@/components/DateField";
 
 function fmt(d: Date) {
   return new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(d);
@@ -48,11 +49,11 @@ export default async function CalendarPage({ params }: { params: { projectId: st
         </div>
         <div>
           <label className="label">Starts</label>
-          <input name="startsAt" type="datetime-local" className="input" required />
+          <DateField name="startsAt" withTime required />
         </div>
         <div>
           <label className="label">Ends</label>
-          <input name="endsAt" type="datetime-local" className="input" />
+          <DateField name="endsAt" withTime />
         </div>
         <div>
           <label className="label">Location</label>

@@ -10,6 +10,7 @@ import { dollarsToCents, formatCents } from "@/lib/money";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
 import { getCompany, companyShortName } from "@/lib/company";
+import { fmtDateShort } from "@/lib/dates";
 import { materializeClaimActuals, matchCostCodeId, projectCodeRefs, claimHeadlineCents } from "@/lib/claims";
 import { recordDecision, contentFingerprint, hasAcknowledged, AUTHORITY_STATEMENT, ACKNOWLEDGEMENT_STATEMENT } from "@/lib/audit";
 import { DecisionAction, DecisionSubject } from "@prisma/client";
@@ -134,6 +135,26 @@ export async function importReconSheet(
   const parsed = parseReconciliationBuffer(buf, reconCompany.marginPercent, reconCompany.gstPercent);
   if (parsed.budgetOverview.length === 0 && parsed.supplierLines.length === 0) {
     return { ok: false, message: parsed.warnings[0] ?? "Could not read the reconciliation sheet." };
+  }
+
+  // Claim periods must run forward: claim #4 cannot cover an earlier period
+  // than claim #3 (Jake §6). Checked BEFORE anything is written, so a
+  // mis-numbered sheet can't corrupt the sequence.
+  if (parsed.meta.date) {
+    const prior = await db.progressClaim.findFirst({
+      where: { projectId, claimNumber: { lt: claim.claimNumber }, periodEnd: { not: null } },
+      orderBy: { claimNumber: "desc" },
+      select: { claimNumber: true, periodEnd: true, periodLabel: true },
+    });
+    if (prior?.periodEnd && parsed.meta.date < prior.periodEnd) {
+      return {
+        ok: false,
+        message:
+          `Period out of sequence: this sheet covers ${fmtDateShort(parsed.meta.date)}, which is earlier than ` +
+          `claim #${prior.claimNumber} (${prior.periodLabel ?? fmtDateShort(prior.periodEnd)}). ` +
+          `Claim periods must run forward — check you've uploaded the right sheet.`,
+      };
+    }
   }
 
   // Store the source file (audit trail).

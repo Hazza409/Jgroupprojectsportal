@@ -914,6 +914,7 @@ model ProjectUpdate {
   tradesOnSite   String?
   worksCompleted String?
   upcomingWorks  String?
+  decisionsNeeded String?
   delaysNotes    String?
   body        String   @default("")
   createdById String?

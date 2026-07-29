@@ -7,6 +7,7 @@ import { createRfi, answerRfi, closeRfi, deleteRfi, addRfiAttachments, deleteRfi
 import { getCompany, companyShortName } from "@/lib/company";
 import { logView } from "@/lib/audit";
 import { fmtDateShort, fmtDateTime, isOverdue, daysOverdue } from "@/lib/dates";
+import { DateField } from "@/components/DateField";
 
 // Questions & Answers — the builder raises design questions or decisions the
 // client must make; the client answers. Supporting files can be attached.
@@ -69,7 +70,7 @@ export default async function RfisPage({ params }: { params: { projectId: string
           </div>
           <div>
             <label className="label">Needed by (optional)</label>
-            <input name="dueDate" type="date" className="input" />
+            <DateField name="dueDate" />
           </div>
           <div>
             <label className="label">Attach files (PDF or image, optional)</label>

@@ -3,6 +3,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { createMaintenanceItem, deleteMaintenanceItem } from "../actions";
+import { DateField } from "@/components/DateField";
 
 const fmtDate = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium" }).format(d) : "—");
 
@@ -35,7 +36,7 @@ export default async function MaintenanceSchedulePage({ params }: { params: { pr
           </div>
           <div>
             <label className="label">Next due</label>
-            <input name="nextDueDate" type="date" className="input" />
+            <DateField name="nextDueDate" />
           </div>
           <div>
             <label className="label">Description (optional)</label>

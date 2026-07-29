@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setForecasts, signOffForecast, type SimpleResult } from "@/app/projects/[projectId]/actions";
+import { DateField } from "@/components/DateField";
 
 export interface ForecastGateView {
   required: string[];
@@ -90,7 +91,7 @@ export function ForecastCard({
           </div>
           <div>
             <label className="label">Forecast completion date</label>
-            <input name="forecastCompletionDate" type="date" defaultValue={pendingDate} className="input" />
+            <DateField name="forecastCompletionDate" defaultValue={pendingDate} />
           </div>
           <div>
             <label className="label">Reason for cost movement (optional)</label>

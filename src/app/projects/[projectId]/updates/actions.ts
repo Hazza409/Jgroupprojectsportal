@@ -8,6 +8,7 @@ import { storage, buildKey } from "@/lib/storage";
 import { notifyProject } from "@/lib/email";
 import { getCompany, companyShortName } from "@/lib/company";
 import { recordDecision, hasAcknowledged, ACKNOWLEDGEMENT_STATEMENT } from "@/lib/audit";
+import { applyHouseStyle, houseStyleField } from "@/lib/houseStyle";
 import { DecisionAction, DecisionSubject } from "@prisma/client";
 
 function refresh(projectId: string) {
@@ -30,17 +31,31 @@ export async function createUpdate(projectId: string, formData: FormData) {
     const v = String(formData.get(k) ?? "").trim();
     return v.length ? v : null;
   };
-  const tradesOnSite = str("tradesOnSite");
-  const worksCompleted = str("worksCompleted");
-  const upcomingWorks = str("upcomingWorks");
-  const delaysNotes = str("delaysNotes");
-  const body = String(formData.get("body") ?? "").trim();
+  // House style applies to everything client-facing: full trade names, proper
+  // sentence case (Jake §6). Site shorthand is fine to type — it's normalised
+  // here so what publishes reads under the J Group name.
+  const tradesOnSite = houseStyleField(str("tradesOnSite")).value;
+  const worksCompleted = houseStyleField(str("worksCompleted")).value;
+  const upcomingWorks = houseStyleField(str("upcomingWorks")).value;
+  const decisionsNeeded = houseStyleField(str("decisionsNeeded")).value;
+  const delaysNotes = houseStyleField(str("delaysNotes")).value;
+  const body = houseStyleField(String(formData.get("body") ?? "")).value ?? "";
   if (!title) throw new Error("Title is required");
-  if (!tradesOnSite && !worksCompleted && !upcomingWorks && !delaysNotes && !body) {
+  if (!tradesOnSite && !worksCompleted && !upcomingWorks && !decisionsNeeded && !delaysNotes && !body) {
     throw new Error("Fill in at least one section of the summary");
   }
   await db.projectUpdate.create({
-    data: { projectId, title, tradesOnSite, worksCompleted, upcomingWorks, delaysNotes, body, createdById: user.id },
+    data: {
+      projectId,
+      title: applyHouseStyle(title).text,
+      tradesOnSite,
+      worksCompleted,
+      upcomingWorks,
+      decisionsNeeded,
+      delaysNotes,
+      body,
+      createdById: user.id,
+    },
   });
 
   // Tell the client(s) + PM there's a new site update to read.

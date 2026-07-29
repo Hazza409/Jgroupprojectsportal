@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addScheduleTask, type ImportResult } from "./actions";
+import { DateField } from "@/components/DateField";
 
 export function AddTaskForm({ projectId }: { projectId: string }) {
   const router = useRouter();
@@ -45,11 +46,11 @@ export function AddTaskForm({ projectId }: { projectId: string }) {
         </div>
         <div>
           <label className="label">Start</label>
-          <input name="startDate" type="date" className="input" />
+          <DateField name="startDate" />
         </div>
         <div>
           <label className="label">Finish</label>
-          <input name="endDate" type="date" className="input" />
+          <DateField name="endDate" />
         </div>
       </div>
       <div className="flex items-end gap-3">

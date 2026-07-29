@@ -65,14 +65,23 @@ export default async function UpdatesPage({ params }: { params: { projectId: str
               <textarea name="upcomingWorks" rows={3} className="input resize-y" placeholder="e.g. Roof cladding, window install, plumbing rough-in…" />
             </div>
             <div>
+              <label className="label">Decisions needed from you</label>
+              <textarea name="decisionsNeeded" rows={3} className="input resize-y" placeholder="e.g. Confirm splashback tile by 8 August; approve joinery variation…" />
+            </div>
+            <div>
               <label className="label">Delays / notes (optional)</label>
-              <textarea name="delaysNotes" rows={3} className="input resize-y" placeholder="e.g. 2-day weather delay; awaiting client tile selection…" />
+              <textarea name="delaysNotes" rows={3} className="input resize-y" placeholder="e.g. Two-day weather delay; awaiting client tile selection…" />
             </div>
           </div>
           <div>
             <label className="label">General notes (optional)</label>
             <textarea name="body" rows={2} className="input resize-y" placeholder="Anything else the client should know…" />
           </div>
+          <p className="text-xs text-stone-400">
+            House style is applied automatically when you post: trade shorthand is expanded to full names
+            (&ldquo;brickies&rdquo; publishes as &ldquo;bricklayers&rdquo;) and sentences are capitalised. This goes out under the
+            {" "}{companyShortName(company)} name.
+          </p>
           <button className="btn-primary" type="submit">Post update</button>
         </form>
       )}
@@ -100,6 +109,7 @@ export default async function UpdatesPage({ params }: { params: { projectId: str
                   ["Trades on site", u.tradesOnSite],
                   ["Works completed", u.worksCompleted],
                   ["Upcoming works", u.upcomingWorks],
+                  ["Decisions needed from you", u.decisionsNeeded],
                   ["Delays / notes", u.delaysNotes],
                 ] as const).map(([label, value]) =>
                   value ? (

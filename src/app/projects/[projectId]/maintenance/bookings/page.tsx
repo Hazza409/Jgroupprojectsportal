@@ -5,6 +5,7 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createBooking, scheduleBooking, setBookingStatus } from "../actions";
 import { getCompany, companyShortName } from "@/lib/company";
+import { DateField } from "@/components/DateField";
 
 const fmtDateTime = (d: Date | null) =>
   d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(d) : null;
@@ -62,7 +63,7 @@ export default async function BookingsPage({ params }: { params: { projectId: st
                   <form action={scheduleBooking.bind(null, projectId, b.id)} className="flex items-end gap-2">
                     <div>
                       <label className="label">Schedule for</label>
-                      <input name="scheduledAt" type="datetime-local" required className="input" />
+                      <DateField name="scheduledAt" withTime required />
                     </div>
                     <button className="btn-ghost" type="submit">{b.status === "SCHEDULED" ? "Reschedule" : "Schedule"}</button>
                   </form>
