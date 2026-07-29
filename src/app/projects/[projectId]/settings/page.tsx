@@ -64,6 +64,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
           hasPending: gate.hasPending,
           warning: gate.warning,
           unconfigured: gate.unconfigured,
+          unmatched: gate.unmatched,
         }}
         canSign={gate.unconfigured || gate.required.includes(user.email.toLowerCase())}
       />

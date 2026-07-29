@@ -1,11 +1,13 @@
 import { createHash } from "crypto";
+import { Role } from "@prisma/client";
 import { db } from "./db";
 
 // ─────────────────────────────────────────────────────────────
 // THE FORTNIGHTLY SIGN-OFF GATE.
 //
-// Jake's rule: "Nothing publishes without Nick and Andrew's fortnightly
-// sign-off." This module is that rule in code.
+// Jake's rule: "Nothing publishes without ... fortnightly sign-off."
+// This module is that rule in code. Sign-off currently sits with Nick;
+// the approver list is configurable in Company settings.
 //
 //   1. A builder enters figures → they land in the PENDING fields. A client
 //      sees nothing new; the previously published figure stays up.
@@ -64,6 +66,12 @@ export interface ForecastGate {
   warning: string | null;
   /** True when no named approvers are configured. */
   unconfigured: boolean;
+  /**
+   * Configured approver emails with no matching staff account. These can never
+   * sign, so they'd deadlock publishing — surfaced so a typo is obvious rather
+   * than silently freezing the fortnightly figures.
+   */
+  unmatched: string[];
   revision: string | null;
 }
 
@@ -102,6 +110,18 @@ export async function forecastGate(
   const outstanding = required.filter((e) => !signedSet.has(e));
 
   const unconfigured = required.length === 0;
+
+  // A configured approver with no staff account could never sign, which would
+  // freeze publishing with no explanation. Detect it so the cause is visible.
+  const staff = required.length
+    ? await db.user.findMany({
+        where: { email: { in: required, mode: "insensitive" }, role: Role.BUILDER },
+        select: { email: true },
+      })
+    : [];
+  const staffSet = new Set(staff.map((s) => s.email.toLowerCase()));
+  const unmatched = required.filter((e) => !staffSet.has(e));
+
   return {
     required,
     signed,
@@ -112,9 +132,12 @@ export async function forecastGate(
     complete: hasPending && (unconfigured ? signed.length > 0 : outstanding.length === 0),
     hasPending,
     unconfigured,
+    unmatched,
     warning: unconfigured
-      ? "No named approvers are configured, so the two-person sign-off is NOT being enforced — any staff member can publish. Set Nick and Andrew in Company settings to enforce it."
-      : null,
+      ? "No named approver is configured, so sign-off is NOT being enforced — any staff member can publish. Add Nick in Company settings to enforce it."
+      : unmatched.length
+        ? `No staff account matches ${unmatched.join(", ")}, so nobody can sign these figures off. Check the address in Company settings, or add the staff account.`
+        : null,
     revision,
   };
 }

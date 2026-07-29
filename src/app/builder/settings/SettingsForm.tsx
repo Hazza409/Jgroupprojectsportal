@@ -101,11 +101,11 @@ export function SettingsForm({ company, logoUrl }: { company: Company; logoUrl: 
             id="forecastApprovers"
             name="forecastApprovers"
             className="input"
-            placeholder="nick@jgroupprojects.com, andrew@jgroupprojects.com"
+            placeholder="nick@jgroupprojects.com"
             defaultValue={company.forecastApprovers ?? ""}
           />
           <p className="mt-1 text-xs text-stone-400">
-            Every person listed here must sign off a project&apos;s forecast figures before they publish to the client.
+            Everyone listed here must sign off a project&apos;s forecast figures before they publish to the client.
             Editing the figures after a sign-off voids it and requires re-signing. Leave blank and nothing can publish.
           </p>
         </div>

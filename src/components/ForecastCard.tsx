@@ -13,11 +13,12 @@ export interface ForecastGateView {
   hasPending: boolean;
   warning: string | null;
   unconfigured: boolean;
+  unmatched: string[];
 }
 
 // Builder-only entry + sign-off for the two headline forecast figures.
-// Figures are TYPED IN from Nick & Andrew's fortnightly numbers (the portal
-// never calculates them) and are STAGED until every approver signs — nothing
+// Figures are TYPED IN from Nick's fortnightly numbers (the portal
+// never calculates them) and are STAGED until the approver signs — nothing
 // reaches the client before that.
 export function ForecastCard({
   projectId,
@@ -59,8 +60,8 @@ export function ForecastCard({
       <div>
         <h3 className="font-semibold">Fortnightly forecast figures</h3>
         <p className="mt-0.5 text-xs text-stone-500">
-          Enter the figures confirmed by Nick and Andrew — the portal never calculates these. Figures are staged here
-          and only reach the client once <strong>every approver has signed off</strong>.
+          Enter the figures confirmed by Nick — the portal never calculates these. Figures are staged here and only
+          reach the client once <strong>sign-off is complete</strong>.
         </p>
       </div>
 

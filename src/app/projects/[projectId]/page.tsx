@@ -133,8 +133,8 @@ export default async function ProjectOverview({ params }: { params: { projectId:
       </div>
 
       {/* THE TWO HEADLINE NUMBERS (Jake §3) — the questions the client is
-          actually holding. Both are entered by hand from Nick & Andrew's
-          fortnightly figures; the portal never calculates them. */}
+          actually holding. Both are entered by hand from Nick's fortnightly
+          figures; the portal never calculates them. */}
       {(project.forecastFinalCostCents != null || project.forecastCompletionDate) && (
         <div className="card border-brand/30">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
