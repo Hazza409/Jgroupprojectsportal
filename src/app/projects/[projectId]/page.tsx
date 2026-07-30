@@ -79,6 +79,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
 
   const constructionLinks = [
     { href: "estimate", label: "Original Estimate" },
+    { href: "budget", label: "Budget" },
     { href: "cost-to-complete", label: "Cost to Complete" },
     { href: "progress-claims", label: `Progress Claims (${claims})` },
     { href: "variations", label: "Variations" },

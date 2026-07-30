@@ -13,6 +13,7 @@ import { getCompany, companyShortName } from "@/lib/company";
 // is not the boundary — a client must not reach a hidden module by deep link).
 const CONSTRUCTION_SLUGS = new Set([
   "estimate",
+  "budget",
   "cost-to-complete",
   "progress-claims",
   "variations",
