@@ -14,6 +14,7 @@ import { getCompany, companyShortName } from "@/lib/company";
 const CONSTRUCTION_SLUGS = new Set([
   "estimate",
   "budget",
+  "overruns",
   "cost-to-complete",
   "progress-claims",
   "variations",

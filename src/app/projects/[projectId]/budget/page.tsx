@@ -5,17 +5,15 @@ import { getCompany } from "@/lib/company";
 import { computeCostToComplete } from "@/lib/claims";
 import { logView } from "@/lib/audit";
 import { ModuleHeader } from "@/components/ModuleHeader";
+import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
 
 /**
- * Budget — "where are we against budget, and what has blown out".
- *
- * Deliberately a different question from Cost to Complete (which answers "what
- * is left to spend"). This view is overrun-first: the codes over budget are
- * pulled to the top, sized by how far over, so an overrun is impossible to
- * miss. Original Estimate stays the as-signed baseline on its own tab.
+ * Budget — the FULL picture: every cost code, its budget, what's been spent,
+ * and how much of the budget is used. Original Estimate stays the as-signed
+ * baseline; overruns get their own tab (linked from the banner here).
  *
  * Every figure comes from computeCostToComplete — the same single source as the
- * Cost to Complete page and the Overview — so nothing can disagree by a cent.
+ * Overruns tab, Cost to Complete and the Overview — so nothing can disagree.
  */
 export default async function BudgetPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -26,50 +24,31 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
   const ctc = await computeCostToComplete(projectId, company);
   await logView(projectId, user, `/projects/${projectId}/budget`, "Budget");
 
-  // A code only counts as spent-against if it has costs OR a budget.
-  const rows = ctc.rows
-    .filter((r) => r.revisedCents !== 0 || r.currentCents !== 0)
-    .map((r) => ({
-      ...r,
-      // Positive = over budget. (variance is revised - current.)
-      overCents: -r.varianceCents,
-      pctUsed: r.revisedCents > 0 ? (r.currentCents / r.revisedCents) * 100 : r.currentCents > 0 ? Infinity : 0,
-    }));
+  const rows = ctc.rows.map((r) => ({
+    ...r,
+    overCents: -r.varianceCents, // positive = over budget
+    pct: pctUsed(r.currentCents, r.revisedCents),
+  }));
+  const overCount = rows.filter((r) => r.overCents > 0).length;
+  const totalOverCents = rows.filter((r) => r.overCents > 0).reduce((a, r) => a + r.overCents, 0);
+  const watchCount = rows.filter((r) => r.overCents <= 0 && Number.isFinite(r.pct) && r.pct >= 90).length;
 
-  const over = rows.filter((r) => r.overCents > 0).sort((a, b) => b.overCents - a.overCents);
-  const within = rows.filter((r) => r.overCents <= 0).sort((a, b) => b.pctUsed - a.pctUsed);
-
-  const totalOverCents = over.reduce((a, r) => a + r.overCents, 0);
   const t = ctc.totals;
-  // Net position across the whole job (negative = over budget overall).
-  const netCents = t.revisedCents - t.currentCents;
-  const pctUsed = t.revisedCents > 0 ? (t.currentCents / t.revisedCents) * 100 : 0;
+  const netCents = t.revisedCents - t.currentCents; // negative = over overall
+  const jobPct = pctUsed(t.currentCents, t.revisedCents);
 
   const headline = [
-    { label: "Original estimate", value: t.estimateCents, tone: "" },
-    { label: "Approved variations", value: t.variationsCents, tone: "" },
-    { label: "Current budget", value: t.revisedCents, tone: "", strong: true },
-    { label: "Spent to date", value: t.currentCents, tone: "" },
+    { label: "Original estimate", value: t.estimateCents },
+    { label: "Approved variations", value: t.variationsCents },
+    { label: "Current budget", value: t.revisedCents, strong: true },
+    { label: "Spent to date", value: t.currentCents },
     {
       label: netCents < 0 ? "Over budget" : "Remaining",
       value: Math.abs(netCents),
-      tone: netCents < 0 ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300",
       strong: true,
+      tone: netCents < 0 ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300",
     },
   ];
-
-  /** Spend bar: fills to % of budget used, turns red past 100%. */
-  function Bar({ pct, over }: { pct: number; over: boolean }) {
-    const width = Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 100;
-    return (
-      <div className="h-2 w-full overflow-hidden rounded-full bg-stone-100">
-        <div
-          className={`h-full rounded-full ${over ? "bg-red-500" : pct >= 90 ? "bg-amber-500" : "bg-brand"}`}
-          style={{ width: `${width}%` }}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -77,12 +56,12 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         title="Budget"
         description={
           isBuilder
-            ? "Current budget (estimate + approved variations) against costs incurred, with overruns surfaced first."
-            : "How your budget is tracking, trade by trade. Anything running over is shown at the top."
+            ? "Current budget (estimate + approved variations) against costs incurred, for every cost code."
+            : "Your budget for each part of the build, and how much of it has been spent."
         }
         action={
-          <Link href={`/projects/${projectId}/cost-to-complete`} className="btn-ghost">
-            Cost to Complete →
+          <Link href={`/projects/${projectId}/overruns`} className="btn-ghost">
+            Overruns →
           </Link>
         }
       />
@@ -97,23 +76,23 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         {headline.map((h) => (
           <div key={h.label} className="card">
             <p className="text-xs uppercase tracking-wide text-stone-400">{h.label}</p>
-            <p className={`mt-2 tabular-nums ${h.strong ? "text-xl font-semibold" : "text-lg"} ${h.tone}`}>
+            <p className={`mt-2 tabular-nums ${h.strong ? "text-xl font-semibold" : "text-lg"} ${h.tone ?? ""}`}>
               {formatCents(h.value)}
             </p>
           </div>
         ))}
       </div>
 
-      {/* Whole-job spend bar */}
+      {/* Whole-job budget used */}
       <div className="card">
         <div className="flex items-end justify-between">
           <p className="text-xs uppercase tracking-wide text-stone-400">Budget used</p>
           <p className={`text-2xl font-semibold ${netCents < 0 ? "text-red-700 dark:text-red-300" : ""}`}>
-            {pctUsed.toFixed(1)}%
+            {fmtPct(jobPct)}
           </p>
         </div>
         <div className="mt-3">
-          <Bar pct={pctUsed} over={netCents < 0} />
+          <BudgetBar pct={jobPct} thick />
         </div>
         <p className="mt-2 text-xs text-stone-400">
           {formatCents(t.currentCents)} of {formatCents(t.revisedCents)}
@@ -121,108 +100,102 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         </p>
       </div>
 
-      {/* ── OVERRUNS, worst first ── */}
-      <div>
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-semibold">
-            Over budget{over.length > 0 && <span className="ml-2 text-sm font-normal text-stone-400">{over.length} cost code{over.length === 1 ? "" : "s"}</span>}
-          </h2>
-          {over.length > 0 && (
-            <span className="text-sm font-semibold text-red-700 dark:text-red-300">
-              {formatCents(totalOverCents)} over in total
+      {/* Pointer to the Overruns tab — the detail lives there, not here. */}
+      {overCount > 0 && (
+        <Link
+          href={`/projects/${projectId}/overruns`}
+          className="card flex flex-wrap items-center justify-between gap-2 border-red-500/30 hover:shadow-md"
+        >
+          <span className="text-sm font-medium text-red-700 dark:text-red-300">
+            {overCount} cost code{overCount === 1 ? " is" : "s are"} over budget by {formatCents(totalOverCents)}
+          </span>
+          <span className="text-sm text-stone-500">See the Overruns tab →</span>
+        </Link>
+      )}
+      {overCount === 0 && (
+        <div className="card border-emerald-500/30 text-sm text-emerald-700 dark:text-emerald-300">
+          ✓ Nothing is over budget.
+          {watchCount > 0 && (
+            <span className="text-stone-500">
+              {" "}
+              {watchCount} code{watchCount === 1 ? "" : "s"} at 90% or more of budget — shown in amber below.
             </span>
           )}
         </div>
+      )}
 
-        {over.length === 0 ? (
-          <div className="card text-sm text-emerald-700 dark:text-emerald-300">
-            ✓ Nothing is over budget. Every cost code is within its allowance.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {over.map((r) => (
-              <div key={r.id} className="card border-red-500/30">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <p className="font-medium">
-                    <span className="font-mono text-xs text-stone-400">{r.code}</span> {r.name}
-                  </p>
-                  <p className="text-sm font-semibold text-red-700 dark:text-red-300 tabular-nums">
-                    {formatCents(r.overCents)} over
-                    {Number.isFinite(r.pctUsed) && r.revisedCents > 0 && (
-                      <span className="ml-1 font-normal">({(r.pctUsed - 100).toFixed(0)}%)</span>
-                    )}
-                  </p>
-                </div>
-                <div className="mt-2">
-                  <Bar pct={r.pctUsed} over />
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-stone-500 sm:grid-cols-4">
-                  <span>Estimate {formatCents(r.estimateCents)}</span>
-                  <span>Variations {r.variationsCents !== 0 ? `+${formatCents(r.variationsCents)}` : "—"}</span>
-                  <span className="font-medium text-stone-600">Budget {formatCents(r.revisedCents)}</span>
-                  <span className="font-medium text-red-700 dark:text-red-300">Spent {formatCents(r.currentCents)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── WITHIN BUDGET, closest to the limit first ── */}
-      {within.length > 0 && (
-        <div>
-          <h2 className="mb-3 font-semibold">
-            Within budget <span className="ml-1 text-sm font-normal text-stone-400">{within.length} cost code{within.length === 1 ? "" : "s"}</span>
-          </h2>
-          <div className="card p-0">
-            <table className="w-full table-fixed text-xs sm:text-sm">
-              <colgroup>
-                <col className="w-[9%]" /><col className="w-[27%]" /><col className="w-[16%]" />
-                <col className="w-[16%]" /><col className="w-[16%]" /><col className="w-[16%]" />
-              </colgroup>
-              <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
-                <tr>
-                  <th className="px-2 py-2.5">Code</th>
-                  <th className="px-2 py-2.5">Cost item</th>
-                  <th className="px-2 py-2.5 text-right">Budget</th>
-                  <th className="px-2 py-2.5 text-right">Spent</th>
-                  <th className="px-2 py-2.5 text-right">Remaining</th>
-                  <th className="px-2 py-2.5">Used</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100 align-top">
-                {within.map((r) => (
-                  <tr key={r.id}>
+      {/* Every cost code, in code order. */}
+      {rows.length === 0 ? (
+        <div className="card text-stone-500">No cost codes yet. Import an estimate first.</div>
+      ) : (
+        <div className="card p-0">
+          <table className="w-full table-fixed text-xs sm:text-sm">
+            <colgroup>
+              <col className="w-[8%]" /><col className="w-[22%]" /><col className="w-[13%]" />
+              <col className="w-[12%]" /><col className="w-[13%]" /><col className="w-[13%]" />
+              <col className="w-[19%]" />
+            </colgroup>
+            <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+              <tr>
+                <th className="px-2 py-2.5">Code</th>
+                <th className="px-2 py-2.5">Cost item</th>
+                <th className="px-2 py-2.5 text-right">Estimate</th>
+                <th className="px-2 py-2.5 text-right">Variations</th>
+                <th className="px-2 py-2.5 text-right">Budget</th>
+                <th className="px-2 py-2.5 text-right">Spent</th>
+                <th className="px-2 py-2.5">Used</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100 align-top">
+              {rows.map((r) => {
+                const over = r.overCents > 0;
+                return (
+                  <tr key={r.id} className={over ? "bg-red-500/5" : undefined}>
                     <td className="px-2 py-2 font-mono text-xs text-stone-400 whitespace-nowrap">{r.code}</td>
                     <td className="px-2 py-2 break-words">{r.name}</td>
-                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.revisedCents)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.currentCents)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-emerald-700 dark:text-emerald-300">
-                      {formatCents(-r.overCents)}
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.estimateCents)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-stone-500">
+                      {r.variationsCents !== 0 ? `+${formatCents(r.variationsCents)}` : "—"}
+                    </td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCents(r.revisedCents)}</td>
+                    <td className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${over ? "font-medium text-red-700 dark:text-red-300" : ""}`}>
+                      {formatCents(r.currentCents)}
                     </td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-2">
-                        <Bar pct={r.pctUsed} over={false} />
-                        <span className="w-10 shrink-0 text-right tabular-nums text-stone-500">
-                          {Number.isFinite(r.pctUsed) ? `${r.pctUsed.toFixed(0)}%` : "—"}
+                        <BudgetBar pct={r.pct} />
+                        <span className={`w-9 shrink-0 text-right tabular-nums ${over ? "text-red-700 dark:text-red-300" : "text-stone-500"}`}>
+                          {fmtPct(r.pct)}
                         </span>
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+            <tfoot className="border-t border-stone-200 bg-stone-50 font-semibold">
+              <tr>
+                <td colSpan={2} className="px-2 py-2.5">Total</td>
+                <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.estimateCents)}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
+                  {t.variationsCents !== 0 ? `+${formatCents(t.variationsCents)}` : "—"}
+                </td>
+                <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.revisedCents)}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.currentCents)}</td>
+                <td className="px-2 py-2.5 tabular-nums text-stone-500">{fmtPct(jobPct)}</td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
       )}
 
-      {/* Unallocated costs, if any — money that hasn't been matched to a code. */}
+      {/* Costs not matched to any cost code — they sit against no budget. */}
       {ctc.unallocated.currentCents !== 0 && (
         <div className="card border-amber-500/30">
           <p className="text-xs uppercase tracking-wide text-stone-400">Unallocated costs</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{formatCents(ctc.unallocated.currentCents)}</p>
           <p className="mt-1 text-xs text-stone-500">
-            Costs not yet matched to a cost code, so they don&apos;t appear against any budget above.
+            Not yet matched to a cost code, so these sit against no budget above.
             {isBuilder && " Use “Re-match claim costs” on Cost to Complete to allocate them."}
           </p>
         </div>
