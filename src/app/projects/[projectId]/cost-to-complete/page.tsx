@@ -2,7 +2,8 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, inclMarginGst } from "@/lib/money";
 import { getCompany, companyShortName } from "@/lib/company";
-import { computeCostToComplete } from "@/lib/claims";
+import { computeCostToComplete, overrunSummary } from "@/lib/claims";
+import Link from "next/link";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { isConnected } from "@/lib/xero/tokens";
 import { XeroControls } from "./XeroControls";
@@ -53,6 +54,10 @@ export default async function CostToCompletePage({
   const currentToDate = ctc.totals.currentCents;
   const costToComplete = ctc.totals.costToCompleteCents;
   const hasActuals = currentToDate !== 0;
+
+  // Overruns — same basis as the Budget/Overruns tabs (shared helper).
+  const overruns = overrunSummary(ctc);
+  const overIds = new Set(overruns.rows.map((r) => r.id));
 
   const summary = [
     { label: "Current to Date", value: formatCents(currentToDate) },
@@ -133,6 +138,25 @@ export default async function CostToCompletePage({
         </div>
       )}
 
+      {/* Overruns are the exception worth calling out — a negative variance
+          number alone is too easy to miss. Detail lives on the Overruns tab. */}
+      {overruns.count > 0 && (
+        <Link
+          href={`/projects/${projectId}/overruns`}
+          className="card mb-4 flex flex-wrap items-center justify-between gap-2 border-red-500/30 hover:shadow-md"
+        >
+          <span className="text-sm">
+            <span className="font-medium text-red-700 dark:text-red-300">
+              {overruns.count} cost code{overruns.count === 1 ? " is" : "s are"} over budget by {formatCents(overruns.totalOverCents)}
+            </span>
+            {overruns.absorbed && (
+              <span className="text-stone-500"> · currently absorbed by underspend elsewhere</span>
+            )}
+          </span>
+          <span className="text-sm text-stone-500">See the Overruns tab →</span>
+        </Link>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         {/* Estimate vs Current vs Variance */}
         {rows.length === 0 ? (
@@ -164,7 +188,7 @@ export default async function CostToCompletePage({
               </thead>
               <tbody className="divide-y divide-stone-100 align-top">
                 {rows.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.id} className={overIds.has(r.id) ? "bg-red-500/5" : undefined}>
                     <td className="px-2 py-2 font-mono text-xs text-stone-400 whitespace-nowrap">{r.code}</td>
                     <td className="px-2 py-2 break-words">{r.name}</td>
                     <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.estimate)}</td>
@@ -175,10 +199,11 @@ export default async function CostToCompletePage({
                     <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.current)}</td>
                     <td
                       className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${
-                        r.variance < 0 ? "text-red-700 dark:text-red-300" : "text-stone-500"
+                        r.variance < 0 ? "font-medium text-red-700 dark:text-red-300" : "text-stone-500"
                       }`}
                     >
                       {formatCents(r.variance)}
+                      {r.variance < 0 && <span className="ml-1 text-[10px] uppercase">over</span>}
                     </td>
                   </tr>
                 ))}

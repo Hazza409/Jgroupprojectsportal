@@ -309,6 +309,45 @@ export async function computeCostToComplete(
   };
 }
 
+export interface OverrunSummary {
+  /** Cost codes spending beyond their current budget, worst first. */
+  rows: (CtcRow & { overCents: number })[];
+  count: number;
+  totalOverCents: number;
+  /** Whole-job position. Negative = the job overall is over budget. */
+  netCents: number;
+  /**
+   * True when individual codes are over but the job as a whole is still within
+   * budget — i.e. underspend elsewhere currently covers them. Worth saying out
+   * loud: an overrun banner reads as alarming when the job is actually fine.
+   */
+  absorbed: boolean;
+}
+
+/**
+ * Which cost codes are over budget, derived from a CostToComplete result.
+ *
+ * "Over budget" means spend exceeds the CURRENT budget (original estimate plus
+ * APPROVED variations) — so approved extra work is never counted as an overrun.
+ * Shared by the Budget, Overruns, Cost to Complete and Overview pages so all
+ * four report the same thing.
+ */
+export function overrunSummary(ctc: CostToComplete): OverrunSummary {
+  const rows = ctc.rows
+    .map((r) => ({ ...r, overCents: -r.varianceCents }))
+    .filter((r) => r.overCents > 0)
+    .sort((a, b) => b.overCents - a.overCents);
+  const totalOverCents = rows.reduce((a, r) => a + r.overCents, 0);
+  const netCents = ctc.totals.revisedCents - ctc.totals.currentCents;
+  return {
+    rows,
+    count: rows.length,
+    totalOverCents,
+    netCents,
+    absorbed: rows.length > 0 && netCents >= 0,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // Invoice-on-invoice drawdown: each progress claim (invoice) draws
 // down the contract budget (estimate + approved variations, client-

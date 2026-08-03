@@ -3,7 +3,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
 import { getCompany } from "@/lib/company";
-import { computeCostToComplete, projectDrawdown } from "@/lib/claims";
+import { computeCostToComplete, projectDrawdown, overrunSummary } from "@/lib/claims";
 import { logView } from "@/lib/audit";
 import { fmtDate } from "@/lib/dates";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -63,6 +63,9 @@ export default async function ProjectOverview({ params }: { params: { projectId:
   const budgetBase = drawdown.budgetCents;
   const drawnPct = drawdown.pct;
 
+  // Budget overruns — same shared basis as the Budget/Overruns/CTC pages.
+  const overruns = overrunSummary(ctc);
+
   const stats = [
     { label: "Original estimate", value: formatCents(estimateTotal) },
     { label: "Estimate + approved variations", value: formatCents(budgetBase) },
@@ -117,6 +120,32 @@ export default async function ProjectOverview({ params }: { params: { projectId:
           </div>
         ))}
       </div>
+
+      {/* Budget overruns — the exception the client actually needs to see, so
+          it sits high on the overview rather than buried in a variance column. */}
+      {overruns.count > 0 && (
+        <Link
+          href={`/projects/${projectId}/overruns`}
+          className="card block border-red-500/30 hover:shadow-md"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs uppercase tracking-wide text-stone-400">Budget overruns</p>
+            <span className="text-sm text-stone-500">View all →</span>
+          </div>
+          <p className="mt-2 text-xl font-semibold tabular-nums text-red-700 dark:text-red-300">
+            {formatCents(overruns.totalOverCents)} over
+            <span className="ml-2 text-sm font-normal text-stone-500">
+              across {overruns.count} cost code{overruns.count === 1 ? "" : "s"}
+            </span>
+          </p>
+          <p className="mt-1 text-sm text-stone-500">
+            Largest: {overruns.rows[0].name} — {formatCents(overruns.rows[0].overCents)} over.
+            {overruns.absorbed
+              ? " Underspend elsewhere currently absorbs this, so the job overall is still within budget."
+              : " The job overall is over budget."}
+          </p>
+        </Link>
+      )}
 
       {/* Drawn-down progress: approved progress claims vs estimate + approved variations. */}
       <div className="card">

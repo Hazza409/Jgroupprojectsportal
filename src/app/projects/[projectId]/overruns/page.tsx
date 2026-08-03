@@ -2,7 +2,7 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { formatCents } from "@/lib/money";
 import { getCompany } from "@/lib/company";
-import { computeCostToComplete } from "@/lib/claims";
+import { computeCostToComplete, overrunSummary } from "@/lib/claims";
 import { logView } from "@/lib/audit";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
@@ -28,16 +28,12 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   const ctc = await computeCostToComplete(projectId, company);
   await logView(projectId, user, `/projects/${projectId}/overruns`, "Overruns");
 
-  const over = ctc.rows
-    .map((r) => ({ ...r, overCents: -r.varianceCents, pct: pctUsed(r.currentCents, r.revisedCents) }))
-    .filter((r) => r.overCents > 0)
-    .sort((a, b) => b.overCents - a.overCents);
-
-  const totalOverCents = over.reduce((a, r) => a + r.overCents, 0);
-  const t = ctc.totals;
-  // Whether the job as a whole is over, which can differ from individual codes:
-  // underspend elsewhere can absorb an overrun.
-  const netCents = t.revisedCents - t.currentCents;
+  // Shared with the Budget, Cost to Complete and Overview pages so all four
+  // report identical overruns on an identical basis.
+  const summary = overrunSummary(ctc);
+  const over = summary.rows.map((r) => ({ ...r, pct: pctUsed(r.currentCents, r.revisedCents) }));
+  const totalOverCents = summary.totalOverCents;
+  const netCents = summary.netCents;
   const worst = over[0];
 
   return (

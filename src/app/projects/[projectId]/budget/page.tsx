@@ -2,7 +2,7 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { formatCents } from "@/lib/money";
 import { getCompany } from "@/lib/company";
-import { computeCostToComplete } from "@/lib/claims";
+import { computeCostToComplete, overrunSummary } from "@/lib/claims";
 import { logView } from "@/lib/audit";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
@@ -29,8 +29,10 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
     overCents: -r.varianceCents, // positive = over budget
     pct: pctUsed(r.currentCents, r.revisedCents),
   }));
-  const overCount = rows.filter((r) => r.overCents > 0).length;
-  const totalOverCents = rows.filter((r) => r.overCents > 0).reduce((a, r) => a + r.overCents, 0);
+  // Shared basis with the Overruns / Cost to Complete / Overview pages.
+  const summary = overrunSummary(ctc);
+  const overCount = summary.count;
+  const totalOverCents = summary.totalOverCents;
   const watchCount = rows.filter((r) => r.overCents <= 0 && Number.isFinite(r.pct) && r.pct >= 90).length;
 
   const t = ctc.totals;
