@@ -171,7 +171,7 @@ model ForecastSignoff {
   signedAt     DateTime @default(now())
 
   /// Snapshot of exactly what was signed, so the record stands alone.
-  finalCostCents Int?
+  finalCostCents BigInt?
   completionDate DateTime?
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -281,7 +281,8 @@ model Project {
   address       String?
   clientName    String?
   // Headline contract value in cents (excludes approved variations).
-  contractValueCents Int  @default(0)
+  // BIGINT: a $21.47M job overflows INT4. Real jobs here exceed that.
+  contractValueCents BigInt  @default(0)
   status        String   @default("ACTIVE") // ACTIVE | ON_HOLD | COMPLETE
   // Lifecycle phase — drives which module suite is primary.
   phase         ProjectPhase @default(BUILD)
@@ -295,8 +296,8 @@ model Project {
   // PUBLISHED set — what the CLIENT sees. Only ever written by publishing a
   // fully signed-off revision, so an in-progress edit can't leak to the client
   // and the last published figure stays visible until the new one is signed.
-  forecastFinalCostCents     Int?
-  forecastFinalCostPrevCents Int?
+  forecastFinalCostCents     BigInt?
+  forecastFinalCostPrevCents BigInt?
   forecastFinalCostNote      String?
   forecastCompletionDate     DateTime?
   forecastCompletionPrevDate DateTime?
@@ -305,7 +306,7 @@ model Project {
   forecastUpdatedBy          String?
 
   // PENDING set — internal working figures awaiting sign-off. Never client-visible.
-  pendingForecastFinalCostCents Int?
+  pendingForecastFinalCostCents BigInt?
   pendingForecastFinalCostNote  String?
   pendingForecastCompletionDate DateTime?
   pendingForecastCompletionNote String?

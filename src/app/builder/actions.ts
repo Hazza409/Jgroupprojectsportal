@@ -33,6 +33,14 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
   const address = String(formData.get("address") ?? "").trim() || null;
   const clientName = String(formData.get("clientName") ?? "").trim() || null;
   const contractValueCents = dollarsToCents(String(formData.get("contractValue") ?? "0"));
+  if (!Number.isFinite(contractValueCents) || contractValueCents < 0) {
+    return { ok: false, message: "Contract value must be a positive amount." };
+  }
+  // Beyond this a JS number stops being exact — far past any real project, but
+  // better a clear message than silent rounding.
+  if (contractValueCents > Number.MAX_SAFE_INTEGER) {
+    return { ok: false, message: "Contract value is too large." };
+  }
 
   // Optional client provisioning.
   const clientEmailRaw = String(formData.get("clientEmail") ?? "").trim().toLowerCase();
@@ -90,7 +98,16 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
     revalidatePath("/builder");
     return { ok: true, message: "Job created.", projectId };
   } catch (e) {
-    // Most likely a unique-email collision race; surface a friendly message.
-    return { ok: false, message: e instanceof Error ? e.message : "Could not create job." };
+    // Never leak a raw driver/Prisma error into the UI — it's unreadable and
+    // exposes internals. Log the real thing, show something actionable.
+    console.error("createJob failed", e);
+    const msg = e instanceof Error ? e.message : "";
+    if (/Unique constraint|unique/i.test(msg)) {
+      return { ok: false, message: "That client email is already in use on another account." };
+    }
+    return {
+      ok: false,
+      message: "Could not create the job. The details were not saved — please check the fields and try again.",
+    };
   }
 }

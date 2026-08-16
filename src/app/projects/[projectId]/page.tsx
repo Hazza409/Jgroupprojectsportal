@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
+import { formatCents, sumCents, inclMarginGst, centsToNumber } from "@/lib/money";
 import { getCompany } from "@/lib/company";
 import { computeCostToComplete, projectDrawdown, overrunSummary } from "@/lib/claims";
 import { logView } from "@/lib/audit";
@@ -40,9 +40,11 @@ export default async function ProjectOverview({ params }: { params: { projectId:
   const ctc = await computeCostToComplete(projectId, company);
 
   // Movement in the two headline forecast figures since the last statement.
+  // Contract/forecast money is BIGINT in the database (a $21.47M job overflows
+  // INT4), so normalise to a JS number before any arithmetic or client props.
   const costMovementCents =
     project.forecastFinalCostCents != null && project.forecastFinalCostPrevCents != null
-      ? project.forecastFinalCostCents - project.forecastFinalCostPrevCents
+      ? centsToNumber(project.forecastFinalCostCents) - centsToNumber(project.forecastFinalCostPrevCents)
       : null;
   const dateMovementDays =
     project.forecastCompletionDate && project.forecastCompletionPrevDate

@@ -8,7 +8,7 @@ import { ClientActivityCard } from "@/components/ClientActivityCard";
 import { getCompany, companyShortName } from "@/lib/company";
 import { fmtDate, fmtDateTime, toDateInputValue } from "@/lib/dates";
 import { forecastGate } from "@/lib/forecast";
-import { formatCents } from "@/lib/money";
+import { formatCents, centsToNumber } from "@/lib/money";
 
 // Project settings — builder only. Home for client access + project administration.
 export default async function ProjectSettingsPage({ params }: { params: { projectId: string } }) {
@@ -49,7 +49,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
       <ModuleHeader title="Settings" description={`Project administration. Visible to ${companyShortName(company)} staff only.`} />
       <ForecastCard
         projectId={projectId}
-        pendingCostDollars={project.pendingForecastFinalCostCents != null ? (project.pendingForecastFinalCostCents / 100).toFixed(2) : ""}
+        pendingCostDollars={project.pendingForecastFinalCostCents != null ? (centsToNumber(project.pendingForecastFinalCostCents) / 100).toFixed(2) : ""}
         pendingDate={toDateInputValue(project.pendingForecastCompletionDate)}
         pendingCostNote={project.pendingForecastFinalCostNote ?? ""}
         pendingDateNote={project.pendingForecastCompletionNote ?? ""}
