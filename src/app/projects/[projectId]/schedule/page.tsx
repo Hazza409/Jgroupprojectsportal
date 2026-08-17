@@ -2,7 +2,7 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
-import { ScheduleGantt } from "@/components/ScheduleGantt";
+import { ScheduleView } from "@/components/ScheduleView";
 import { ScheduleUploadForm } from "./ScheduleUploadForm";
 import { AddTaskForm } from "./AddTaskForm";
 import { getCompany, companyShortName } from "@/lib/company";
@@ -13,10 +13,10 @@ export default async function SchedulePage({ params }: { params: { projectId: st
   const isBuilder = user.role === "BUILDER";
   const company = await getCompany();
 
-  const items = await db.scheduleItem.findMany({
-    where: { projectId },
-    orderBy: { sortOrder: "asc" },
-  });
+  const [items, project] = await Promise.all([
+    db.scheduleItem.findMany({ where: { projectId }, orderBy: { sortOrder: "asc" } }),
+    db.project.findUniqueOrThrow({ where: { id: projectId }, select: { name: true } }),
+  ]);
 
   return (
     <div>
@@ -44,7 +44,7 @@ export default async function SchedulePage({ params }: { params: { projectId: st
       {items.length === 0 ? (
         <div className="card text-stone-500">No schedule yet. Import an Excel programme or add tasks manually.</div>
       ) : (
-        <ScheduleGantt items={items} />
+        <ScheduleView items={items} projectName={project.name} />
       )}
     </div>
   );
