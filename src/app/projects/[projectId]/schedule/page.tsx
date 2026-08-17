@@ -44,7 +44,7 @@ export default async function SchedulePage({ params }: { params: { projectId: st
       {items.length === 0 ? (
         <div className="card text-stone-500">No schedule yet. Import an Excel programme or add tasks manually.</div>
       ) : (
-        <ScheduleView items={items} projectName={project.name} />
+        <ScheduleView items={items} projectName={project.name} projectId={projectId} isBuilder={isBuilder} />
       )}
     </div>
   );

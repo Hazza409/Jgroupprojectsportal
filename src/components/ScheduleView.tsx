@@ -13,7 +13,9 @@
 // status colour and milestones as labelled diamonds.
 // ─────────────────────────────────────────────────────────────
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { updateScheduleProgress } from "@/app/projects/[projectId]/schedule/actions";
 import { fmtDateShort } from "@/lib/dates";
 import {
   preparePhases,
@@ -47,10 +49,37 @@ function ProgressCell({ pct }: { pct: number }) {
   );
 }
 
-export function ScheduleView({ items, projectName }: { items: ScheduleItemLike[]; projectName: string }) {
+export function ScheduleView({
+  items,
+  projectName,
+  projectId,
+  isBuilder = false,
+}: {
+  items: ScheduleItemLike[];
+  projectName: string;
+  projectId: string;
+  isBuilder?: boolean;
+}) {
   const [view, setView] = useState<View>("list");
   const [zoom, setZoom] = useState(1);
   const [hidePast, setHidePast] = useState(false);
+  // Fortnightly progress update: edit every row, save once.
+  const [editing, setEditing] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [saving, startSaving] = useTransition();
+  const router = useRouter();
+
+  function saveProgress(form: HTMLFormElement) {
+    const fd = new FormData(form);
+    startSaving(async () => {
+      const res = await updateScheduleProgress(projectId, fd);
+      setSaveMsg(res.message);
+      if (res.ok) {
+        setEditing(false);
+        router.refresh();
+      }
+    });
+  }
 
   const phases = useMemo(() => preparePhases(items, projectName), [items, projectName]);
   const summary = useMemo(() => summarise(phases), [phases]);
@@ -143,6 +172,11 @@ export function ScheduleView({ items, projectName }: { items: ScheduleItemLike[]
           ))}
         </div>
         <div className="flex items-center gap-3">
+          {isBuilder && view === "list" && !editing && (
+            <button type="button" className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => { setEditing(true); setSaveMsg(null); }}>
+              Update progress
+            </button>
+          )}
           <label className="flex items-center gap-2 text-xs text-stone-500">
             <input type="checkbox" checked={hidePast} onChange={(e) => setHidePast(e.target.checked)} className="accent-brand" />
             Hide completed
@@ -157,8 +191,34 @@ export function ScheduleView({ items, projectName }: { items: ScheduleItemLike[]
         </div>
       </div>
 
+      {saveMsg && (
+        <p className="text-sm text-emerald-700 dark:text-emerald-200">{saveMsg}</p>
+      )}
+
       {view === "list" ? (
-        <ListView phases={visiblePhases} />
+        editing ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveProgress(e.currentTarget);
+            }}
+          >
+            <ListView phases={visiblePhases} editing />
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button type="submit" className="btn-primary" disabled={saving}>
+                {saving ? "Saving…" : "Save progress"}
+              </button>
+              <button type="button" className="btn-ghost" onClick={() => setEditing(false)} disabled={saving}>
+                Cancel
+              </button>
+              <span className="text-xs text-stone-400">
+                Enter each task&apos;s percentage complete. 100% marks it done.
+              </span>
+            </div>
+          </form>
+        ) : (
+          <ListView phases={visiblePhases} />
+        )
       ) : (
         <TimelineView phases={visiblePhases} zoom={zoom} />
       )}
@@ -167,7 +227,7 @@ export function ScheduleView({ items, projectName }: { items: ScheduleItemLike[]
 }
 
 /** Dates-first table. No horizontal scroll; nothing truncated. */
-function ListView({ phases }: { phases: ReturnType<typeof preparePhases> }) {
+function ListView({ phases, editing = false }: { phases: ReturnType<typeof preparePhases>; editing?: boolean }) {
   return (
     <div className="card p-0">
       <table className="w-full table-fixed text-xs sm:text-sm">
@@ -214,7 +274,25 @@ function ListView({ phases }: { phases: ReturnType<typeof preparePhases> }) {
                     {t.isMilestone ? "—" : t.durationDays > 0 ? t.durationDays : "—"}
                   </td>
                   <td className="px-2 py-2"><StatusChip status={t.status} /></td>
-                  <td className="px-2 py-2"><ProgressCell pct={t.percentComplete} /></td>
+                  <td className="px-2 py-2">
+                    {editing ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          name={`pct_${t.id}`}
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={5}
+                          defaultValue={Math.round(t.percentComplete)}
+                          className="input !w-16 !py-1 text-right text-xs"
+                          aria-label={`Progress for ${t.label}`}
+                        />
+                        <span className="text-xs text-stone-400">%</span>
+                      </div>
+                    ) : (
+                      <ProgressCell pct={t.percentComplete} />
+                    )}
+                  </td>
                 </tr>
               ))}
             </>

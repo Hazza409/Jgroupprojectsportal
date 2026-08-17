@@ -105,3 +105,47 @@ export async function deleteScheduleTask(projectId: string, taskId: string) {
   await db.scheduleItem.deleteMany({ where: { id: taskId, projectId } });
   revalidatePath(`/projects/${projectId}/schedule`);
 }
+
+/**
+ * Bulk-update task progress (Jake: the programme is updated fortnightly).
+ *
+ * The form posts one `pct_<taskId>` per row so a whole fortnight's update saves
+ * in a single action rather than a click per task. Ids are validated against
+ * the project — never trusted from the form — and values are clamped to 0–100.
+ * Only genuinely changed rows are written, so a no-op save touches nothing.
+ */
+export async function updateScheduleProgress(projectId: string, formData: FormData): Promise<ImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) return { ok: false, message: "Builder access required." };
+
+  const existing = await db.scheduleItem.findMany({
+    where: { projectId },
+    select: { id: true, percentComplete: true },
+  });
+  const current = new Map(existing.map((t) => [t.id, t.percentComplete]));
+
+  let changed = 0;
+  for (const [key, raw] of formData.entries()) {
+    if (!key.startsWith("pct_")) continue;
+    const id = key.slice(4);
+    if (!current.has(id)) continue; // not on this project — ignore silently
+
+    const text = String(raw).trim();
+    if (text === "") continue;
+    const n = Number(text);
+    if (!Number.isFinite(n)) continue;
+    const pct = Math.max(0, Math.min(100, Math.round(n)));
+
+    if (pct !== current.get(id)) {
+      await db.scheduleItem.update({ where: { id }, data: { percentComplete: pct } });
+      changed++;
+    }
+  }
+
+  revalidatePath(`/projects/${projectId}/schedule`);
+  revalidatePath(`/projects/${projectId}`);
+  return {
+    ok: true,
+    message: changed === 0 ? "No changes to save." : `Updated progress on ${changed} task${changed === 1 ? "" : "s"}.`,
+  };
+}
