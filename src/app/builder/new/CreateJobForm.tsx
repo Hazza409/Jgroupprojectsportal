@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -15,9 +16,12 @@ export function CreateJobForm() {
     setError(null);
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await createJob(form);
-      if (res.ok && res.projectId) {
-        router.push(`/projects/${res.projectId}`);
+      const res = await runAction(() => createJob(form));
+      // runAction can hand back a bare failure (stale build, server
+      // unreachable), which carries no projectId to navigate to.
+      const projectId = "projectId" in res ? res.projectId : undefined;
+      if (res.ok && projectId) {
+        router.push(`/projects/${projectId}`);
         router.refresh();
       } else {
         setError(res.message);

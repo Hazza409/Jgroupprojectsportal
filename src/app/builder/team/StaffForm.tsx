@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createStaff, type StaffResult } from "./actions";
@@ -15,7 +16,7 @@ export function StaffForm() {
     setResult(null);
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await createStaff(form);
+      const res = await runAction(() => createStaff(form));
       setResult(res);
       if (res.ok) {
         formRef.current?.reset();

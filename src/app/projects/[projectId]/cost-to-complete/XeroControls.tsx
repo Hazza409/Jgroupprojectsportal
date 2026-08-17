@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { syncXero, type SyncResult } from "./actions";
@@ -19,7 +20,7 @@ export function XeroControls({
 
   function onSync() {
     startTransition(async () => {
-      const res = await syncXero(projectId);
+      const res = await runAction(() => syncXero(projectId));
       setResult(res);
       if (res.ok) router.refresh();
     });

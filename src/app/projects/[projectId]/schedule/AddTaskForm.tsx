@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addScheduleTask, type ImportResult } from "./actions";
@@ -16,7 +17,7 @@ export function AddTaskForm({ projectId }: { projectId: string }) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await addScheduleTask(projectId, form);
+      const res = await runAction(() => addScheduleTask(projectId, form));
       setResult(res);
       if (res.ok) {
         formRef.current?.reset();

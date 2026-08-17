@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useRef, useState, useTransition } from "react";
 import { changePassword, type ChangePasswordResult } from "./actions";
 
@@ -12,7 +13,7 @@ export function ChangePasswordForm() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await changePassword(formData);
+      const res = await runAction(() => changePassword(formData));
       setResult(res);
       if (res.ok) formRef.current?.reset();
     });

@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addEstimateLine, type ImportResult } from "./actions";
@@ -15,7 +16,7 @@ export function AddLineForm({ projectId }: { projectId: string }) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await addEstimateLine(projectId, form);
+      const res = await runAction(() => addEstimateLine(projectId, form));
       setResult(res);
       if (res.ok) {
         formRef.current?.reset();

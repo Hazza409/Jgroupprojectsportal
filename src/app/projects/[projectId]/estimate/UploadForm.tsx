@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { importEstimate, type ImportResult } from "./actions";
@@ -13,7 +14,7 @@ export function UploadForm({ projectId }: { projectId: string }) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await importEstimate(projectId, form);
+      const res = await runAction(() => importEstimate(projectId, form));
       setResult(res);
       if (res.ok) router.refresh();
     });

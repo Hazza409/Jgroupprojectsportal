@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { setForecasts, signOffForecast, type SimpleResult } from "@/app/projects/[projectId]/actions";
@@ -49,7 +50,7 @@ export function ForecastCard({
 
   function run(fn: () => Promise<SimpleResult>) {
     startTransition(async () => {
-      const res = await fn();
+      const res = await runAction(() => fn());
       setResult(res);
       router.refresh();
     });

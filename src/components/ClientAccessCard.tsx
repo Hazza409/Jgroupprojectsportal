@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -25,7 +26,7 @@ function ClientRow({ projectId, client }: { projectId: string; client: Client })
     setResult(null);
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await setClientPassword(projectId, client.id, form);
+      const res = await runAction(() => setClientPassword(projectId, client.id, form));
       setResult(res);
       if (res.ok) setValue("");
     });
@@ -88,7 +89,7 @@ function AddClientForm({ projectId }: { projectId: string }) {
     setResult(null);
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await addClientToProject(projectId, form);
+      const res = await runAction(() => addClientToProject(projectId, form));
       setResult(res);
       if (res.ok) {
         formRef.current?.reset();

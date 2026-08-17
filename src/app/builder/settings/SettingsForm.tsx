@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateCompany, uploadLogo, removeLogo, type SettingsResult } from "./actions";
@@ -15,7 +16,7 @@ export function SettingsForm({ company, logoUrl }: { company: Company; logoUrl: 
   function run(action: () => Promise<SettingsResult>) {
     setResult(null);
     startTransition(async () => {
-      const res = await action();
+      const res = await runAction(() => action());
       setResult(res);
       if (res.ok) router.refresh();
     });

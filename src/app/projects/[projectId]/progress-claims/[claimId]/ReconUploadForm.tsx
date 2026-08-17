@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { importReconSheet, type ReconImportResult } from "../actions";
@@ -21,7 +22,7 @@ export function ReconUploadForm({
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await importReconSheet(projectId, claimId, form);
+      const res = await runAction(() => importReconSheet(projectId, claimId, form));
       setResult(res);
       if (res.ok) router.refresh();
     });

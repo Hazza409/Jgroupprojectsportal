@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -15,7 +16,7 @@ export function CurrentCostsImport({ projectId }: { projectId: string }) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await importCurrentCosts(projectId, form);
+      const res = await runAction(() => importCurrentCosts(projectId, form));
       setResult(res);
       if (res.ok) router.refresh();
     });

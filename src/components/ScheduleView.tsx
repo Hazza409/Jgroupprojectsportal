@@ -13,10 +13,11 @@
 // status colour and milestones as labelled diamonds.
 // ─────────────────────────────────────────────────────────────
 
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateScheduleProgress } from "@/app/projects/[projectId]/schedule/actions";
 import { DateField } from "@/components/DateField";
+import { runAction } from "@/lib/actionResult";
 import { fmtDateShort } from "@/lib/dates";
 import {
   preparePhases,
@@ -74,15 +75,18 @@ export function ScheduleView({
   const [hidePast, setHidePast] = useState(false);
   // Fortnightly progress update: edit every row, save once.
   const [editing, setEditing] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, startSaving] = useTransition();
   const router = useRouter();
 
   function saveProgress(form: HTMLFormElement) {
     const fd = new FormData(form);
     startSaving(async () => {
-      const res = await updateScheduleProgress(projectId, fd);
-      setSaveMsg(res.message);
+      const res = await runAction(() => updateScheduleProgress(projectId, fd));
+      setSaveMsg({ ok: res.ok, text: res.message });
+      // Only leave edit mode once the save actually landed. On failure the
+      // rows stay open with everything still typed into them, so a retry
+      // costs a click rather than re-keying the whole update.
       if (res.ok) {
         setEditing(false);
         router.refresh();
@@ -205,7 +209,16 @@ export function ScheduleView({
       </div>
 
       {saveMsg && (
-        <p className="text-sm text-emerald-700 dark:text-emerald-200">{saveMsg}</p>
+        <p
+          className={`text-sm ${
+            saveMsg.ok
+              ? "text-emerald-700 dark:text-emerald-200"
+              : "rounded-md bg-red-500/10 px-3 py-2 text-red-700 dark:text-red-300"
+          }`}
+          role={saveMsg.ok ? undefined : "alert"}
+        >
+          {saveMsg.text}
+        </p>
       )}
 
       {view === "list" ? (
@@ -263,9 +276,17 @@ function ListView({ phases, editing = false }: { phases: ReturnType<typeof prepa
           </tr>
         </thead>
         <tbody className="divide-y divide-stone-100 align-top">
+          {/*
+            The keyed element must be the FRAGMENT — it's what the map returns.
+            A bare <> can't take one, so React fell back to position. That is
+            not cosmetic here: the rows hold uncontrolled inputs, so when the
+            list changes shape (the "hide past" filter, or a save re-render)
+            React re-uses DOM nodes by index and typed values can end up
+            against the wrong task.
+          */}
           {phases.map((p) => (
-            <>
-              <tr key={p.name} className="bg-stone-100/60">
+            <Fragment key={p.name}>
+              <tr className="bg-stone-100/60">
                 <td className="px-3 py-2 text-xs font-semibold uppercase tracking-wide break-words">{p.name}</td>
                 <td className="px-2 py-2 text-xs tabular-nums text-stone-500">{fmtDateShort(p.start)}</td>
                 <td className="px-2 py-2 text-xs tabular-nums text-stone-500">{fmtDateShort(p.end)}</td>
@@ -323,7 +344,11 @@ function ListView({ phases, editing = false }: { phases: ReturnType<typeof prepa
                           type="number"
                           min={0}
                           max={100}
-                          step={5}
+                          // step must stay 1. Anything coarser (5 for tidy
+                          // stepper arrows) makes the browser reject 62, 47,
+                          // 33 — it silently blocks the whole form, so Save
+                          // looks broken rather than saying anything.
+                          step={1}
                           defaultValue={Math.round(t.percentComplete)}
                           className="input !w-16 !py-1 text-right text-xs"
                           aria-label={`Progress for ${t.label}`}
@@ -336,7 +361,7 @@ function ListView({ phases, editing = false }: { phases: ReturnType<typeof prepa
                   </td>
                 </tr>
               ))}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>

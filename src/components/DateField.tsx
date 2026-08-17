@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 // ─────────────────────────────────────────────────────────────
 // ONE date convention, everywhere (Jake §6).
@@ -68,10 +68,22 @@ export function DateField({
   const hiddenValue = isoDate ? (withTime ? `${isoDate}T${time || "09:00"}` : isoDate) : "";
   const invalid = text.trim().length > 0 && !parsed;
 
+  // A typo must never submit. Unparseable text posts an EMPTY hidden value,
+  // which the server reads as "clear this date" — so "25/13/2026" would
+  // silently wipe a finish date instead of complaining. Marking the visible
+  // input invalid makes the browser block the form and say why.
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    inputRef.current?.setCustomValidity(
+      invalid ? "Enter the date as DD/MM/YYYY — day first." : "",
+    );
+  }, [invalid]);
+
   return (
     <div>
       <div className="flex items-center gap-2">
         <input
+          ref={inputRef}
           type="text"
           inputMode="numeric"
           autoComplete="off"

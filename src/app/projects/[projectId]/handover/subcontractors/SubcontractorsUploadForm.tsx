@@ -1,5 +1,6 @@
 "use client";
 
+import { runAction } from "@/lib/actionResult";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { importSubcontractors, type ImportResult } from "./actions";
@@ -13,7 +14,7 @@ export function SubcontractorsUploadForm({ projectId }: { projectId: string }) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
     startTransition(async () => {
-      const res = await importSubcontractors(projectId, form);
+      const res = await runAction(() => importSubcontractors(projectId, form));
       setResult(res);
       if (res.ok) router.refresh();
     });
