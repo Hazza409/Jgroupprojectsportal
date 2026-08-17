@@ -93,13 +93,29 @@ export const STATUS_STYLE: Record<TaskStatus, { bar: string; chip: string }> = {
 export function preparePhases(items: ScheduleItemLike[], projectName: string, now: Date = new Date()): PreparedPhase[] {
   const phases: PreparedPhase[] = [];
 
+  // Exported programmes flatten a work-breakdown structure, so a PARENT row
+  // appears as a task AND again as the heading for its own children:
+  //   group "Penklis House"          task "8 Fisher Avenue"        (whole-job duration)
+  //   group "8 Fisher Avenue"        task "Key Project Milestones" (whole-job duration)
+  //   group "Key Project Milestones" task "Tender Submission Date" (real work)
+  // Any task whose name is also used as a group heading is one of those parent
+  // rows — the heading already represents it, so drop the duplicate. Matching
+  // only against the row's OWN group misses every level but the last.
+  const groupNames = new Set(
+    items
+      .map((i) => (i.group ?? "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+
   for (const it of items) {
     const phaseName = (it.group ?? "General").trim();
     const label = stripProjectPrefix(it.taskName, projectName);
+    const key = label.trim().toLowerCase();
 
-    // A row that merely restates its own phase is a summary line from the
-    // spreadsheet — the phase header already carries that information.
-    const isSummaryEcho = label.trim().toLowerCase() === phaseName.toLowerCase();
+    const isSummaryEcho =
+      key === phaseName.toLowerCase() || // restates its own heading
+      groupNames.has(key) || // is a heading elsewhere = parent summary row
+      key === projectName.trim().toLowerCase(); // the project itself as a row
 
     let phase = phases[phases.length - 1];
     if (!phase || phase.name !== phaseName) {
