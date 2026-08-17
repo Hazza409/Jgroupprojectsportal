@@ -47,12 +47,15 @@ export function DateField({
   defaultValue,
   required = false,
   withTime = false,
+  compact = false,
 }: {
   name: string;
   /** ISO ("2026-07-27" or "2026-07-27T14:30"). */
   defaultValue?: string;
   required?: boolean;
   withTime?: boolean;
+  /** Table-cell sizing: no confirmation line unless the input is invalid. */
+  compact?: boolean;
 }) {
   const [text, setText] = useState(() => toDayFirst(defaultValue));
   const [time, setTime] = useState(() => timePart(defaultValue));
@@ -77,7 +80,7 @@ export function DateField({
           required={required}
           onChange={(e) => setText(e.target.value)}
           aria-invalid={invalid}
-          className={`input ${invalid ? "border-red-500" : ""}`}
+          className={`input ${compact ? "!py-1 text-xs" : ""} ${invalid ? "border-red-500" : ""}`}
         />
         {withTime && (
           <input
@@ -91,13 +94,15 @@ export function DateField({
       </div>
       {/* What the server actually receives. */}
       <input type="hidden" name={name} value={hiddenValue} />
-      <p className={`mt-1 text-xs ${invalid ? "text-red-600 dark:text-red-300" : "text-stone-400"}`}>
-        {invalid
-          ? "Enter the date as DD/MM/YYYY — day first."
-          : parsed
-            ? `→ ${LONG.format(new Date(parsed.y, parsed.m - 1, parsed.d))}${withTime && time ? ` at ${time}` : ""}`
-            : "Day first — e.g. 27/07/2026"}
-      </p>
+      {(!compact || invalid) && (
+        <p className={`mt-1 text-xs ${invalid ? "text-red-600 dark:text-red-300" : "text-stone-400"}`}>
+          {invalid
+            ? "Enter the date as DD/MM/YYYY — day first."
+            : parsed
+              ? `→ ${LONG.format(new Date(parsed.y, parsed.m - 1, parsed.d))}${withTime && time ? ` at ${time}` : ""}`
+              : "Day first — e.g. 27/07/2026"}
+        </p>
+      )}
     </div>
   );
 }

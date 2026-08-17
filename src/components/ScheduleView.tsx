@@ -16,6 +16,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateScheduleProgress } from "@/app/projects/[projectId]/schedule/actions";
+import { DateField } from "@/components/DateField";
 import { fmtDateShort } from "@/lib/dates";
 import {
   preparePhases,
@@ -28,6 +29,14 @@ import {
 } from "@/lib/schedule";
 
 type View = "list" | "timeline";
+
+/** Date → "YYYY-MM-DD" for DateField's defaultValue. */
+function isoDay(d: Date | null | undefined): string {
+  if (!d) return "";
+  const x = new Date(d);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}`;
+}
 
 function StatusChip({ status }: { status: PreparedTask["status"] }) {
   return (
@@ -172,9 +181,13 @@ export function ScheduleView({
           ))}
         </div>
         <div className="flex items-center gap-3">
-          {isBuilder && view === "list" && !editing && (
-            <button type="button" className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => { setEditing(true); setSaveMsg(null); }}>
-              Update progress
+          {isBuilder && !editing && (
+            <button
+              type="button"
+              className="btn-ghost !px-3 !py-1.5 text-sm"
+              onClick={() => { setView("list"); setEditing(true); setSaveMsg(null); }}
+            >
+              Edit tasks
             </button>
           )}
           <label className="flex items-center gap-2 text-xs text-stone-500">
@@ -212,7 +225,7 @@ export function ScheduleView({
                 Cancel
               </button>
               <span className="text-xs text-stone-400">
-                Enter each task&apos;s percentage complete. 100% marks it done.
+                Edit dates, days and progress on any row. Leave Days blank to recalculate it from the dates.
               </span>
             </div>
           </form>
@@ -232,12 +245,12 @@ function ListView({ phases, editing = false }: { phases: ReturnType<typeof prepa
     <div className="card p-0">
       <table className="w-full table-fixed text-xs sm:text-sm">
         <colgroup>
-          <col className="w-[38%]" />
-          <col className="w-[13%]" />
-          <col className="w-[13%]" />
-          <col className="w-[9%]" />
+          <col className={editing ? "w-[26%]" : "w-[38%]"} />
+          <col className={editing ? "w-[17%]" : "w-[13%]"} />
+          <col className={editing ? "w-[17%]" : "w-[13%]"} />
+          <col className={editing ? "w-[10%]" : "w-[9%]"} />
           <col className="w-[12%]" />
-          <col className="w-[15%]" />
+          <col className={editing ? "w-[18%]" : "w-[15%]"} />
         </colgroup>
         <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
           <tr>
@@ -266,12 +279,40 @@ function ListView({ phases, editing = false }: { phases: ReturnType<typeof prepa
                     {t.isMilestone && <span className="mr-1 text-stone-400">◆</span>}
                     {t.label}
                   </td>
-                  <td className="px-2 py-2 tabular-nums whitespace-nowrap text-stone-600">{fmtDateShort(t.startDate)}</td>
                   <td className="px-2 py-2 tabular-nums whitespace-nowrap text-stone-600">
-                    {t.isMilestone ? "—" : fmtDateShort(t.endDate)}
+                    {editing ? (
+                      <DateField name={`start_${t.id}`} defaultValue={isoDay(t.startDate)} compact />
+                    ) : (
+                      fmtDateShort(t.startDate)
+                    )}
+                  </td>
+                  <td className="px-2 py-2 tabular-nums whitespace-nowrap text-stone-600">
+                    {editing ? (
+                      <DateField name={`finish_${t.id}`} defaultValue={isoDay(t.endDate)} compact />
+                    ) : t.isMilestone ? (
+                      "—"
+                    ) : (
+                      fmtDateShort(t.endDate)
+                    )}
                   </td>
                   <td className="px-2 py-2 text-right tabular-nums text-stone-500">
-                    {t.isMilestone ? "—" : t.durationDays > 0 ? t.durationDays : "—"}
+                    {editing ? (
+                      <input
+                        name={`days_${t.id}`}
+                        type="number"
+                        min={0}
+                        defaultValue={t.durationDays > 0 ? t.durationDays : ""}
+                        placeholder="auto"
+                        className="input !w-16 !py-1 text-right text-xs"
+                        aria-label={`Days for ${t.label}`}
+                      />
+                    ) : t.isMilestone ? (
+                      "—"
+                    ) : t.durationDays > 0 ? (
+                      t.durationDays
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="px-2 py-2"><StatusChip status={t.status} /></td>
                   <td className="px-2 py-2">

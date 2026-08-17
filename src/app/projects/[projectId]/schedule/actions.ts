@@ -107,12 +107,16 @@ export async function deleteScheduleTask(projectId: string, taskId: string) {
 }
 
 /**
- * Bulk-update task progress (Jake: the programme is updated fortnightly).
+ * Bulk-edit the programme (Jake: updated fortnightly).
  *
- * The form posts one `pct_<taskId>` per row so a whole fortnight's update saves
- * in a single action rather than a click per task. Ids are validated against
- * the project — never trusted from the form — and values are clamped to 0–100.
- * Only genuinely changed rows are written, so a no-op save touches nothing.
+ * The form posts one field per task per column — `start_<id>`, `finish_<id>`,
+ * `days_<id>`, `pct_<id>` — so a whole fortnight's update saves in one action
+ * rather than a click per row. Ids are validated against the project and never
+ * trusted from the form; only genuinely changed rows are written.
+ *
+ * Days is derived from the dates when left blank, because a duration left over
+ * from the old dates would otherwise silently contradict them. A value typed in
+ * explicitly always wins.
  */
 export async function updateScheduleProgress(projectId: string, formData: FormData): Promise<ImportResult> {
   const user = await assertProjectAccess(projectId);
@@ -120,32 +124,71 @@ export async function updateScheduleProgress(projectId: string, formData: FormDa
 
   const existing = await db.scheduleItem.findMany({
     where: { projectId },
-    select: { id: true, percentComplete: true },
+    select: { id: true, percentComplete: true, durationDays: true, startDate: true, endDate: true },
   });
-  const current = new Map(existing.map((t) => [t.id, t.percentComplete]));
+
+  const parseDate = (v: FormDataEntryValue | null): Date | null => {
+    const t = String(v ?? "").trim();
+    if (!t) return null;
+    const d = new Date(t);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+  const sameDay = (a: Date | null, b: Date | null) =>
+    (a === null && b === null) || (a !== null && b !== null && a.toISOString().slice(0, 10) === b.toISOString().slice(0, 10));
 
   let changed = 0;
-  for (const [key, raw] of formData.entries()) {
-    if (!key.startsWith("pct_")) continue;
-    const id = key.slice(4);
-    if (!current.has(id)) continue; // not on this project — ignore silently
+  const problems: string[] = [];
 
-    const text = String(raw).trim();
-    if (text === "") continue;
-    const n = Number(text);
-    if (!Number.isFinite(n)) continue;
-    const pct = Math.max(0, Math.min(100, Math.round(n)));
+  for (const row of existing) {
+    const hasAny = ["start_", "finish_", "days_", "pct_"].some((p) => formData.has(p + row.id));
+    if (!hasAny) continue;
 
-    if (pct !== current.get(id)) {
-      await db.scheduleItem.update({ where: { id }, data: { percentComplete: pct } });
+    const data: { percentComplete?: number; durationDays?: number; startDate?: Date | null; endDate?: Date | null } = {};
+
+    // Progress
+    const pctRaw = String(formData.get(`pct_${row.id}`) ?? "").trim();
+    if (pctRaw !== "") {
+      const n = Number(pctRaw);
+      if (Number.isFinite(n)) {
+        const pct = Math.max(0, Math.min(100, Math.round(n)));
+        if (pct !== row.percentComplete) data.percentComplete = pct;
+      }
+    }
+
+    // Dates
+    const start = formData.has(`start_${row.id}`) ? parseDate(formData.get(`start_${row.id}`)) : row.startDate;
+    const finish = formData.has(`finish_${row.id}`) ? parseDate(formData.get(`finish_${row.id}`)) : row.endDate;
+    if (start && finish && finish < start) {
+      problems.push("A finish date was before its start date and was not saved.");
+      continue;
+    }
+    if (formData.has(`start_${row.id}`) && !sameDay(start, row.startDate)) data.startDate = start;
+    if (formData.has(`finish_${row.id}`) && !sameDay(finish, row.endDate)) data.endDate = finish;
+
+    // Days — explicit value wins; blank re-derives from the dates.
+    const daysRaw = String(formData.get(`days_${row.id}`) ?? "").trim();
+    if (daysRaw !== "") {
+      const n = Number(daysRaw);
+      if (Number.isFinite(n) && n >= 0) {
+        const days = Math.round(n);
+        if (days !== row.durationDays) data.durationDays = days;
+      }
+    } else if (start && finish) {
+      const derived = Math.max(0, Math.round((finish.getTime() - start.getTime()) / 86_400_000));
+      if (derived !== row.durationDays) data.durationDays = derived;
+    }
+
+    if (Object.keys(data).length > 0) {
+      await db.scheduleItem.update({ where: { id: row.id }, data });
       changed++;
     }
   }
 
   revalidatePath(`/projects/${projectId}/schedule`);
   revalidatePath(`/projects/${projectId}`);
+  const note = problems.length ? ` ${[...new Set(problems)].join(" ")}` : "";
   return {
-    ok: true,
-    message: changed === 0 ? "No changes to save." : `Updated progress on ${changed} task${changed === 1 ? "" : "s"}.`,
+    ok: problems.length === 0,
+    message: (changed === 0 ? "No changes to save." : `Updated ${changed} task${changed === 1 ? "" : "s"}.`) + note,
   };
 }
