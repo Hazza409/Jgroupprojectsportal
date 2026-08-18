@@ -5,6 +5,7 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { ClientAccessCard } from "@/components/ClientAccessCard";
 import { ForecastCard } from "@/components/ForecastCard";
 import { ClientActivityCard } from "@/components/ClientActivityCard";
+import { JobDetailsCard } from "@/components/JobDetailsCard";
 import { getCompany, companyShortName } from "@/lib/company";
 import { fmtDate, fmtDateTime, toDateInputValue } from "@/lib/dates";
 import { forecastGate } from "@/lib/forecast";
@@ -27,6 +28,9 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
   const project = await db.project.findUniqueOrThrow({
     where: { id: projectId },
     select: {
+      name: true,
+      address: true,
+      contractValueCents: true,
       forecastFinalCostCents: true,
       forecastCompletionDate: true,
       forecastUpdatedAt: true,
@@ -47,6 +51,12 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
   return (
     <div className="space-y-6">
       <ModuleHeader title="Settings" description={`Project administration. Visible to ${companyShortName(company)} staff only.`} />
+      <JobDetailsCard
+        projectId={projectId}
+        name={project.name}
+        address={project.address}
+        contractDollars={(centsToNumber(project.contractValueCents) / 100).toFixed(2)}
+      />
       <ForecastCard
         projectId={projectId}
         pendingCostDollars={project.pendingForecastFinalCostCents != null ? (centsToNumber(project.pendingForecastFinalCostCents) / 100).toFixed(2) : ""}

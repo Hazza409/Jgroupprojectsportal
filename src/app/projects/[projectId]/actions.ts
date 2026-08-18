@@ -259,3 +259,44 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
     message: `Signed off by all approvers (${after.signed.map((s) => s.name).join(", ")}) — figures are now published to the client.`,
   };
 }
+
+// ─────────────────────────────────────────────────────────────
+// Builder corrects a job's headline details.
+//
+// These were writable only at creation, so a mistyped contract value could
+// only be fixed by deleting the job — taking the estimate, claims, photos and
+// documents with it. A digit dropped while re-keying the figure is exactly the
+// kind of thing that needs a two-second fix, not a rebuild.
+//
+// Contract value is a display figure: nothing computes from it (Cost to
+// Complete derives its own budget from the estimate and approved variations),
+// so correcting it can't move any money that's already been claimed.
+// ─────────────────────────────────────────────────────────────
+export async function updateJobDetails(projectId: string, formData: FormData): Promise<SimpleResult> {
+  const actor = await assertProjectAccess(projectId);
+  if (actor.role !== Role.BUILDER) throw new AccessError("Only builders edit job details");
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return { ok: false, message: "Job name is required." };
+  const address = String(formData.get("address") ?? "").trim() || null;
+
+  // Same guards as createJob — one rule for the same figure.
+  const contractValueCents = dollarsToCents(String(formData.get("contractValue") ?? "0"));
+  if (!Number.isFinite(contractValueCents) || contractValueCents < 0) {
+    return { ok: false, message: "Contract value must be a positive amount." };
+  }
+  if (contractValueCents > Number.MAX_SAFE_INTEGER) {
+    return { ok: false, message: "Contract value is too large." };
+  }
+
+  await db.project.update({
+    where: { id: projectId },
+    data: { name, address, contractValueCents },
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath(`/projects/${projectId}/settings`);
+  revalidatePath("/builder");
+  revalidatePath("/projects");
+  return { ok: true, message: "Job details saved." };
+}
