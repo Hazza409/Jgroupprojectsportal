@@ -180,6 +180,19 @@ export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12
 
   if (supplierLines.length === 0 && budgetOverview.length === 0) {
     warnings.push("Could not find supplier or budget-overview rows — check the sheet matches the expected reconciliation format.");
+  } else if (budgetOverview.length === 0) {
+    // Warn on EACH section independently. Requiring both to be missing hid the
+    // worst case: the supplier side parses, so the claim's money is right and
+    // the import reports success, but with no budget-overview rows there is
+    // nothing to split it by cost code — the whole claim lands in Cost to
+    // Complete as one Unallocated lump, silently.
+    warnings.push(
+      "No Budget Overview rows found, so this claim can't be split by cost code — " +
+        "its costs will show against Unallocated in Cost to Complete. Check the sheet has a " +
+        "'Budget Overview' heading with the cost-code rows directly beneath it.",
+    );
+  } else if (supplierLines.length === 0) {
+    warnings.push("No supplier invoice rows found — the supplier backup for this claim will be empty.");
   }
 
   return { meta, supplierLines, budgetOverview, costsCents, labourCents, marginPercent, marginCents, subtotalCents, gstCents, totalCents, warnings };

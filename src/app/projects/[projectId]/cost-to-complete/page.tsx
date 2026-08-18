@@ -59,6 +59,23 @@ export default async function CostToCompletePage({
     .filter((c) => c.headline > 0);
   const pendingTotal = pending.reduce((a, c) => a + c.headline, 0);
 
+  // WHY money is sitting in Unallocated. The row on its own is a dead end — it
+  // shows a total and nothing about what caused it, and the two causes need
+  // opposite fixes:
+  //   · "not itemised by cost code" → the sheet had no Budget Overview rows, so
+  //     there was nothing to split by. Fix the sheet, re-import.
+  //   · a named line → the line parsed but its name matched no cost code. Fix
+  //     the name (either end), then "Re-match claim costs".
+  const unallocatedSources = isBuilder
+    ? await db.costActual.findMany({
+        where: { projectId, costCodeId: null, amountCents: { not: 0 } },
+        orderBy: { amountCents: "desc" },
+        select: { id: true, description: true, amountCents: true, xeroSourceId: true },
+      })
+    : [];
+  const unmatchedNames = unallocatedSources.filter((a) => !a.xeroSourceId?.endsWith(":remainder"));
+  const unitemised = unallocatedSources.filter((a) => a.xeroSourceId?.endsWith(":remainder"));
+
   // Aliases so the table markup below stays unchanged (all values incl margin+GST).
   const rows = ctc.rows.map((r) => ({
     id: r.id, code: r.code, name: r.name,
@@ -171,6 +188,59 @@ export default async function CostToCompletePage({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* Why is Unallocated non-zero? Name the cause and the fix. */}
+      {isBuilder && unallocated !== 0 && (
+        <div className="card mb-6 border-amber-500/40 bg-amber-500/10">
+          <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+            {formatCents(unallocated)} isn&apos;t split by cost code
+          </p>
+          {unitemised.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-800/80 dark:text-amber-200/80">
+                Not itemised on the sheet — {formatCents(inclMarginGst(unitemised.reduce((a, u) => a + u.amountCents, 0), company))}
+              </p>
+              <p className="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
+                These claims had no <strong>Budget Overview</strong> rows, so there was nothing to split their
+                costs by. The money is counted in the totals, but it can&apos;t appear against a trade until the
+                sheet is re-imported with that section present.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {unitemised.map((u) => (
+                  <li key={u.id} className="flex justify-between gap-3 text-sm">
+                    <span>{u.description}</span>
+                    <span className="tabular-nums">{formatCents(inclMarginGst(u.amountCents, company))}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {unmatchedNames.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-800/80 dark:text-amber-200/80">
+                No matching cost code — {formatCents(inclMarginGst(unmatchedNames.reduce((a, u) => a + u.amountCents, 0), company))}
+              </p>
+              <p className="mt-1 text-sm text-amber-900/90 dark:text-amber-100/90">
+                These lines came through, but their names don&apos;t match any cost code on this job. Rename at
+                either end so they agree, then press <strong>Re-match claim costs</strong>.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {unmatchedNames.slice(0, 15).map((u) => (
+                  <li key={u.id} className="flex justify-between gap-3 text-sm">
+                    <span>{u.description}</span>
+                    <span className="tabular-nums">{formatCents(inclMarginGst(u.amountCents, company))}</span>
+                  </li>
+                ))}
+              </ul>
+              {unmatchedNames.length > 15 && (
+                <p className="mt-1 text-xs text-amber-800/80 dark:text-amber-200/80">
+                  + {unmatchedNames.length - 15} more
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
