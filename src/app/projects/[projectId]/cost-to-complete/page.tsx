@@ -2,7 +2,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, inclMarginGst } from "@/lib/money";
 import { getCompany, companyShortName } from "@/lib/company";
-import { computeCostToComplete, overrunSummary } from "@/lib/claims";
+import { computeCostToComplete, overrunSummary, claimHeadlineCents } from "@/lib/claims";
 import Link from "next/link";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { isConnected } from "@/lib/xero/tokens";
@@ -38,6 +38,26 @@ export default async function CostToCompletePage({
       select: { id: true, title: true, totalCents: true },
     }),
   ]);
+
+  // Claims that have been entered but haven't reached these figures yet. Costs
+  // post to Current to Date on APPROVAL, so a builder who has just entered an
+  // invoice sees this page unchanged and has no way to tell whether the link is
+  // broken or the claim simply isn't approved. Builder-only — draft claims are
+  // internal until issued.
+  const pendingClaims = isBuilder
+    ? await db.progressClaim.findMany({
+        where: { projectId, status: { in: ["DRAFT", "SUBMITTED"] } },
+        orderBy: { claimNumber: "asc" },
+        select: {
+          id: true, claimNumber: true, status: true, periodLabel: true,
+          totalCents: true, lines: { select: { claimedAmountCents: true } },
+        },
+      })
+    : [];
+  const pending = pendingClaims
+    .map((c) => ({ ...c, headline: claimHeadlineCents(c, company) }))
+    .filter((c) => c.headline > 0);
+  const pendingTotal = pending.reduce((a, c) => a + c.headline, 0);
 
   // Aliases so the table markup below stays unchanged (all values incl margin+GST).
   const rows = ctc.rows.map((r) => ({
@@ -116,6 +136,43 @@ export default async function CostToCompletePage({
           </div>
         ))}
       </div>
+
+      {/*
+        Entered but not yet in the figures above. Without this the page is
+        silent about the single most common question: "I put the invoice in,
+        why hasn't Current to Date moved?"
+      */}
+      {pending.length > 0 && (
+        <div className="card mb-6 border-amber-500/40 bg-amber-500/10">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              {formatCents(pendingTotal)} claimed but not yet in Current to Date
+            </p>
+            <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+              Claim costs post here when the claim is approved.
+            </p>
+          </div>
+          <ul className="mt-3 divide-y divide-amber-500/20">
+            {pending.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-sm">
+                <Link
+                  href={`/projects/${projectId}/progress-claims/${c.id}`}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Claim #{c.claimNumber}
+                  {c.periodLabel ? ` — ${c.periodLabel}` : ""}
+                </Link>
+                <span className="flex items-center gap-3">
+                  <span className="tabular-nums">{formatCents(c.headline)}</span>
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                    {c.status === "SUBMITTED" ? "Awaiting client" : "Draft"}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {searchParams.xero === "connected" && (
         <div className="card mb-4 border-emerald-500/30 dark:border-emerald-400/30 bg-emerald-500/10 dark:bg-emerald-400/10 text-sm text-emerald-700 dark:text-emerald-200">

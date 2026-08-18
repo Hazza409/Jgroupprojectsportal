@@ -133,7 +133,7 @@ async function relinkClaimLines(claimId: string, codes: CodeRef[]): Promise<numb
 export async function materializeClaimActuals(projectId: string, claimId: string): Promise<number> {
   const claim = await db.progressClaim.findFirst({
     where: { id: claimId, projectId, status: ClaimStatus.APPROVED },
-    select: { id: true, claimNumber: true, approvedAt: true, labourCents: true },
+    select: { id: true, claimNumber: true, approvedAt: true, labourCents: true, costsCents: true },
   });
   if (!claim) return 0;
 
@@ -183,6 +183,47 @@ export async function materializeClaimActuals(projectId: string, claimId: string
       },
       update: { costCodeId: labourCode?.id ?? null, amountCents: claim.labourCents },
     });
+  }
+
+  // The recon sheet's SUMMARY is authoritative — the same rule Cost to Complete
+  // already applies to variations ("park the difference so the column always
+  // sums to the total").
+  //
+  // It matters because importReconSheet only creates line items when it finds a
+  // budget-overview section. When that section doesn't parse, the claim still
+  // stores its labour/costs summary but has NO lines, so approving it posted
+  // labour and nothing else — Current to Date silently under-read by the whole
+  // supplier/subcontract spend while the claim drew down the budget in full.
+  // That's the "claims aren't talking to Cost to Complete" gap.
+  //
+  // Park whatever the lines don't account for against no cost code, where the
+  // CTC already shows it as Unallocated. Base figures only: labour and costs are
+  // stored ex-margin/ex-GST, and CTC grosses them up once on the way out.
+  const summaryBase = claim.labourCents + claim.costsCents;
+  if (summaryBase > 0) {
+    const postedBase =
+      sumCents(lines.map((l) => l.claimedAmountCents)) +
+      (claim.labourCents !== 0 && !labourCoveredByLines ? claim.labourCents : 0);
+    const remainder = summaryBase - postedBase;
+    const xeroSourceId = `claim:${claim.id}:remainder`;
+    if (remainder !== 0) {
+      await db.costActual.upsert({
+        where: { projectId_xeroSourceId: { projectId, xeroSourceId } },
+        create: {
+          projectId,
+          costCodeId: null,
+          xeroSourceId,
+          description: `Claim #${claim.claimNumber} — not itemised by cost code`,
+          amountCents: remainder,
+          occurredAt,
+        },
+        update: { amountCents: remainder },
+      });
+    } else {
+      // Re-running after a corrected sheet must clear a previously parked
+      // balance, or it would be counted twice.
+      await db.costActual.deleteMany({ where: { projectId, xeroSourceId } });
+    }
   }
   return lines.length;
 }
