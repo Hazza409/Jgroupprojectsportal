@@ -199,6 +199,15 @@ export async function materializeClaimActuals(projectId: string, claimId: string
   // Park whatever the lines don't account for against no cost code, where the
   // CTC already shows it as Unallocated. Base figures only: labour and costs are
   // stored ex-margin/ex-GST, and CTC grosses them up once on the way out.
+  //
+  // ONE DIRECTION ONLY: park a shortfall, never a negative. The summary and the
+  // line items come from two INDEPENDENT sections of the sheet (supplier totals
+  // vs budget overview), so either can fail to parse on its own. If the supplier
+  // total is the half that's missing, costsCents reads 0 while the lines are
+  // perfectly good — and a signed remainder would post a negative that cancels
+  // those lines and leaves the claim contributing almost nothing. That is worse
+  // than the bug this is here to fix. When the lines already meet or exceed the
+  // summary, trust the lines and park nothing.
   const summaryBase = claim.labourCents + claim.costsCents;
   if (summaryBase > 0) {
     const postedBase =
@@ -206,7 +215,7 @@ export async function materializeClaimActuals(projectId: string, claimId: string
       (claim.labourCents !== 0 && !labourCoveredByLines ? claim.labourCents : 0);
     const remainder = summaryBase - postedBase;
     const xeroSourceId = `claim:${claim.id}:remainder`;
-    if (remainder !== 0) {
+    if (remainder > 0) {
       await db.costActual.upsert({
         where: { projectId_xeroSourceId: { projectId, xeroSourceId } },
         create: {
