@@ -17,9 +17,22 @@ services:
     # install even though Render runs in production mode — without this the
     # build fails with "prisma: not found" / "Please install typescript".
     buildCommand: npm install --include=dev && npm run build
-    # Run DB migrations on every deploy, then start. NEXTAUTH_URL is taken from
-    # the public URL Render assigns this service (no manual step needed).
-    startCommand: npx prisma migrate deploy && NEXTAUTH_URL=$RENDER_EXTERNAL_URL npm run start
+    # Migrations run in preDeploy, NOT in the start command.
+    #
+    # With them in startCommand, every deploy took the old container down and
+    # then had to finish `prisma migrate deploy` + ensure-admin + a cold Next
+    # start before anything could answer — and every request that landed in
+    # that window got a 502. Render runs preDeployCommand after the build and
+    # BEFORE the new version goes live, while the old one is still serving, so
+    # the migration time no longer costs uptime. If a migration fails the
+    # deploy stops and the old version keeps running, instead of leaving a
+    # container that exits on boot.
+    #
+    # ./node_modules/.bin/prisma rather than npx: the binary is already there
+    # from the build (--include=dev), so this can't stall on a registry lookup.
+    preDeployCommand: ./node_modules/.bin/prisma migrate deploy
+    # NEXTAUTH_URL is taken from the public URL Render assigns this service.
+    startCommand: NEXTAUTH_URL=$RENDER_EXTERNAL_URL npm run start
     healthCheckPath: /login
     disk:
       name: uploads
