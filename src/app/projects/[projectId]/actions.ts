@@ -229,12 +229,20 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
   await db.project.update({
     where: { id: projectId },
     data: {
-      forecastFinalCostCents: project.pendingForecastFinalCostCents,
+      // Publish ONLY what was staged. A revision can be line-forecasts-only, or
+      // date-only — its unstaged headline fields are null, and copying those
+      // nulls across would WIPE a previously published figure off the client's
+      // page as a side effect of signing something unrelated. `undefined`
+      // means "leave the column alone"; withdrawing a published forecast, if
+      // ever wanted, must be its own deliberate action — never a side effect.
+      forecastFinalCostCents: project.pendingForecastFinalCostCents ?? undefined,
       forecastFinalCostPrevCents: costMoved ? project.forecastFinalCostCents : undefined,
-      forecastFinalCostNote: project.pendingForecastFinalCostNote,
-      forecastCompletionDate: project.pendingForecastCompletionDate,
+      forecastFinalCostNote:
+        project.pendingForecastFinalCostCents !== null ? project.pendingForecastFinalCostNote : undefined,
+      forecastCompletionDate: project.pendingForecastCompletionDate ?? undefined,
       forecastCompletionPrevDate: dateMoved ? project.forecastCompletionDate : undefined,
-      forecastCompletionNote: project.pendingForecastCompletionNote,
+      forecastCompletionNote:
+        project.pendingForecastCompletionDate !== null ? project.pendingForecastCompletionNote : undefined,
       forecastUpdatedAt: new Date(),
       forecastUpdatedBy: after.signed.map((s) => s.name).join(" & "),
       // Clear the staging area — this revision is now the published truth.
