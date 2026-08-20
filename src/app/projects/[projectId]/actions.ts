@@ -6,7 +6,7 @@ import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { dollarsToCents, exceedsInt4, tooLargeMessage, exMarginGst } from "@/lib/money";
-import { forecastGate, restampForecastRevision } from "@/lib/forecast";
+import { forecastGate, restampForecastRevision, approverEmails } from "@/lib/forecast";
 import { getCompany } from "@/lib/company";
 import { validatePassword } from "@/lib/password";
 
@@ -355,6 +355,7 @@ export async function setLineForecast(
     select: { id: true, name: true },
   });
   if (!code) return { ok: false, message: "That cost code isn't on this project." };
+  const company = await getCompany();
 
   const raw = String(formData.get("forecast") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim() || null;
@@ -370,7 +371,6 @@ export async function setLineForecast(
     // like estimates and actuals, then grossed exactly once on display. Storing
     // the typed figure as base was the original sin: type 146,000 against a
     // budget shown as $146,000 and the page displayed $180,675.
-    const company = await getCompany();
     cents = exMarginGst(inclCents, company);
     // Per-line amounts are 32-bit in the database, unlike the whole-project
     // figures. Say so plainly rather than surfacing a driver error.
@@ -390,11 +390,15 @@ export async function setLineForecast(
   revalidatePath(`/projects/${projectId}/settings`);
 
   if (cents === null) return { ok: true, message: `Forecast withdrawn for ${code.name}.` };
-  const gate = await forecastGate(projectId, await getCompany());
+  // Message composed from data already in hand — this used to run a full gate
+  // evaluation (four more queries) purely to word this sentence, a solid share
+  // of the frozen seconds after pressing Stage.
+  const approvers = approverEmails(company);
   return {
     ok: true,
-    message: gate.unconfigured
-      ? `Forecast staged for ${code.name} — sign off at the top of the page to publish it to the client.`
-      : `Forecast staged for ${code.name} — awaiting sign-off from ${gate.outstanding.join(", ")}.`,
+    message:
+      approvers.length === 0
+        ? `Forecast staged for ${code.name} — sign off above to publish it to the client.`
+        : `Forecast staged for ${code.name} — publishes once signed off by ${approvers.join(", ")}.`,
   };
 }

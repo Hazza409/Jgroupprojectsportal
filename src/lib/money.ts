@@ -103,3 +103,22 @@ export function exceedsInt4(cents: number): boolean {
 export function tooLargeMessage(label = "That amount"): string {
   return `${label} is above the ${formatCents(INT4_MAX_CENTS)} limit for a single line. Split it across lines, or record it as the project's contract value.`;
 }
+
+/**
+ * The structure of a client-facing figure: base + builder's margin + GST.
+ *
+ * The margin is computed on the base; GST is then TOTAL − base − margin, so
+ * the three components always sum exactly to the same grossed total shown
+ * everywhere else (inclMarginGst rounds once on the combined rate — deriving
+ * GST independently could drift from the displayed total by a cent).
+ */
+export function moneyStructure(baseCents: number, rates: MarginGstRates): {
+  baseCents: number;
+  marginCents: number;
+  gstCents: number;
+  totalCents: number;
+} {
+  const totalCents = inclMarginGst(baseCents, rates);
+  const marginCents = Math.round(baseCents * (rates.marginPercent / 100));
+  return { baseCents, marginCents, gstCents: totalCents - baseCents - marginCents, totalCents };
+}

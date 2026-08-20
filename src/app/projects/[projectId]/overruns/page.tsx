@@ -1,35 +1,30 @@
 import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
-import { formatCents } from "@/lib/money";
+import { formatCents, inclMarginGst, centsToNumber, moneyStructure } from "@/lib/money";
 import { getCompany } from "@/lib/company";
 import { computeCostToComplete, overrunSummary } from "@/lib/claims";
 import { correctCostName } from "@/lib/houseStyle";
 import { forecastGate } from "@/lib/forecast";
 import { db } from "@/lib/db";
-import { LineForecastEditor, type ForecastLine } from "@/components/LineForecastEditor";
-import { ForecastSignOffCard, type StagedItem } from "@/components/ForecastSignOffCard";
-import { centsToNumber, inclMarginGst } from "@/lib/money";
+import { ForecastWorkbench, type WorkbenchRow } from "@/components/ForecastWorkbench";
 import { fmtDate } from "@/lib/dates";
 import { logView } from "@/lib/audit";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
 
 /**
- * Forecast Adjustments — ONLY the cost codes tracking above their estimate, largest
- * first. (Route stays /overruns: Jake §4 changes the labels, not the data or
- * any existing link.)
+ * Forecast Adjustments. (Route stays /overruns: Jake §4 changed the labels,
+ * not the data or any existing link.)
  *
- * Deliberately narrow: this tab exists so a movement is impossible to miss and
- * can be sent to a client or QS as the exception report. The full code-by-code
- * position lives on the Budget tab.
+ * Two audiences, two shapes:
+ *   BUILDER — a single workbench: every cost code, its budget/spent/forecast,
+ *   inline staging, and sign-off on the same surface. Data loads in parallel;
+ *   the workbench shows a working state during saves, so nothing "freezes".
+ *   CLIENT — the exception report: only movements, with the reason for each.
  *
- * Measured against the APPROVED budget (original estimate plus APPROVED
- * variations). A code that received an approved variation for extra work is
- * therefore not flagged — approved growth is not a movement against estimate.
- *
- * Language throughout is "above estimate", never "over budget", and the colour
- * is amber, never red: on cost plus the estimate was never a committed ceiling,
- * so "over budget" misdescribes the figure and reads as an admitted breach.
+ * Language is "above estimate", never "over budget", and the colour is amber,
+ * never red: on cost plus the estimate was never a committed ceiling, so
+ * "over budget" misdescribes the figure and reads as an admitted breach.
  */
 export default async function OverrunsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -37,87 +32,64 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   const isBuilder = user.role === "BUILDER";
   const company = await getCompany();
 
-  const ctc = await computeCostToComplete(projectId, company);
-  await logView(projectId, user, `/projects/${projectId}/overruns`, "Forecast Adjustments");
-
-  // Builder-only: every cost code, with whatever is staged against it, so a
-  // movement can be forecast BEFORE the line is over rather than after.
-  const gate = isBuilder ? await forecastGate(projectId, company) : null;
-  const editorLines: ForecastLine[] = isBuilder
-    ? (
-        await db.costCode.findMany({
+  // Everything in parallel — this page previously awaited seven fetches in a
+  // row, which on a remote database was seconds of blank wait per render.
+  const [ctc, gate, costCodes, pendingProject] = await Promise.all([
+    computeCostToComplete(projectId, company),
+    isBuilder ? forecastGate(projectId, company) : Promise.resolve(null),
+    isBuilder
+      ? db.costCode.findMany({
           where: { projectId },
           orderBy: { code: "asc" },
           select: { id: true, code: true, name: true, pendingForecastCents: true, pendingForecastNote: true },
         })
-      ).map((cc) => {
-        const row = ctc.rows.find((r) => r.id === cc.id);
-        return {
-          id: cc.id,
-          code: cc.code,
-          name: correctCostName(cc.name),
-          approvedBudgetCents: row?.revisedCents ?? 0,
-          spentCents: row?.currentCents ?? 0,
-          publishedForecastCents: row?.forecastCents ?? null,
-          // ONE basis everywhere on this page: inc margin + GST. The stored
-          // figure is base cents, so it is grossed for the input exactly as it
-          // is for every displayed amount — the builder edits the same number
-          // they see beside it, and what they type is what the client reads.
-          pendingDollars:
-            cc.pendingForecastCents === null ? "" : (inclMarginGst(cc.pendingForecastCents, company) / 100).toFixed(2),
-          pendingNote: cc.pendingForecastNote ?? "",
-        };
-      })
-    : [];
-  const gateNote = !gate
-    ? ""
-    : gate.unconfigured
-      ? "Sign off below to publish"
-      : `Publishes once signed off by ${gate.required.join(", ")}`;
-
-  // Everything the pending revision covers, shown at the point of approval —
-  // signing publishes the WHOLE revision, so the card must list all of it, not
-  // just the line the builder happens to remember staging.
-  let stagedItems: StagedItem[] = [];
-  let canSign = false;
-  if (isBuilder && gate?.hasPending) {
-    stagedItems = editorLines
-      .filter((l) => l.pendingDollars !== "")
-      .map((l) => ({
-        label: `${l.code} ${l.name}`,
-        // pendingDollars is already inc margin+GST (one basis page-wide), so
-        // it goes straight to display — grossing again would inflate it 29.8%.
-        value: formatCents(Math.round(Number(l.pendingDollars) * 100)),
-        note: l.pendingNote || null,
-      }));
-    const proj = await db.project.findUniqueOrThrow({
-      where: { id: projectId },
-      select: { pendingForecastFinalCostCents: true, pendingForecastCompletionDate: true, pendingForecastFinalCostNote: true, pendingForecastCompletionNote: true },
-    });
-    if (proj.pendingForecastFinalCostCents !== null) {
-      stagedItems.push({
-        label: "Forecast final cost (whole job)",
-        value: formatCents(centsToNumber(proj.pendingForecastFinalCostCents)),
-        note: proj.pendingForecastFinalCostNote,
-      });
-    }
-    if (proj.pendingForecastCompletionDate !== null) {
-      stagedItems.push({
-        label: "Forecast completion (whole job)",
-        value: fmtDate(proj.pendingForecastCompletionDate),
-        note: proj.pendingForecastCompletionNote,
-      });
-    }
-    canSign = gate.unconfigured || gate.required.includes(user.email.toLowerCase());
-  }
+      : Promise.resolve([]),
+    isBuilder
+      ? db.project.findUnique({
+          where: { id: projectId },
+          select: { pendingForecastFinalCostCents: true, pendingForecastCompletionDate: true },
+        })
+      : Promise.resolve(null),
+    logView(projectId, user, `/projects/${projectId}/overruns`, "Forecast Adjustments"),
+  ]);
 
   // Shared with the Budget, Cost to Complete and Overview pages so all four
-  // report identical overruns on an identical basis.
+  // report identical movements on an identical basis.
   const summary = overrunSummary(ctc);
   const over = summary.rows.map((r) => ({ ...r, pct: pctUsed(r.currentCents, r.revisedCents) }));
   const totalOverCents = summary.totalOverCents;
   const netCents = summary.netCents;
   const worst = over[0];
+
+  // ── Builder workbench rows: one basis (inc margin + GST) throughout ──
+  const rows: WorkbenchRow[] = costCodes.map((cc) => {
+    const r = ctc.rows.find((x) => x.id === cc.id);
+    return {
+      id: cc.id,
+      code: cc.code,
+      name: correctCostName(cc.name),
+      budgetCents: r?.revisedCents ?? 0,
+      spentCents: r?.currentCents ?? 0,
+      publishedCents: r?.forecastCents ?? null,
+      publishedNote: r?.forecastNote ?? null,
+      stagedDollars:
+        cc.pendingForecastCents === null ? "" : (inclMarginGst(cc.pendingForecastCents, company) / 100).toFixed(2),
+      stagedNote: cc.pendingForecastNote ?? "",
+      bases: {
+        budget: (r?.bases.estimateCents ?? 0) + (r?.bases.variationsCents ?? 0),
+        spent: r?.bases.currentCents ?? 0,
+        forecast: r?.bases.forecastCents ?? null,
+      },
+    };
+  });
+  const alsoStaged: string[] = [];
+  if (pendingProject?.pendingForecastFinalCostCents != null) {
+    alsoStaged.push(`final cost ${formatCents(centsToNumber(pendingProject.pendingForecastFinalCostCents))}`);
+  }
+  if (pendingProject?.pendingForecastCompletionDate != null) {
+    alsoStaged.push(`completion ${fmtDate(pendingProject.pendingForecastCompletionDate)}`);
+  }
+  const canSign = !!gate && (gate.unconfigured || gate.required.includes(user.email.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -125,7 +97,7 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
         title="Forecast Adjustments"
         description={
           isBuilder
-            ? "Cost codes tracking above their approved budget, largest first. Approved variations are already counted in the budget, so these are movements against estimate, not approved growth."
+            ? "Forecast what each cost code will finish at, and publish movements to the client with a reason — before spend gets there."
             : "Where costs are currently running above the original estimate for that item. Estimates are reforecast as the build progresses — these are not extra charges beyond what's been approved."
         }
         action={
@@ -140,67 +112,72 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
         on final cost. All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
       </div>
 
-      {isBuilder && gate?.hasPending && stagedItems.length > 0 && (
-        <ForecastSignOffCard
-          projectId={projectId}
-          staged={stagedItems}
-          canSign={canSign}
-          warning={gate.warning}
-          outstanding={gate.outstanding}
-        />
-      )}
-
-      {isBuilder && editorLines.length > 0 && (
-        <LineForecastEditor projectId={projectId} lines={editorLines} gateNote={gateNote} />
-      )}
-
+      {/* ── Headline position: same three figures for both audiences ── */}
       {over.length === 0 ? (
         <div className="card border-emerald-500/30">
-          <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">✓ Every cost code is tracking at or below its estimate</p>
+          <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">
+            ✓ Every cost code is tracking at or below its estimate
+          </p>
           <p className="mt-1 text-sm text-stone-500">
-            Nothing is currently running above its approved budget. See the{" "}
-            <Link href={`/projects/${projectId}/budget`} className="text-brand underline">Budget tab</Link> for the full
-            position.
+            Nothing is currently forecast or spending above its approved budget.
           </p>
         </div>
       ) : (
-        <>
-          {/* Headline: how bad, and is it absorbed elsewhere? */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="card border-amber-500/40">
-              <p className="text-xs uppercase tracking-wide text-stone-400">Total above estimate</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-amber-800 dark:text-amber-200">
-                {formatCents(totalOverCents)}
-              </p>
-              <p className="mt-1 text-xs text-stone-400">
-                across {over.length} cost code{over.length === 1 ? "" : "s"}
-              </p>
-            </div>
-            <div className="card">
-              <p className="text-xs uppercase tracking-wide text-stone-400">Largest movement</p>
-              <p className="mt-2 text-lg font-semibold">{worst.name}</p>
-              <p className="mt-1 text-sm tabular-nums text-amber-800 dark:text-amber-200">
-                {formatCents(worst.overCents)} above estimate
-              </p>
-            </div>
-            <div className="card">
-              <p className="text-xs uppercase tracking-wide text-stone-400">Whole-job position</p>
-              <p
-                className={`mt-2 text-lg font-semibold tabular-nums ${
-                  netCents < 0 ? "text-amber-800 dark:text-amber-200" : "text-emerald-700 dark:text-emerald-300"
-                }`}
-              >
-                {netCents < 0 ? `${formatCents(-netCents)} above` : `${formatCents(netCents)} remaining`}
-              </p>
-              <p className="mt-1 text-xs text-stone-400">
-                {netCents < 0
-                  ? "These movements are not currently offset elsewhere."
-                  : "Movement elsewhere currently offsets these."}
-              </p>
-            </div>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="card border-amber-500/40">
+            <p className="text-xs uppercase tracking-wide text-stone-400">Total above estimate</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-amber-800 dark:text-amber-200">
+              {formatCents(totalOverCents)}
+            </p>
+            <p className="mt-1 text-xs text-stone-400">
+              across {over.length} cost code{over.length === 1 ? "" : "s"}
+              {summary.forecastCount > 0 && ` · ${summary.forecastCount} by forecast`}
+            </p>
           </div>
+          <div className="card">
+            <p className="text-xs uppercase tracking-wide text-stone-400">Largest movement</p>
+            <p className="mt-2 text-lg font-semibold">{worst.name}</p>
+            <p className="mt-1 text-sm tabular-nums text-amber-800 dark:text-amber-200">
+              {formatCents(worst.overCents)} above estimate
+            </p>
+          </div>
+          <div className="card">
+            <p className="text-xs uppercase tracking-wide text-stone-400">Whole-job position</p>
+            <p
+              className={`mt-2 text-lg font-semibold tabular-nums ${
+                netCents < 0 ? "text-amber-800 dark:text-amber-200" : "text-emerald-700 dark:text-emerald-300"
+              }`}
+            >
+              {netCents < 0 ? `${formatCents(-netCents)} above` : `${formatCents(netCents)} remaining`}
+            </p>
+            <p className="mt-1 text-xs text-stone-400">
+              {netCents < 0
+                ? "These movements are not currently offset elsewhere."
+                : "Movement elsewhere currently offsets these."}
+            </p>
+          </div>
+        </div>
+      )}
 
-          {/* Each overrun, worst first. */}
+      {/* ── BUILDER: the workbench is the page ── */}
+      {isBuilder && rows.length > 0 && (
+        <ForecastWorkbench
+          projectId={projectId}
+          rows={rows}
+          canSign={canSign}
+          gateWarning={gate?.warning ?? null}
+          outstanding={gate?.outstanding ?? []}
+          alsoStaged={alsoStaged}
+          rates={{ marginPercent: company.marginPercent, gstPercent: company.gstPercent }}
+        />
+      )}
+      {isBuilder && rows.length === 0 && (
+        <div className="card text-stone-500">No cost codes yet. Import an estimate first.</div>
+      )}
+
+      {/* ── CLIENT: the exception report, one card per movement ── */}
+      {!isBuilder && over.length > 0 && (
+        <>
           <div className="space-y-2">
             {over.map((r) => (
               <div key={r.id} className="card border-amber-500/40">
@@ -219,13 +196,23 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
                   <BudgetBar pct={r.pct} />
                 </div>
                 {r.basis === "forecast" ? (
-                  <p className="mt-1 text-xs text-stone-500">
-                    Forecast to finish at{" "}
-                    <span className="font-medium tabular-nums text-stone-600 dark:text-stone-300">
-                      {formatCents(r.forecastCents ?? 0)}
-                    </span>
-                    {r.forecastNote ? ` — ${r.forecastNote}` : ""}
-                  </p>
+                  <>
+                    <p className="mt-1 text-xs text-stone-500">
+                      Forecast to finish at{" "}
+                      <span className="font-medium tabular-nums text-stone-600 dark:text-stone-300">
+                        {formatCents(r.forecastCents ?? 0)}
+                      </span>
+                      {r.forecastNote ? ` — ${r.forecastNote}` : ""}
+                    </p>
+                    {r.bases.forecastCents !== null && (() => {
+                      const m = moneyStructure(r.bases.forecastCents, company);
+                      return (
+                        <p className="mt-0.5 text-xs tabular-nums text-stone-400">
+                          Made up of: base cost {formatCents(m.baseCents)} + builder&apos;s margin ({company.marginPercent.toFixed(1)}%) {formatCents(m.marginCents)} + GST ({company.gstPercent.toFixed(0)}%) {formatCents(m.gstCents)}
+                        </p>
+                      );
+                    })()}
+                  </>
                 ) : (
                   <p className="mt-1 text-xs text-stone-500">
                     Based on cost incurred so far. No forecast has been published for this item yet.
@@ -241,7 +228,6 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
               </div>
             ))}
           </div>
-
           <p className="text-xs text-stone-400">
             A code shows here when it is forecast to finish above its approved budget, or when cost incurred has
             already passed it. The approved budget already includes any approved variations for that item.
@@ -251,13 +237,13 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
         </>
       )}
 
-      {/* Unallocated costs can mask an overrun, so flag them here too. */}
+      {/* Unallocated costs can mask a movement, so flag them here too. */}
       {ctc.unallocated.currentCents !== 0 && (
         <div className="card border-amber-500/30">
           <p className="text-xs uppercase tracking-wide text-stone-400">Unallocated costs</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{formatCents(ctc.unallocated.currentCents)}</p>
           <p className="mt-1 text-xs text-stone-500">
-            These sit against no cost code, so they aren&apos;t counted in any overrun above.
+            These sit against no cost code, so they aren&apos;t counted in any movement above.
             {isBuilder && " Allocate them via “Re-match claim costs” on Cost to Complete for a true picture."}
           </p>
         </div>

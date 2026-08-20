@@ -262,6 +262,12 @@ export interface CtcRow {
   forecastNote: string | null;
   /** Forecast − approved budget. Positive = a movement above estimate. */
   forecastMovementCents: number | null;
+  /**
+   * The EX-margin/EX-GST bases behind the client-facing figures — exposed so
+   * pages can show the structure of a number (base + builder's margin + GST)
+   * instead of de-grossing a display value and reintroducing rounding drift.
+   */
+  bases: { estimateCents: number; variationsCents: number; currentCents: number; forecastCents: number | null };
   estimateCents: number;
   variationsCents: number;
   revisedCents: number;
@@ -329,14 +335,18 @@ export async function computeCostToComplete(
   }
 
   const rows: CtcRow[] = costCodes.map((cc) => {
-    const estimateCents = inclMarginGst(sumCents(cc.estimateLines.map((l) => l.totalCents)), company);
-    const variationsCents = inclMarginGst(varBaseByCode.get(cc.id) ?? 0, company);
-    const currentCents = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)), company);
+    const baseEstimate = sumCents(cc.estimateLines.map((l) => l.totalCents));
+    const baseVariations = varBaseByCode.get(cc.id) ?? 0;
+    const baseCurrent = sumCents(cc.costActuals.map((a) => a.amountCents));
+    const estimateCents = inclMarginGst(baseEstimate, company);
+    const variationsCents = inclMarginGst(baseVariations, company);
+    const currentCents = inclMarginGst(baseCurrent, company);
     const revisedCents = estimateCents + variationsCents;
     // The stored forecast is a base figure like every other amount, so it is
     // grossed up here once — same treatment as estimate and variations.
     const forecastCents = cc.forecastCents === null ? null : inclMarginGst(cc.forecastCents, company);
     return {
+      bases: { estimateCents: baseEstimate, variationsCents: baseVariations, currentCents: baseCurrent, forecastCents: cc.forecastCents },
       // Spelling corrected for display only (Jake §7) — the stored name is
       // untouched, so cost-code matching is unaffected.
       id: cc.id, code: cc.code, name: correctCostName(cc.name),
