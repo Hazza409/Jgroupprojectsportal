@@ -85,7 +85,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
   const constructionLinks = [
     { href: "estimate", label: "Original Estimate" },
     { href: "budget", label: "Budget" },
-    { href: "overruns", label: "Cost Movements" },
+    { href: "overruns", label: "Forecast Adjustments" },
     { href: "cost-to-complete", label: "Cost to Complete" },
     { href: "progress-claims", label: `Progress Claims (${claims})` },
     { href: "variations", label: "Variations" },
@@ -125,14 +125,16 @@ export default async function ProjectOverview({ params }: { params: { projectId:
 
       {/* Cost movements — the exception the client needs to see, so it sits high
           on the overview rather than buried in a variance column. Language and
-          colour per Jake §4: "above estimate", amber, never "over budget". */}
+          colour per Jake §4: "above estimate", amber, never "over budget".
+          Tab name is "Forecast Adjustments" per Harry (Jake's draft said "Cost
+          Movements"); the route stays /overruns so existing links keep working. */}
       {overruns.count > 0 && (
         <Link
           href={`/projects/${projectId}/overruns`}
           className="card block border-amber-500/40 hover:shadow-md"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-xs uppercase tracking-wide text-stone-400">Cost movements</p>
+            <p className="text-xs uppercase tracking-wide text-stone-400">Forecast adjustments</p>
             <span className="text-sm text-stone-500">View all →</span>
           </div>
           <p className="mt-2 text-xl font-semibold tabular-nums text-amber-800 dark:text-amber-200">

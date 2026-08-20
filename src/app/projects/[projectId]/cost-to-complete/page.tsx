@@ -272,7 +272,7 @@ export default async function CostToCompletePage({
       )}
 
       {/* Cost movements are the exception worth calling out — a negative variance
-          number alone is too easy to miss. Detail lives on Cost Movements.
+          number alone is too easy to miss. Detail lives on Forecast Adjustments.
           Wording and colour per Jake §4. */}
       {overruns.count > 0 && (
         <Link
@@ -288,7 +288,7 @@ export default async function CostToCompletePage({
               <span className="text-stone-500"> · currently offset by movement elsewhere</span>
             )}
           </span>
-          <span className="text-sm text-stone-500">See the Cost Movements tab →</span>
+          <span className="text-sm text-stone-500">See the Forecast Adjustments tab →</span>
         </Link>
       )}
 

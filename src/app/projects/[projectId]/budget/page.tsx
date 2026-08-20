@@ -69,7 +69,7 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         }
         action={
           <Link href={`/projects/${projectId}/overruns`} className="btn-ghost">
-            Cost Movements →
+            Forecast Adjustments →
           </Link>
         }
       />
@@ -151,7 +151,7 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
             {overCount} cost code{overCount === 1 ? " is" : "s are"} forecast above{" "}
             {overCount === 1 ? "its" : "their"} original estimate by {formatCents(totalOverCents)}
           </span>
-          <span className="text-sm text-stone-500">See the Cost Movements tab →</span>
+          <span className="text-sm text-stone-500">See the Forecast Adjustments tab →</span>
         </Link>
       )}
       {overCount === 0 && (

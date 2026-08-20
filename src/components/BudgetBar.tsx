@@ -1,4 +1,4 @@
-// Spend bar shared by the Budget and Cost Movements tabs. Pure markup (no
+// Spend bar shared by the Budget and Forecast Adjustments tabs. Pure markup (no
 // client state) so it works in server components.
 //
 // Colour is the signal: brand under 90%, amber from 90% and above.

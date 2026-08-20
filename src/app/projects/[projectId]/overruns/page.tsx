@@ -8,7 +8,7 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
 
 /**
- * Cost Movements — ONLY the cost codes tracking above their estimate, largest
+ * Forecast Adjustments — ONLY the cost codes tracking above their estimate, largest
  * first. (Route stays /overruns: Jake §4 changes the labels, not the data or
  * any existing link.)
  *
@@ -31,7 +31,7 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   const company = await getCompany();
 
   const ctc = await computeCostToComplete(projectId, company);
-  await logView(projectId, user, `/projects/${projectId}/overruns`, "Overruns");
+  await logView(projectId, user, `/projects/${projectId}/overruns`, "Forecast Adjustments");
 
   // Shared with the Budget, Cost to Complete and Overview pages so all four
   // report identical overruns on an identical basis.
@@ -44,7 +44,7 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   return (
     <div className="space-y-6">
       <ModuleHeader
-        title="Cost Movements"
+        title="Forecast Adjustments"
         description={
           isBuilder
             ? "Cost codes tracking above their approved budget, largest first. Approved variations are already counted in the budget, so these are movements against estimate, not approved growth."
