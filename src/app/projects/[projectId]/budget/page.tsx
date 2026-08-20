@@ -24,16 +24,25 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
   const ctc = await computeCostToComplete(projectId, company);
   await logView(projectId, user, `/projects/${projectId}/budget`, "Budget");
 
-  const rows = ctc.rows.map((r) => ({
-    ...r,
-    overCents: -r.varianceCents, // positive = over budget
-    pct: pctUsed(r.currentCents, r.revisedCents),
-  }));
+  // A published line forecast ADJUSTS the line's working budget: the Used bar
+  // reads against what the line is now expected to finish at, not the figure
+  // everyone already knows it will pass. Same rule as the whole-job bar (§2),
+  // applied per row. No forecast → the approved budget stands.
+  const rows = ctc.rows.map((r) => {
+    const workingBudgetCents = r.forecastCents ?? r.revisedCents;
+    return {
+      ...r,
+      workingBudgetCents,
+      // Forecast wins over raw spend — same basis as the Adjustments tab.
+      over: r.forecastMovementCents !== null ? r.forecastMovementCents > 0 : r.currentCents > r.revisedCents,
+      pct: pctUsed(r.currentCents, workingBudgetCents),
+    };
+  });
   // Shared basis with the Overruns / Cost to Complete / Overview pages.
   const summary = overrunSummary(ctc);
   const overCount = summary.count;
   const totalOverCents = summary.totalOverCents;
-  const watchCount = rows.filter((r) => r.overCents <= 0 && Number.isFinite(r.pct) && r.pct >= 90).length;
+  const watchCount = rows.filter((r) => !r.over && Number.isFinite(r.pct) && r.pct >= 90).length;
 
   const t = ctc.totals;
   // Remaining counts against the FORECAST, not the estimate (Jake §2) — on cost
@@ -173,9 +182,9 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         <div className="card p-0">
           <table className="w-full table-fixed text-xs sm:text-sm">
             <colgroup>
-              <col className="w-[8%]" /><col className="w-[22%]" /><col className="w-[13%]" />
-              <col className="w-[12%]" /><col className="w-[13%]" /><col className="w-[13%]" />
-              <col className="w-[19%]" />
+              <col className="w-[7%]" /><col className="w-[19%]" /><col className="w-[12%]" />
+              <col className="w-[11%]" /><col className="w-[12%]" /><col className="w-[12%]" />
+              <col className="w-[12%]" /><col className="w-[15%]" />
             </colgroup>
             <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
               <tr>
@@ -184,6 +193,7 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
                 <th className="px-2 py-2.5 text-right">Estimate</th>
                 <th className="px-2 py-2.5 text-right">Variations</th>
                 <th className="px-2 py-2.5 text-right">Approved budget</th>
+                <th className="px-2 py-2.5 text-right">Forecast</th>
                 <th className="px-2 py-2.5 text-right">Spent</th>
                 <th className="px-2 py-2.5">Used</th>
               </tr>
@@ -193,7 +203,7 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
                 // "above estimate", flagged amber. Never red from spend alone
                 // (Jake §3): a front-loaded line early in the job is not a
                 // blowout, and red here reads as a self-reported failure.
-                const over = r.overCents > 0;
+                const over = r.over;
                 return (
                   <tr key={r.id} className={over ? "bg-amber-500/5" : undefined}>
                     <td className="px-2 py-2 font-mono text-xs text-stone-400 whitespace-nowrap">{r.code}</td>
@@ -203,6 +213,14 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
                       {r.variationsCents !== 0 ? `+${formatCents(r.variationsCents)}` : "—"}
                     </td>
                     <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCents(r.revisedCents)}</td>
+                    <td
+                      className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${
+                        r.forecastCents !== null ? "font-medium" : "text-stone-400"
+                      }`}
+                      title={r.forecastNote ?? undefined}
+                    >
+                      {r.forecastCents !== null ? formatCents(r.forecastCents) : "—"}
+                    </td>
                     <td className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${over ? "font-medium text-amber-800 dark:text-amber-200" : ""}`}>
                       {formatCents(r.currentCents)}
                     </td>
@@ -226,12 +244,21 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
                   {t.variationsCents !== 0 ? `+${formatCents(t.variationsCents)}` : "—"}
                 </td>
                 <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.revisedCents)}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap text-stone-400">—</td>
                 <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.currentCents)}</td>
                 <td className="px-2 py-2.5 tabular-nums text-stone-500">{fmtPct(jobPct)}</td>
               </tr>
             </tfoot>
           </table>
         </div>
+      )}
+
+      {rows.some((r) => r.forecastCents !== null) && (
+        <p className="text-xs text-stone-400">
+          Where a forecast has been published for a cost line, its Used bar reads against that forecast —
+          the line&apos;s current expected final cost — rather than the approved budget. The reasons are on
+          the Forecast Adjustments tab.
+        </p>
       )}
 
       {/* Costs not matched to any cost code — they sit against no budget. */}

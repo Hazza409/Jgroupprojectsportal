@@ -32,7 +32,15 @@ services:
     # from the build (--include=dev), so this can't stall on a registry lookup.
     preDeployCommand: ./node_modules/.bin/prisma migrate deploy
     # NEXTAUTH_URL is taken from the public URL Render assigns this service.
-    startCommand: NEXTAUTH_URL=$RENDER_EXTERNAL_URL npm run start
+    #
+    # migrate deploy appears here AS WELL as in preDeploy, deliberately. When
+    # preDeploy has run, this is a no-op check (~1s) — nowhere near the old 502
+    # window, which came from applying real migrations at boot via npx. But if
+    # the service's dashboard config ever drops the preDeploy step, the boot
+    # still applies pending migrations rather than starting an app whose queries
+    # reference columns the database doesn't have — which kills every money page
+    # at once. A one-second check is cheap insurance against a bricked site.
+    startCommand: ./node_modules/.bin/prisma migrate deploy && NEXTAUTH_URL=$RENDER_EXTERNAL_URL npm run start
     healthCheckPath: /login
     disk:
       name: uploads
