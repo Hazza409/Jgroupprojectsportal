@@ -24,7 +24,9 @@ export async function GET(_req: Request, { params }: { params: { projectId: stri
   }
 
   const company = await getCompany();
-  const { buffer, filename } = await buildProjectWorkbook(projectId, company);
+  const { buffer, filename } = await buildProjectWorkbook(projectId, company, {
+    forClient: user.role === "CLIENT",
+  });
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {

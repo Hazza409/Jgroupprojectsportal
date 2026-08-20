@@ -35,7 +35,16 @@ function addSheet(wb: XLSX.WorkBook, name: string, aoa: Row[]) {
  * codes, the progress-claim register with drawdown, and the schedule. All money
  * is client-facing (incl builder's margin + GST) to match the dashboard.
  */
-export async function buildProjectWorkbook(projectId: string, company: Company): Promise<{ buffer: Buffer; filename: string }> {
+export async function buildProjectWorkbook(
+  projectId: string,
+  company: Company,
+  opts: { forClient?: boolean } = {},
+): Promise<{ buffer: Buffer; filename: string }> {
+  // Role separation holds in EVERY format (Jake §1). The web UI hides DRAFT
+  // variations and claims from clients and 404s their deep links — an export
+  // that includes them would hand the client the builder's unissued workspace
+  // in a spreadsheet. Same filter as the pages: status != DRAFT for clients.
+  const statusFilter = opts.forClient ? ({ status: { not: "DRAFT" as const } }) : {};
   const project = await db.project.findUniqueOrThrow({
     where: { id: projectId },
     select: { name: true, address: true, clientName: true, status: true },
@@ -50,7 +59,7 @@ export async function buildProjectWorkbook(projectId: string, company: Company):
       select: { description: true, quantity: true, unit: true, unitCostCents: true, totalCents: true, costCode: { select: { code: true, name: true } } },
     }),
     db.variation.findMany({
-      where: { projectId },
+      where: { projectId, ...statusFilter },
       orderBy: { variationNumber: "asc" },
       select: {
         variationNumber: true, title: true, status: true, totalCents: true,
@@ -58,7 +67,7 @@ export async function buildProjectWorkbook(projectId: string, company: Company):
       },
     }),
     db.progressClaim.findMany({
-      where: { projectId },
+      where: { projectId, ...statusFilter },
       orderBy: { claimNumber: "asc" },
       select: { claimNumber: true, periodLabel: true, status: true, approvedAt: true, totalCents: true, lines: { select: { claimedAmountCents: true } } },
     }),
