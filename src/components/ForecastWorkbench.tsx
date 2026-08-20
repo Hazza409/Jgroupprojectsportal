@@ -89,6 +89,8 @@ export function ForecastWorkbench({
     if (r.stagedDollars !== "") return 3e15; // staged work floats to the top while in progress
     if (r.publishedCents !== null && r.publishedCents > r.budgetCents) return 2e15 + (r.publishedCents - r.budgetCents);
     if (r.spentCents > r.budgetCents) return 1e15 + (r.spentCents - r.budgetCents);
+    // A published saving is news too — keep it visible without the toggle.
+    if (r.publishedCents !== null && r.publishedCents < r.budgetCents) return 0.5e15 + (r.budgetCents - r.publishedCents);
     return 0;
   };
   const sorted = [...rows].sort((a, b) => weight(b) - weight(a) || (a.code < b.code ? -1 : 1));
@@ -192,6 +194,10 @@ export function ForecastWorkbench({
                     ) : spendAbove ? (
                       <span className="text-xs text-amber-800 dark:text-amber-200">
                         Spend above budget — forecast it
+                      </span>
+                    ) : r.publishedCents !== null && r.publishedCents < r.budgetCents ? (
+                      <span className="text-xs font-medium tabular-nums text-emerald-700 dark:text-emerald-300">
+                        −{formatCents(r.budgetCents - r.publishedCents)} under budget
                       </span>
                     ) : (
                       <span className="text-xs text-stone-400">On track</span>

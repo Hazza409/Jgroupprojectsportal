@@ -212,6 +212,11 @@ export default async function BudgetPage({
           {remaining < 0 && (
             <span className="text-amber-700 dark:text-amber-300"> · {formatCents(-remaining)} above forecast</span>
           )}
+          {pos.forecastIsPublished && pos.forecastCents < pos.approvedBudgetCents && (
+            <span className="text-emerald-700 dark:text-emerald-300">
+              {" "}· forecast to finish {formatCents(pos.approvedBudgetCents - pos.forecastCents)} under the approved budget
+            </span>
+          )}
           {!pos.forecastIsPublished && (
             <>
               {" · "}
@@ -266,6 +271,18 @@ export default async function BudgetPage({
           <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
             {overCount} cost code{overCount === 1 ? " is" : "s are"} forecast above{" "}
             {overCount === 1 ? "its" : "their"} original estimate by {formatCents(totalOverCents)}
+          </span>
+          <span className="text-sm text-stone-500">See the Forecast Adjustments tab →</span>
+        </Link>
+      )}
+      {summary.savings.length > 0 && (
+        <Link
+          href={`/projects/${projectId}/overruns`}
+          className="card flex flex-wrap items-center justify-between gap-2 border-emerald-500/30 hover:shadow-md"
+        >
+          <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+            {summary.savings.length} cost code{summary.savings.length === 1 ? " is" : "s are"} forecast to finish{" "}
+            under budget by {formatCents(summary.totalUnderCents)}
           </span>
           <span className="text-sm text-stone-500">See the Forecast Adjustments tab →</span>
         </Link>

@@ -407,6 +407,13 @@ export interface OverrunSummary {
   absorbed: boolean;
   /** How many are listed on a forecast rather than on money already spent. */
   forecastCount: number;
+  /**
+   * The good news, kept as visible as the bad: cost codes with a published
+   * forecast BELOW their approved budget. Only a forecast can put a line here —
+   * merely being underspent mid-job is not a saving, the work just isn't done.
+   */
+  savings: (CtcRow & { underCents: number })[];
+  totalUnderCents: number;
 }
 
 /**
@@ -439,6 +446,10 @@ export function overrunSummary(ctc: CostToComplete): OverrunSummary {
     .sort((a, b) => b.overCents - a.overCents);
   const totalOverCents = rows.reduce((a, r) => a + r.overCents, 0);
   const netCents = ctc.totals.revisedCents - ctc.totals.currentCents;
+  const savings = ctc.rows
+    .filter((r) => r.forecastMovementCents !== null && r.forecastMovementCents < 0)
+    .map((r) => ({ ...r, underCents: -r.forecastMovementCents! }))
+    .sort((a, b) => b.underCents - a.underCents);
   return {
     rows,
     count: rows.length,
@@ -446,6 +457,8 @@ export function overrunSummary(ctc: CostToComplete): OverrunSummary {
     netCents,
     absorbed: rows.length > 0 && netCents >= 0,
     forecastCount: rows.filter((r) => r.basis === "forecast").length,
+    savings,
+    totalUnderCents: savings.reduce((a, r) => a + r.underCents, 0),
   };
 }
 

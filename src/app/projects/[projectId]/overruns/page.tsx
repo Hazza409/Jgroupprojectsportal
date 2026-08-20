@@ -244,6 +244,44 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
         </>
       )}
 
+      {/* ── The good news, given equal footing: forecast savings ── */}
+      {summary.savings.length > 0 && (
+        <div className="card border-emerald-500/30">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+              {formatCents(summary.totalUnderCents)} forecast under budget
+            </p>
+            <p className="text-xs text-stone-400">
+              across {summary.savings.length} cost code{summary.savings.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <ul className="mt-3 divide-y divide-stone-100">
+            {summary.savings.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
+                <span className="min-w-0 flex-1">
+                  <span className="font-mono text-xs text-stone-400">{r.code}</span> {r.name}
+                  {r.forecastNote && <span className="block text-xs text-stone-400">{r.forecastNote}</span>}
+                </span>
+                <span className="flex items-center gap-3 tabular-nums">
+                  <span className="text-xs text-stone-400">
+                    budget {formatCents(r.revisedCents)} → forecast {formatCents(r.forecastCents ?? 0)}
+                  </span>
+                  <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                    −{formatCents(r.underCents)}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {!isBuilder && (
+            <p className="mt-2 text-xs text-stone-400">
+              These lines are currently forecast to finish below their approved budget. Like all estimates,
+              they are reforecast as the build progresses.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Unallocated costs can mask a movement, so flag them here too. */}
       {ctc.unallocated.currentCents !== 0 && (
         <div className="card border-amber-500/30">
