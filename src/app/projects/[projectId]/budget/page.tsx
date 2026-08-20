@@ -306,7 +306,14 @@ export default async function BudgetPage({
                   the table a fifth full-size money column.
                 */}
                 <th className="px-2 py-2.5 text-right">Forecast adj.</th>
-                <th className="px-2 py-2.5 text-right">Approved budget</th>
+                {/*
+                  Estimate + Variations + Forecast adj. = this column, row by
+                  row. It is NOT the approved budget once an adjustment is
+                  published (Jake §5: approved budget = estimate + approved
+                  variations only) — it is the line's forecast budget, and it
+                  equals the approved budget when nothing is forecast.
+                */}
+                <th className="px-2 py-2.5 text-right">Forecast budget</th>
                 <th className="px-2 py-2.5 text-right">Spent</th>
                 <th className="px-2 py-2.5">Used</th>
               </tr>
@@ -336,7 +343,7 @@ export default async function BudgetPage({
                         ? "—"
                         : `${r.adjustmentCents >= 0 ? "+" : "−"}${formatCents(Math.abs(r.adjustmentCents))}`}
                     </td>
-                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCents(r.revisedCents)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCents(r.workingBudgetCents)}</td>
                     <td className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${over ? "font-medium text-amber-800 dark:text-amber-200" : ""}`}>
                       {formatCents(r.currentCents)}
                     </td>
@@ -368,7 +375,7 @@ export default async function BudgetPage({
                     ? `${netAdjustmentCents >= 0 ? "+" : "−"}${formatCents(Math.abs(netAdjustmentCents))}`
                     : "—"}
                 </td>
-                <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.revisedCents)}</td>
+                <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.revisedCents + netAdjustmentCents)}</td>
                 <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.currentCents)}</td>
                 <td className="px-2 py-2.5 tabular-nums text-stone-500">{fmtPct(jobPct)}</td>
               </tr>
@@ -379,9 +386,11 @@ export default async function BudgetPage({
 
       {anyForecast && (
         <p className="text-xs text-stone-400">
-          Forecast adj. is the published forecast&apos;s difference against that line&apos;s approved budget —
-          amber when it finishes above, green when below. Where one exists, the Used bar reads against the
-          forecast rather than the approved budget. Full figures and reasons are on the Forecast Adjustments tab.
+          Estimate + Variations + Forecast adj. = Forecast budget, row by row. Where no adjustment is
+          published, the forecast budget simply equals the approved budget (estimate plus approved
+          variations). Adjustments are amber when a line is forecast to finish above its approved budget,
+          green when below; the Used bar reads against the forecast budget. Full figures and reasons are on
+          the Forecast Adjustments tab.
         </p>
       )}
 
