@@ -75,8 +75,9 @@ export function LineForecastEditor({
         <span className="text-xs text-stone-400">{gateNote}</span>
       </div>
       <p className="mt-1 text-sm text-stone-500">
-        Set what a cost code is expected to finish at. Staged figures are not shown to the client until the
-        forecast is signed off.
+        Set what a cost code is expected to finish at, in the same terms as every figure on this page —
+        including builder&apos;s margin and GST. Staged figures are not shown to the client until the forecast
+        is signed off.
       </p>
 
       {msg && (
@@ -128,7 +129,7 @@ export function LineForecastEditor({
                   onSubmit={(e) => { e.preventDefault(); save(l.id, e.currentTarget); }}
                 >
                   <div>
-                    <label className="label text-xs" htmlFor={`f_${l.id}`}>Expected final cost</label>
+                    <label className="label text-xs" htmlFor={`f_${l.id}`}>Expected final cost (incl. margin &amp; GST)</label>
                     <input
                       id={`f_${l.id}`}
                       name="forecast"

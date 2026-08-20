@@ -19,6 +19,19 @@ export function inclMarginGst(baseCents: number, rates: MarginGstRates): number 
   return Math.round(baseCents * (1 + rates.marginPercent / 100) * (1 + rates.gstPercent / 100));
 }
 
+/**
+ * Inverse of inclMarginGst: a client-facing amount back to base cents.
+ *
+ * Exists because people TYPE amounts in the same form they READ them — every
+ * figure on the client pages is shown inc margin+GST, so an input interpreted
+ * as base silently inflates by the combined rate the moment it's redisplayed
+ * (~29.8% at 12.5% + 10%). Round-tripping incl(ex(x)) is exact to the cent for
+ * ordinary figures; a boundary value may drift by one cent, never more.
+ */
+export function exMarginGst(inclCents: number, rates: MarginGstRates): number {
+  return Math.round(inclCents / (1 + rates.marginPercent / 100) / (1 + rates.gstPercent / 100));
+}
+
 /** Parse a user/Excel-entered dollar string or number into integer cents.
  *  Accounting-style parentheses negatives — "(1,234.56)" — parse as negative. */
 export function dollarsToCents(input: string | number | null | undefined): number {

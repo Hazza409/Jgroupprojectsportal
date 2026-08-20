@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { dollarsToCents, exceedsInt4, tooLargeMessage } from "@/lib/money";
+import { dollarsToCents, exceedsInt4, tooLargeMessage, exMarginGst } from "@/lib/money";
 import { forecastGate, restampForecastRevision } from "@/lib/forecast";
 import { getCompany } from "@/lib/company";
 import { validatePassword } from "@/lib/password";
@@ -361,10 +361,17 @@ export async function setLineForecast(
 
   let cents: number | null = null;
   if (raw !== "") {
-    cents = dollarsToCents(raw);
-    if (!Number.isFinite(cents) || cents < 0) {
+    const inclCents = dollarsToCents(raw);
+    if (!Number.isFinite(inclCents) || inclCents < 0) {
       return { ok: false, message: "Forecast must be a positive amount." };
     }
+    // The builder types the figure in the SAME form the page shows every other
+    // amount: inc margin + GST. It is de-grossed here and stored as base cents
+    // like estimates and actuals, then grossed exactly once on display. Storing
+    // the typed figure as base was the original sin: type 146,000 against a
+    // budget shown as $146,000 and the page displayed $180,675.
+    const company = await getCompany();
+    cents = exMarginGst(inclCents, company);
     // Per-line amounts are 32-bit in the database, unlike the whole-project
     // figures. Say so plainly rather than surfacing a driver error.
     if (exceedsInt4(cents)) return { ok: false, message: tooLargeMessage("A single cost code's forecast") };

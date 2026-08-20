@@ -59,8 +59,12 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
           approvedBudgetCents: row?.revisedCents ?? 0,
           spentCents: row?.currentCents ?? 0,
           publishedForecastCents: row?.forecastCents ?? null,
-          // The input takes plain dollars; the stored figure is base cents.
-          pendingDollars: cc.pendingForecastCents === null ? "" : (cc.pendingForecastCents / 100).toFixed(2),
+          // ONE basis everywhere on this page: inc margin + GST. The stored
+          // figure is base cents, so it is grossed for the input exactly as it
+          // is for every displayed amount — the builder edits the same number
+          // they see beside it, and what they type is what the client reads.
+          pendingDollars:
+            cc.pendingForecastCents === null ? "" : (inclMarginGst(cc.pendingForecastCents, company) / 100).toFixed(2),
           pendingNote: cc.pendingForecastNote ?? "",
         };
       })
@@ -81,9 +85,9 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
       .filter((l) => l.pendingDollars !== "")
       .map((l) => ({
         label: `${l.code} ${l.name}`,
-        // Grossed by the same shared helper as every other figure — an inline
-        // copy of the maths would eventually round differently somewhere.
-        value: formatCents(inclMarginGst(Math.round(Number(l.pendingDollars) * 100), company)),
+        // pendingDollars is already inc margin+GST (one basis page-wide), so
+        // it goes straight to display — grossing again would inflate it 29.8%.
+        value: formatCents(Math.round(Number(l.pendingDollars) * 100)),
         note: l.pendingNote || null,
       }));
     const proj = await db.project.findUniqueOrThrow({
