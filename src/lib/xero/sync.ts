@@ -2,7 +2,7 @@
 // Xero → dashboard cost sync. ONE-DIRECTIONAL. Reads actuals from Xero and
 // maps them onto CostCode rows (matched by code) into CostActual.
 //
-// This is the service INTERFACE + mapping logic. The Xero API fetch is a TODO;
+// Service interface + mapping logic, with the live Xero API fetch below.
 // the upsert/mapping shape below is real so the rest of the app can build
 // against it and a cron/route can call syncProjectActuals() once wired.
 // ─────────────────────────────────────────────────────────────
@@ -145,7 +145,7 @@ export async function applyActuals(projectId: string, rows: XeroActualRow[]): Pr
   return { upserted, unmatched };
 }
 
-/** End-to-end sync entrypoint (fetch → map → persist). Fetch is the TODO. */
+/** End-to-end sync entrypoint: fetch ACCPAY invoices + SPEND transactions → map → persist. */
 export async function syncProjectActuals(projectId: string) {
   const rows = await fetchActualsFromXero(projectId);
   return applyActuals(projectId, rows);
