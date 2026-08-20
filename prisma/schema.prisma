@@ -764,7 +764,11 @@ model XeroConnection {
   id            String   @id @default(cuid())
   projectId     String   @unique
   xeroTenantId  String?
-  accessToken   String? // encrypt at rest in prod (TODO)
+  // Both tokens are stored ENCRYPTED (AES-256-GCM, see src/lib/xero/crypto.ts):
+  // base64(iv).base64(authTag).base64(ciphertext). Written only via
+  // src/lib/xero/tokens.ts, which encrypts on the way in and decrypts on the
+  // way out — never assign to these fields directly.
+  accessToken   String?
   refreshToken  String?
   expiresAt     DateTime?
   connectedAt   DateTime @default(now())
