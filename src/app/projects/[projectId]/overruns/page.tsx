@@ -7,6 +7,9 @@ import { correctCostName } from "@/lib/houseStyle";
 import { forecastGate } from "@/lib/forecast";
 import { db } from "@/lib/db";
 import { LineForecastEditor, type ForecastLine } from "@/components/LineForecastEditor";
+import { ForecastSignOffCard, type StagedItem } from "@/components/ForecastSignOffCard";
+import { centsToNumber, inclMarginGst } from "@/lib/money";
+import { fmtDate } from "@/lib/dates";
 import { logView } from "@/lib/audit";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
@@ -65,8 +68,44 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   const gateNote = !gate
     ? ""
     : gate.unconfigured
-      ? "Sign off in Settings to publish"
+      ? "Sign off below to publish"
       : `Publishes once signed off by ${gate.required.join(", ")}`;
+
+  // Everything the pending revision covers, shown at the point of approval —
+  // signing publishes the WHOLE revision, so the card must list all of it, not
+  // just the line the builder happens to remember staging.
+  let stagedItems: StagedItem[] = [];
+  let canSign = false;
+  if (isBuilder && gate?.hasPending) {
+    stagedItems = editorLines
+      .filter((l) => l.pendingDollars !== "")
+      .map((l) => ({
+        label: `${l.code} ${l.name}`,
+        // Grossed by the same shared helper as every other figure — an inline
+        // copy of the maths would eventually round differently somewhere.
+        value: formatCents(inclMarginGst(Math.round(Number(l.pendingDollars) * 100), company)),
+        note: l.pendingNote || null,
+      }));
+    const proj = await db.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { pendingForecastFinalCostCents: true, pendingForecastCompletionDate: true, pendingForecastFinalCostNote: true, pendingForecastCompletionNote: true },
+    });
+    if (proj.pendingForecastFinalCostCents !== null) {
+      stagedItems.push({
+        label: "Forecast final cost (whole job)",
+        value: formatCents(centsToNumber(proj.pendingForecastFinalCostCents)),
+        note: proj.pendingForecastFinalCostNote,
+      });
+    }
+    if (proj.pendingForecastCompletionDate !== null) {
+      stagedItems.push({
+        label: "Forecast completion (whole job)",
+        value: fmtDate(proj.pendingForecastCompletionDate),
+        note: proj.pendingForecastCompletionNote,
+      });
+    }
+    canSign = gate.unconfigured || gate.required.includes(user.email.toLowerCase());
+  }
 
   // Shared with the Budget, Cost to Complete and Overview pages so all four
   // report identical overruns on an identical basis.
@@ -96,6 +135,16 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
         Measured against the approved budget — original estimate plus approved variations, which is not a cap
         on final cost. All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
       </div>
+
+      {isBuilder && gate?.hasPending && stagedItems.length > 0 && (
+        <ForecastSignOffCard
+          projectId={projectId}
+          staged={stagedItems}
+          canSign={canSign}
+          warning={gate.warning}
+          outstanding={gate.outstanding}
+        />
+      )}
 
       {isBuilder && editorLines.length > 0 && (
         <LineForecastEditor projectId={projectId} lines={editorLines} gateNote={gateNote} />

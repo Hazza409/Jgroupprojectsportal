@@ -387,7 +387,7 @@ export async function setLineForecast(
   return {
     ok: true,
     message: gate.unconfigured
-      ? `Forecast staged for ${code.name} — sign off in Settings to show it to the client.`
+      ? `Forecast staged for ${code.name} — sign off at the top of the page to publish it to the client.`
       : `Forecast staged for ${code.name} — awaiting sign-off from ${gate.outstanding.join(", ")}.`,
   };
 }
