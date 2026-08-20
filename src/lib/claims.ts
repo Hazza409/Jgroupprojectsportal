@@ -252,6 +252,16 @@ export interface CtcRow {
   id: string;
   code: string;
   name: string;
+  /**
+   * What this code is now expected to FINISH at, grossed like every other
+   * figure here. Null when nobody has forecast it — which is NOT the same as
+   * forecasting zero, so the pages must treat null as "no view yet".
+   * Published only: a staged forecast is builder-business until sign-off.
+   */
+  forecastCents: number | null;
+  forecastNote: string | null;
+  /** Forecast − approved budget. Positive = a movement above estimate. */
+  forecastMovementCents: number | null;
   estimateCents: number;
   variationsCents: number;
   revisedCents: number;
@@ -284,6 +294,7 @@ export async function computeCostToComplete(
         estimateLines: { select: { totalCents: true } },
         costActuals: { select: { amountCents: true } },
       },
+      // forecastCents / forecastNote come along with the model fields.
     }),
     db.variation.findMany({
       where: { projectId, status: "APPROVED" },
@@ -322,10 +333,16 @@ export async function computeCostToComplete(
     const variationsCents = inclMarginGst(varBaseByCode.get(cc.id) ?? 0, company);
     const currentCents = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)), company);
     const revisedCents = estimateCents + variationsCents;
+    // The stored forecast is a base figure like every other amount, so it is
+    // grossed up here once — same treatment as estimate and variations.
+    const forecastCents = cc.forecastCents === null ? null : inclMarginGst(cc.forecastCents, company);
     return {
       // Spelling corrected for display only (Jake §7) — the stored name is
       // untouched, so cost-code matching is unaffected.
       id: cc.id, code: cc.code, name: correctCostName(cc.name),
+      forecastCents,
+      forecastNote: cc.forecastNote,
+      forecastMovementCents: forecastCents === null ? null : forecastCents - revisedCents,
       estimateCents, variationsCents, revisedCents, currentCents,
       varianceCents: revisedCents - currentCents,
     };
@@ -362,32 +379,52 @@ export async function computeCostToComplete(
   };
 }
 
+/** Why a code is listed — which determines how it must be described. */
+export type AdjustmentBasis = "forecast" | "spend";
+
 export interface OverrunSummary {
-  /** Cost codes spending beyond their current budget, worst first. */
-  rows: (CtcRow & { overCents: number })[];
+  /** Cost codes tracking above their approved budget, largest first. */
+  rows: (CtcRow & { overCents: number; basis: AdjustmentBasis })[];
   count: number;
   totalOverCents: number;
-  /** Whole-job position. Negative = the job overall is over budget. */
+  /** Whole-job position. Negative = the job overall is above its budget. */
   netCents: number;
   /**
-   * True when individual codes are over but the job as a whole is still within
-   * budget — i.e. underspend elsewhere currently covers them. Worth saying out
-   * loud: an overrun banner reads as alarming when the job is actually fine.
+   * True when individual codes are above but the job as a whole is still within
+   * its approved budget — i.e. movement elsewhere currently offsets them. Worth
+   * saying out loud: the banner reads as alarming when the job is actually fine.
    */
   absorbed: boolean;
+  /** How many are listed on a forecast rather than on money already spent. */
+  forecastCount: number;
 }
 
 /**
- * Which cost codes are over budget, derived from a CostToComplete result.
+ * Which cost codes are tracking above their approved budget.
  *
- * "Over budget" means spend exceeds the CURRENT budget (original estimate plus
- * APPROVED variations) — so approved extra work is never counted as an overrun.
- * Shared by the Budget, Overruns, Cost to Complete and Overview pages so all
- * four report the same thing.
+ * A code qualifies on EITHER basis:
+ *   · forecast — a published forecast for it finishes above the approved
+ *     budget. This is the one that gives notice: it lists the movement while
+ *     the line may be barely spent, which is the whole point of forecasting a
+ *     movement rather than waiting for it to happen.
+ *   · spend — money already spent has passed the approved budget, with no
+ *     forecast published to explain it.
+ *
+ * A published forecast WINS over spend for the same code: once someone has
+ * said what the line is expected to finish at, that is the better number, and
+ * reporting the raw overspend beside it would double-count the same movement.
+ *
+ * Approved variations are already inside the budget, so approved extra work is
+ * never listed. Shared by the Budget, Forecast Adjustments, Cost to Complete
+ * and Overview pages so all four report the same thing.
  */
 export function overrunSummary(ctc: CostToComplete): OverrunSummary {
   const rows = ctc.rows
-    .map((r) => ({ ...r, overCents: -r.varianceCents }))
+    .map((r) =>
+      r.forecastMovementCents !== null
+        ? { ...r, overCents: r.forecastMovementCents, basis: "forecast" as AdjustmentBasis }
+        : { ...r, overCents: -r.varianceCents, basis: "spend" as AdjustmentBasis },
+    )
     .filter((r) => r.overCents > 0)
     .sort((a, b) => b.overCents - a.overCents);
   const totalOverCents = rows.reduce((a, r) => a + r.overCents, 0);
@@ -398,6 +435,7 @@ export function overrunSummary(ctc: CostToComplete): OverrunSummary {
     totalOverCents,
     netCents,
     absorbed: rows.length > 0 && netCents >= 0,
+    forecastCount: rows.filter((r) => r.basis === "forecast").length,
   };
 }
 

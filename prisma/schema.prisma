@@ -363,6 +363,22 @@ model CostCode {
   name        String
   createdAt   DateTime @default(now())
 
+  // ── Per-line forecast ────────────────────────────────────
+  // What this cost code is now expected to FINISH at. Lets a movement be
+  // forecast and shown before spend has passed the estimate, instead of the
+  // client only learning about it once the line is already over.
+  //
+  // Staged exactly like the project forecast: a builder writes the pending
+  // figure, the client keeps seeing the last published one, and the whole
+  // revision publishes together on sign-off. Editing any pending line changes
+  // the project's forecast revision, which voids signatures already given —
+  // nobody can sign one set of numbers and publish another.
+  pendingForecastCents Int?
+  pendingForecastNote  String?
+  forecastCents        Int? // published — client-visible
+  forecastNote         String?
+  forecastPublishedAt  DateTime?
+
   project        Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   estimateLines  EstimateLineItem[]
   costActuals    CostActual[]

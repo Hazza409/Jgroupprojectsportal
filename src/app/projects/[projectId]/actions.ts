@@ -5,8 +5,8 @@ import bcrypt from "bcryptjs";
 import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { dollarsToCents } from "@/lib/money";
-import { forecastRevision, forecastGate } from "@/lib/forecast";
+import { dollarsToCents, exceedsInt4, tooLargeMessage } from "@/lib/money";
+import { forecastGate, restampForecastRevision } from "@/lib/forecast";
 import { getCompany } from "@/lib/company";
 import { validatePassword } from "@/lib/password";
 
@@ -130,15 +130,6 @@ export async function setForecasts(projectId: string, formData: FormData): Promi
   if (dateRaw && Number.isNaN(nextDate!.getTime())) return { ok: false, message: "Completion date is not a valid date." };
 
   // Staged only — NOT client-visible. Publishing happens on full sign-off.
-  // The revision fingerprint changes with the figures, which voids any
-  // signatures already given against the previous revision.
-  const revision = forecastRevision({
-    finalCostCents: nextCost,
-    completionDate: nextDate,
-    costNote,
-    dateNote,
-  });
-
   await db.project.update({
     where: { id: projectId },
     data: {
@@ -148,9 +139,14 @@ export async function setForecasts(projectId: string, formData: FormData): Promi
       pendingForecastCompletionNote: dateNote,
       pendingForecastUpdatedAt: new Date(),
       pendingForecastUpdatedBy: user.name,
-      pendingForecastRevision: revision,
     },
   });
+
+  // Restamp AFTER writing, from everything staged — headline figures and line
+  // forecasts together. Hashing only the headline here would produce a revision
+  // that doesn't cover staged lines, so a signature could publish line figures
+  // it never described.
+  await restampForecastRevision(projectId);
 
   revalidatePath(`/projects/${projectId}/settings`);
   const gate = await forecastGate(projectId, await getCompany());
@@ -252,8 +248,31 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
     },
   });
 
+  // Line forecasts belong to the same revision, so they publish in the same
+  // act — a signature covers the headline figures AND the line detail behind
+  // them. Done per row because each carries its own amount and note.
+  const stagedLines = await db.costCode.findMany({
+    where: { projectId, pendingForecastCents: { not: null } },
+    select: { id: true, pendingForecastCents: true, pendingForecastNote: true },
+  });
+  const publishedAt = new Date();
+  for (const line of stagedLines) {
+    await db.costCode.update({
+      where: { id: line.id },
+      data: {
+        forecastCents: line.pendingForecastCents,
+        forecastNote: line.pendingForecastNote,
+        forecastPublishedAt: publishedAt,
+        pendingForecastCents: null,
+        pendingForecastNote: null,
+      },
+    });
+  }
+
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/settings`);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}/overruns`);
   return {
     ok: true,
     message: `Signed off by all approvers (${after.signed.map((s) => s.name).join(", ")}) — figures are now published to the client.`,
@@ -299,4 +318,68 @@ export async function updateJobDetails(projectId: string, formData: FormData): P
   revalidatePath("/builder");
   revalidatePath("/projects");
   return { ok: true, message: "Job details saved." };
+}
+
+// ─────────────────────────────────────────────────────────────
+// Forecast a movement on ONE cost code, before spend passes the estimate.
+//
+// The point is notice. Without this a client only learns a line is running
+// above its estimate once it already has — which on cost plus is both a poor
+// experience and a weak position to argue from. A forecast entered early says
+// "we now expect this to finish at X, here's why", on the record, in advance.
+//
+// Staged, not live: the client keeps seeing the last PUBLISHED figure until
+// the revision is signed off, same as the headline forecast. Clearing the
+// field withdraws the staged figure.
+// ─────────────────────────────────────────────────────────────
+export async function setLineForecast(
+  projectId: string,
+  costCodeId: string,
+  formData: FormData,
+): Promise<SimpleResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) return { ok: false, message: "Builder access required." };
+
+  // Scope the cost code to THIS project — an id from another job must not be
+  // writable through this route.
+  const code = await db.costCode.findFirst({
+    where: { id: costCodeId, projectId },
+    select: { id: true, name: true },
+  });
+  if (!code) return { ok: false, message: "That cost code isn't on this project." };
+
+  const raw = String(formData.get("forecast") ?? "").trim();
+  const note = String(formData.get("note") ?? "").trim() || null;
+
+  let cents: number | null = null;
+  if (raw !== "") {
+    cents = dollarsToCents(raw);
+    if (!Number.isFinite(cents) || cents < 0) {
+      return { ok: false, message: "Forecast must be a positive amount." };
+    }
+    // Per-line amounts are 32-bit in the database, unlike the whole-project
+    // figures. Say so plainly rather than surfacing a driver error.
+    if (exceedsInt4(cents)) return { ok: false, message: tooLargeMessage("A single cost code's forecast") };
+  }
+
+  await db.costCode.update({
+    where: { id: code.id },
+    data: { pendingForecastCents: cents, pendingForecastNote: cents === null ? null : note },
+  });
+
+  // Restamp the whole revision: this edit voids any signatures already given.
+  await restampForecastRevision(projectId);
+
+  revalidatePath(`/projects/${projectId}/overruns`);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}/settings`);
+
+  if (cents === null) return { ok: true, message: `Forecast withdrawn for ${code.name}.` };
+  const gate = await forecastGate(projectId, await getCompany());
+  return {
+    ok: true,
+    message: gate.unconfigured
+      ? `Forecast staged for ${code.name} — sign off in Settings to show it to the client.`
+      : `Forecast staged for ${code.name} — awaiting sign-off from ${gate.outstanding.join(", ")}.`,
+  };
 }

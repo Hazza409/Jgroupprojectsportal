@@ -3,6 +3,10 @@ import { assertProjectAccess } from "@/lib/scope";
 import { formatCents } from "@/lib/money";
 import { getCompany } from "@/lib/company";
 import { computeCostToComplete, overrunSummary } from "@/lib/claims";
+import { correctCostName } from "@/lib/houseStyle";
+import { forecastGate } from "@/lib/forecast";
+import { db } from "@/lib/db";
+import { LineForecastEditor, type ForecastLine } from "@/components/LineForecastEditor";
 import { logView } from "@/lib/audit";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
@@ -33,6 +37,37 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   const ctc = await computeCostToComplete(projectId, company);
   await logView(projectId, user, `/projects/${projectId}/overruns`, "Forecast Adjustments");
 
+  // Builder-only: every cost code, with whatever is staged against it, so a
+  // movement can be forecast BEFORE the line is over rather than after.
+  const gate = isBuilder ? await forecastGate(projectId, company) : null;
+  const editorLines: ForecastLine[] = isBuilder
+    ? (
+        await db.costCode.findMany({
+          where: { projectId },
+          orderBy: { code: "asc" },
+          select: { id: true, code: true, name: true, pendingForecastCents: true, pendingForecastNote: true },
+        })
+      ).map((cc) => {
+        const row = ctc.rows.find((r) => r.id === cc.id);
+        return {
+          id: cc.id,
+          code: cc.code,
+          name: correctCostName(cc.name),
+          approvedBudgetCents: row?.revisedCents ?? 0,
+          spentCents: row?.currentCents ?? 0,
+          publishedForecastCents: row?.forecastCents ?? null,
+          // The input takes plain dollars; the stored figure is base cents.
+          pendingDollars: cc.pendingForecastCents === null ? "" : (cc.pendingForecastCents / 100).toFixed(2),
+          pendingNote: cc.pendingForecastNote ?? "",
+        };
+      })
+    : [];
+  const gateNote = !gate
+    ? ""
+    : gate.unconfigured
+      ? "Sign off in Settings to publish"
+      : `Publishes once signed off by ${gate.required.join(", ")}`;
+
   // Shared with the Budget, Cost to Complete and Overview pages so all four
   // report identical overruns on an identical basis.
   const summary = overrunSummary(ctc);
@@ -61,6 +96,10 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
         Measured against the approved budget — original estimate plus approved variations, which is not a cap
         on final cost. All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
       </div>
+
+      {isBuilder && editorLines.length > 0 && (
+        <LineForecastEditor projectId={projectId} lines={editorLines} gateNote={gateNote} />
+      )}
 
       {over.length === 0 ? (
         <div className="card border-emerald-500/30">
@@ -118,7 +157,7 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
                   </p>
                   <p className="text-sm font-semibold tabular-nums text-amber-800 dark:text-amber-200">
                     {formatCents(r.overCents)} above estimate
-                    {Number.isFinite(r.pct) && r.revisedCents > 0 && (
+                    {r.basis === "spend" && Number.isFinite(r.pct) && r.revisedCents > 0 && (
                       <span className="ml-1 font-normal">({(r.pct - 100).toFixed(0)}% above)</span>
                     )}
                   </p>
@@ -126,6 +165,19 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
                 <div className="mt-2">
                   <BudgetBar pct={r.pct} />
                 </div>
+                {r.basis === "forecast" ? (
+                  <p className="mt-1 text-xs text-stone-500">
+                    Forecast to finish at{" "}
+                    <span className="font-medium tabular-nums text-stone-600 dark:text-stone-300">
+                      {formatCents(r.forecastCents ?? 0)}
+                    </span>
+                    {r.forecastNote ? ` — ${r.forecastNote}` : ""}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-stone-500">
+                    Based on cost incurred so far. No forecast has been published for this item yet.
+                  </p>
+                )}
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-stone-500 sm:grid-cols-5">
                   <span>Estimate {formatCents(r.estimateCents)}</span>
                   <span>Variations {r.variationsCents !== 0 ? `+${formatCents(r.variationsCents)}` : "—"}</span>
@@ -138,9 +190,10 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
           </div>
 
           <p className="text-xs text-stone-400">
-            A code shows here only when spend is above its approved budget, which already includes any approved
-            variations for that item. Estimates are reforecast as the build progresses and are not a cap on final
-            cost — a movement here is information, not an extra charge.
+            A code shows here when it is forecast to finish above its approved budget, or when cost incurred has
+            already passed it. The approved budget already includes any approved variations for that item.
+            Estimates are reforecast as the build progresses and are not a cap on final cost — a movement here is
+            information, not an extra charge.
           </p>
         </>
       )}
