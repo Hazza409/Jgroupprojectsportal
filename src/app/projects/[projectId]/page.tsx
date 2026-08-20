@@ -85,7 +85,7 @@ export default async function ProjectOverview({ params }: { params: { projectId:
   const constructionLinks = [
     { href: "estimate", label: "Original Estimate" },
     { href: "budget", label: "Budget" },
-    { href: "overruns", label: "Overruns" },
+    { href: "overruns", label: "Cost Movements" },
     { href: "cost-to-complete", label: "Cost to Complete" },
     { href: "progress-claims", label: `Progress Claims (${claims})` },
     { href: "variations", label: "Variations" },
@@ -123,28 +123,29 @@ export default async function ProjectOverview({ params }: { params: { projectId:
         ))}
       </div>
 
-      {/* Budget overruns — the exception the client actually needs to see, so
-          it sits high on the overview rather than buried in a variance column. */}
+      {/* Cost movements — the exception the client needs to see, so it sits high
+          on the overview rather than buried in a variance column. Language and
+          colour per Jake §4: "above estimate", amber, never "over budget". */}
       {overruns.count > 0 && (
         <Link
           href={`/projects/${projectId}/overruns`}
-          className="card block border-red-500/30 hover:shadow-md"
+          className="card block border-amber-500/40 hover:shadow-md"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-xs uppercase tracking-wide text-stone-400">Budget overruns</p>
+            <p className="text-xs uppercase tracking-wide text-stone-400">Cost movements</p>
             <span className="text-sm text-stone-500">View all →</span>
           </div>
-          <p className="mt-2 text-xl font-semibold tabular-nums text-red-700 dark:text-red-300">
-            {formatCents(overruns.totalOverCents)} over
+          <p className="mt-2 text-xl font-semibold tabular-nums text-amber-800 dark:text-amber-200">
+            {formatCents(overruns.totalOverCents)} above estimate
             <span className="ml-2 text-sm font-normal text-stone-500">
               across {overruns.count} cost code{overruns.count === 1 ? "" : "s"}
             </span>
           </p>
           <p className="mt-1 text-sm text-stone-500">
-            Largest: {overruns.rows[0].name} — {formatCents(overruns.rows[0].overCents)} over.
+            Largest: {overruns.rows[0].name} — {formatCents(overruns.rows[0].overCents)} above its estimate.
             {overruns.absorbed
-              ? " Underspend elsewhere currently absorbs this, so the job overall is still within budget."
-              : " The job overall is over budget."}
+              ? " Movement elsewhere currently offsets this, so the job overall is still tracking to its approved budget."
+              : " Overall, the job is tracking above its approved budget."}
           </p>
         </Link>
       )}

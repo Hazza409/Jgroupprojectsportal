@@ -94,3 +94,30 @@ export function houseStyleField(input: string | null): { value: string | null; c
   const r = applyHouseStyle(v);
   return { value: r.text || null, changed: r.changed };
 }
+
+// ─────────────────────────────────────────────────────────────
+// Cost-item spelling (Jake, Budget Revisions §7).
+//
+// These names arrive from the imported estimate workbook, so the misspellings
+// live in the source data, not in our code. Correcting them at DISPLAY time
+// means the client-facing views read correctly straight away and STAY correct
+// when the estimate is re-imported — a one-off database edit would be undone
+// by the next import.
+//
+// Display only. Cost-code matching still works off the stored name, so nothing
+// re-links or moves money as a result of this.
+// ─────────────────────────────────────────────────────────────
+const COST_NAME_FIXES: [RegExp, string][] = [
+  [/\bScaff?hold\b/gi, "Scaffold"],
+  [/\bAccomodation\b/gi, "Accommodation"],
+  // "Rubbish (builders Waste)" → "Rubbish (Builders' Waste)": the possessive
+  // apostrophe and the capital are both wrong in the source sheet.
+  [/\bbuilders\s+waste\b/gi, "Builders' Waste"],
+];
+
+/** Fix known misspellings in a cost-item name for client-facing display. */
+export function correctCostName(name: string): string {
+  let out = name;
+  for (const [re, fix] of COST_NAME_FIXES) out = out.replace(re, fix);
+  return out;
+}

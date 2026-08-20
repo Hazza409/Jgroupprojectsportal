@@ -265,22 +265,24 @@ export default async function CostToCompletePage({
         </div>
       )}
 
-      {/* Overruns are the exception worth calling out — a negative variance
-          number alone is too easy to miss. Detail lives on the Overruns tab. */}
+      {/* Cost movements are the exception worth calling out — a negative variance
+          number alone is too easy to miss. Detail lives on Cost Movements.
+          Wording and colour per Jake §4. */}
       {overruns.count > 0 && (
         <Link
           href={`/projects/${projectId}/overruns`}
-          className="card mb-4 flex flex-wrap items-center justify-between gap-2 border-red-500/30 hover:shadow-md"
+          className="card mb-4 flex flex-wrap items-center justify-between gap-2 border-amber-500/40 hover:shadow-md"
         >
           <span className="text-sm">
-            <span className="font-medium text-red-700 dark:text-red-300">
-              {overruns.count} cost code{overruns.count === 1 ? " is" : "s are"} over budget by {formatCents(overruns.totalOverCents)}
+            <span className="font-medium text-amber-800 dark:text-amber-200">
+              {overruns.count} cost code{overruns.count === 1 ? " is" : "s are"} forecast above{" "}
+              {overruns.count === 1 ? "its" : "their"} original estimate by {formatCents(overruns.totalOverCents)}
             </span>
             {overruns.absorbed && (
-              <span className="text-stone-500"> · currently absorbed by underspend elsewhere</span>
+              <span className="text-stone-500"> · currently offset by movement elsewhere</span>
             )}
           </span>
-          <span className="text-sm text-stone-500">See the Overruns tab →</span>
+          <span className="text-sm text-stone-500">See the Cost Movements tab →</span>
         </Link>
       )}
 
@@ -315,7 +317,7 @@ export default async function CostToCompletePage({
               </thead>
               <tbody className="divide-y divide-stone-100 align-top">
                 {rows.map((r) => (
-                  <tr key={r.id} className={overIds.has(r.id) ? "bg-red-500/5" : undefined}>
+                  <tr key={r.id} className={overIds.has(r.id) ? "bg-amber-500/5" : undefined}>
                     <td className="px-2 py-2 font-mono text-xs text-stone-400 whitespace-nowrap">{r.code}</td>
                     <td className="px-2 py-2 break-words">{r.name}</td>
                     <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.estimate)}</td>
@@ -326,7 +328,7 @@ export default async function CostToCompletePage({
                     <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(r.current)}</td>
                     <td
                       className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${
-                        r.variance < 0 ? "font-medium text-red-700 dark:text-red-300" : "text-stone-500"
+                        r.variance < 0 ? "font-medium text-amber-800 dark:text-amber-200" : "text-stone-500"
                       }`}
                     >
                       {formatCents(r.variance)}

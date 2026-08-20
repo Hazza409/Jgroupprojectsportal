@@ -15,7 +15,7 @@ const SECTIONS: Section[] = [
     items: [
       { slug: "estimate", label: "Original Estimate" },
       { slug: "budget", label: "Budget" },
-      { slug: "overruns", label: "Overruns" },
+      { slug: "overruns", label: "Cost Movements" },
       { slug: "cost-to-complete", label: "Cost to Complete" },
       { slug: "progress-claims", label: "Progress Claims" },
       { slug: "variations", label: "Variations" },

@@ -8,16 +8,21 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
 
 /**
- * Overruns — ONLY the cost codes running over budget, worst first.
+ * Cost Movements — ONLY the cost codes tracking above their estimate, largest
+ * first. (Route stays /overruns: Jake §4 changes the labels, not the data or
+ * any existing link.)
  *
- * Deliberately narrow: this tab exists so an overrun is impossible to miss and
+ * Deliberately narrow: this tab exists so a movement is impossible to miss and
  * can be sent to a client or QS as the exception report. The full code-by-code
  * position lives on the Budget tab.
  *
- * "Over budget" is measured against the CURRENT budget (original estimate plus
- * APPROVED variations). A code that received an approved variation for extra
- * work is therefore not flagged — only genuine overspend appears. That's the
- * right basis on cost plus: approved growth isn't an overrun.
+ * Measured against the APPROVED budget (original estimate plus APPROVED
+ * variations). A code that received an approved variation for extra work is
+ * therefore not flagged — approved growth is not a movement against estimate.
+ *
+ * Language throughout is "above estimate", never "over budget", and the colour
+ * is amber, never red: on cost plus the estimate was never a committed ceiling,
+ * so "over budget" misdescribes the figure and reads as an admitted breach.
  */
 export default async function OverrunsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -39,11 +44,11 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   return (
     <div className="space-y-6">
       <ModuleHeader
-        title="Overruns"
+        title="Cost Movements"
         description={
           isBuilder
-            ? "Cost codes spending beyond their current budget, largest first. Approved variations are already counted in the budget, so these are genuine overspends."
-            : "Anything costing more than its current budget. Approved variations are already included in the budget, so these are over and above what's been approved."
+            ? "Cost codes tracking above their approved budget, largest first. Approved variations are already counted in the budget, so these are movements against estimate, not approved growth."
+            : "Where costs are currently running above the original estimate for that item. Estimates are reforecast as the build progresses — these are not extra charges beyond what's been approved."
         }
         action={
           <Link href={`/projects/${projectId}/budget`} className="btn-ghost">
@@ -53,15 +58,15 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
       />
 
       <div className="rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
-        Measured against the current budget — original estimate plus approved variations. All amounts include
-        builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
+        Measured against the approved budget — original estimate plus approved variations, which is not a cap
+        on final cost. All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
       </div>
 
       {over.length === 0 ? (
         <div className="card border-emerald-500/30">
-          <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">✓ Nothing is over budget</p>
+          <p className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">✓ Every cost code is tracking at or below its estimate</p>
           <p className="mt-1 text-sm text-stone-500">
-            Every cost code is within its current budget. See the{" "}
+            Nothing is currently running above its approved budget. See the{" "}
             <Link href={`/projects/${projectId}/budget`} className="text-brand underline">Budget tab</Link> for the full
             position.
           </p>
@@ -70,9 +75,9 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
         <>
           {/* Headline: how bad, and is it absorbed elsewhere? */}
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="card border-red-500/30">
-              <p className="text-xs uppercase tracking-wide text-stone-400">Total over budget</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-red-700 dark:text-red-300">
+            <div className="card border-amber-500/40">
+              <p className="text-xs uppercase tracking-wide text-stone-400">Total above estimate</p>
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-amber-800 dark:text-amber-200">
                 {formatCents(totalOverCents)}
               </p>
               <p className="mt-1 text-xs text-stone-400">
@@ -80,25 +85,25 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
               </p>
             </div>
             <div className="card">
-              <p className="text-xs uppercase tracking-wide text-stone-400">Largest overrun</p>
+              <p className="text-xs uppercase tracking-wide text-stone-400">Largest movement</p>
               <p className="mt-2 text-lg font-semibold">{worst.name}</p>
-              <p className="mt-1 text-sm tabular-nums text-red-700 dark:text-red-300">
-                {formatCents(worst.overCents)} over
+              <p className="mt-1 text-sm tabular-nums text-amber-800 dark:text-amber-200">
+                {formatCents(worst.overCents)} above estimate
               </p>
             </div>
             <div className="card">
               <p className="text-xs uppercase tracking-wide text-stone-400">Whole-job position</p>
               <p
                 className={`mt-2 text-lg font-semibold tabular-nums ${
-                  netCents < 0 ? "text-red-700 dark:text-red-300" : "text-emerald-700 dark:text-emerald-300"
+                  netCents < 0 ? "text-amber-800 dark:text-amber-200" : "text-emerald-700 dark:text-emerald-300"
                 }`}
               >
-                {netCents < 0 ? `${formatCents(-netCents)} over` : `${formatCents(netCents)} remaining`}
+                {netCents < 0 ? `${formatCents(-netCents)} above` : `${formatCents(netCents)} remaining`}
               </p>
               <p className="mt-1 text-xs text-stone-400">
                 {netCents < 0
-                  ? "The overruns are not absorbed by savings elsewhere."
-                  : "Underspend elsewhere currently absorbs these overruns."}
+                  ? "These movements are not currently offset elsewhere."
+                  : "Movement elsewhere currently offsets these."}
               </p>
             </div>
           </div>
@@ -106,15 +111,15 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
           {/* Each overrun, worst first. */}
           <div className="space-y-2">
             {over.map((r) => (
-              <div key={r.id} className="card border-red-500/30">
+              <div key={r.id} className="card border-amber-500/40">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <p className="font-medium">
                     <span className="font-mono text-xs text-stone-400">{r.code}</span> {r.name}
                   </p>
-                  <p className="text-sm font-semibold tabular-nums text-red-700 dark:text-red-300">
-                    {formatCents(r.overCents)} over
+                  <p className="text-sm font-semibold tabular-nums text-amber-800 dark:text-amber-200">
+                    {formatCents(r.overCents)} above estimate
                     {Number.isFinite(r.pct) && r.revisedCents > 0 && (
-                      <span className="ml-1 font-normal">({(r.pct - 100).toFixed(0)}% above budget)</span>
+                      <span className="ml-1 font-normal">({(r.pct - 100).toFixed(0)}% above)</span>
                     )}
                   </p>
                 </div>
@@ -124,8 +129,8 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
                 <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-stone-500 sm:grid-cols-5">
                   <span>Estimate {formatCents(r.estimateCents)}</span>
                   <span>Variations {r.variationsCents !== 0 ? `+${formatCents(r.variationsCents)}` : "—"}</span>
-                  <span className="font-medium text-stone-600">Budget {formatCents(r.revisedCents)}</span>
-                  <span className="font-medium text-red-700 dark:text-red-300">Spent {formatCents(r.currentCents)}</span>
+                  <span className="font-medium text-stone-600">Approved budget {formatCents(r.revisedCents)}</span>
+                  <span className="font-medium text-amber-800 dark:text-amber-200">Spent {formatCents(r.currentCents)}</span>
                   <span>Used {fmtPct(r.pct)}</span>
                 </div>
               </div>
@@ -133,8 +138,9 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
           </div>
 
           <p className="text-xs text-stone-400">
-            A code shows here only when spend exceeds its budget including approved variations. If extra work was
-            approved for it, that money is already in the budget figure above.
+            A code shows here only when spend is above its approved budget, which already includes any approved
+            variations for that item. Estimates are reforecast as the build progresses and are not a cap on final
+            cost — a movement here is information, not an extra charge.
           </p>
         </>
       )}

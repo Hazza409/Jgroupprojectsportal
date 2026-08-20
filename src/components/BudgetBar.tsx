@@ -1,12 +1,19 @@
-// Spend bar shared by the Budget and Overruns tabs. Pure markup (no client
-// state) so it works in server components.
+// Spend bar shared by the Budget and Cost Movements tabs. Pure markup (no
+// client state) so it works in server components.
 //
-// Colour is the signal: brand under 90%, amber from 90% (about to blow), red
-// once over budget. Same thresholds on both tabs so they read consistently.
+// Colour is the signal: brand under 90%, amber from 90% and above.
+//
+// There is deliberately NO red here (Jake, Budget Revisions §3). Red on a
+// spend-vs-estimate bar means "you have spent more than a number we never
+// committed to" — and on a cost-plus job it fires early on any front-loaded
+// line (scaffold, plant hire, preliminaries) while the job is barely started.
+// In the client's own portal that reads as a self-reported breach. Red is
+// reserved for a genuine forecast-above-estimate signal, which needs a
+// per-line forecast the portal does not hold yet.
 export function BudgetBar({ pct, thick = false }: { pct: number; thick?: boolean }) {
   const width = Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 100;
   const over = !Number.isFinite(pct) || pct > 100;
-  const colour = over ? "bg-red-500" : pct >= 90 ? "bg-amber-500" : "bg-brand";
+  const colour = over || pct >= 90 ? "bg-amber-500" : "bg-brand";
   return (
     <div className={`${thick ? "h-3" : "h-2"} w-full overflow-hidden rounded-full bg-stone-100`}>
       <div className={`h-full rounded-full ${colour}`} style={{ width: `${width}%` }} />

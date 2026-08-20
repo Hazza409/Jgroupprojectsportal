@@ -1,6 +1,7 @@
 import { ClaimStatus } from "@prisma/client";
 import { db } from "./db";
-import { inclMarginGst, sumCents } from "./money";
+import { inclMarginGst, sumCents, centsToNumber } from "./money";
+import { correctCostName } from "./houseStyle";
 
 // ─────────────────────────────────────────────────────────────
 // Cost-code name matching. Real-world estimate vs reconciliation
@@ -322,7 +323,9 @@ export async function computeCostToComplete(
     const currentCents = inclMarginGst(sumCents(cc.costActuals.map((a) => a.amountCents)), company);
     const revisedCents = estimateCents + variationsCents;
     return {
-      id: cc.id, code: cc.code, name: cc.name,
+      // Spelling corrected for display only (Jake §7) — the stored name is
+      // untouched, so cost-code matching is unaffected.
+      id: cc.id, code: cc.code, name: correctCostName(cc.name),
       estimateCents, variationsCents, revisedCents, currentCents,
       varianceCents: revisedCents - currentCents,
     };
@@ -484,3 +487,74 @@ export async function rematerializeProjectClaims(projectId: string): Promise<{ c
   for (const c of claims) lines += await materializeClaimActuals(projectId, c.id);
   return { claims: claims.length, lines };
 }
+
+// ─────────────────────────────────────────────────────────────
+// The budget headline on a COST-PLUS job (Jake, Budget Revisions §2).
+//
+// The estimate is not a ceiling the client draws down against — they pay actual
+// cost plus margin. So "Remaining" must count against the FORECAST final cost,
+// not against the estimate; anchoring it to the estimate is what made the page
+// read as a fixed pot being spent down.
+//
+// Where the forecast comes from: the project's published forecast final cost —
+// a figure a person enters and Nick signs off, not something derived here. Until
+// one is published we fall back to the approved budget, so the card always shows
+// a real number and simply sharpens once a forecast exists. We deliberately do
+// NOT compute a forecast from spend-to-date: an invented number in front of a
+// client on a cost-plus job is worse than an honest placeholder.
+// ─────────────────────────────────────────────────────────────
+export interface BudgetPosition {
+  estimateCents: number;
+  variationsCents: number;
+  /** Original estimate + approved variations. Not a cap. */
+  approvedBudgetCents: number;
+  forecastCents: number;
+  /** False when forecastCents is standing in for an unpublished forecast. */
+  forecastIsPublished: boolean;
+  spentCents: number;
+  /** Forecast − spent. Negative means spend has passed the forecast. */
+  remainingToForecastCents: number;
+  /** Spend as a % of FORECAST (Jake §2: the bar reads against forecast). */
+  pctOfForecast: number;
+}
+
+/**
+ * The arithmetic, separated from the fetch so it can be tested directly.
+ *
+ * @param publishedForecastCents a forecast that has cleared sign-off, or null.
+ */
+export function resolveBudgetPosition(
+  publishedForecastCents: number | null,
+  totals: { estimateCents: number; variationsCents: number; revisedCents: number; currentCents: number },
+): BudgetPosition {
+  const approvedBudgetCents = totals.revisedCents;
+  const spentCents = totals.currentCents;
+  const forecastCents = publishedForecastCents ?? approvedBudgetCents;
+  return {
+    estimateCents: totals.estimateCents,
+    variationsCents: totals.variationsCents,
+    approvedBudgetCents,
+    forecastCents,
+    forecastIsPublished: publishedForecastCents !== null,
+    spentCents,
+    remainingToForecastCents: forecastCents - spentCents,
+    pctOfForecast: forecastCents > 0 ? (spentCents / forecastCents) * 100 : spentCents > 0 ? Infinity : 0,
+  };
+}
+
+export async function budgetPosition(projectId: string, ctc: CostToComplete): Promise<BudgetPosition> {
+  const project = await db.project.findUnique({
+    where: { id: projectId },
+    select: { forecastFinalCostCents: true, forecastUpdatedAt: true },
+  });
+
+  // Only a PUBLISHED forecast counts — a pending one hasn't cleared sign-off
+  // and must not reach a client-facing figure.
+  const published =
+    project?.forecastFinalCostCents != null && project.forecastUpdatedAt != null
+      ? centsToNumber(project.forecastFinalCostCents)
+      : null;
+
+  return resolveBudgetPosition(published, ctc.totals);
+}
+
