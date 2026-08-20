@@ -56,7 +56,14 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   // Shared with the Budget, Cost to Complete and Overview pages so all four
   // report identical movements on an identical basis.
   const summary = overrunSummary(ctc);
-  const over = summary.rows.map((r) => ({ ...r, pct: pctUsed(r.currentCents, r.revisedCents) }));
+  // A movement listed on the FORECAST basis measures spend against the
+  // forecast — the line's explained expected final cost — not the superseded
+  // budget. Otherwise the card says "finishes at $114k" and "179% used" in
+  // the same breath.
+  const over = summary.rows.map((r) => ({
+    ...r,
+    pct: pctUsed(r.currentCents, r.basis === "forecast" && r.forecastCents !== null ? r.forecastCents : r.revisedCents),
+  }));
   const totalOverCents = summary.totalOverCents;
   const netCents = summary.netCents;
   const worst = over[0];
@@ -98,7 +105,7 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
         description={
           isBuilder
             ? "Forecast what each cost code will finish at, and publish movements to the client with a reason — before spend gets there."
-            : "Where costs are currently running above the original estimate for that item. Estimates are reforecast as the build progresses — these are not extra charges beyond what's been approved."
+            : "Where costs are running — or are forecast to finish — above the original estimate for that item. Estimates are reforecast as the build progresses — these are not extra charges beyond what's been approved."
         }
         action={
           <Link href={`/projects/${projectId}/budget`} className="btn-ghost">
@@ -223,7 +230,7 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
                   <span>Variations {r.variationsCents !== 0 ? `+${formatCents(r.variationsCents)}` : "—"}</span>
                   <span className="font-medium text-stone-600">Approved budget {formatCents(r.revisedCents)}</span>
                   <span className="font-medium text-amber-800 dark:text-amber-200">Spent {formatCents(r.currentCents)}</span>
-                  <span>Used {fmtPct(r.pct)}</span>
+                  <span>Used {fmtPct(r.pct)}{r.basis === "forecast" ? " of forecast" : ""}</span>
                 </div>
               </div>
             ))}
