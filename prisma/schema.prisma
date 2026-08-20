@@ -113,6 +113,7 @@ enum DecisionAction {
   REJECTED // client declined
   ACKNOWLEDGED // client confirmed receipt — NOT approval
   ANSWERED // client responded to a query/decision
+  PUBLISHED // J Group issued revised figures to the client (forecast sign-off)
 }
 
 enum DecisionSubject {
@@ -120,6 +121,7 @@ enum DecisionSubject {
   CLAIM
   UPDATE // fortnightly summary
   QUERY // Q&A item
+  FORECAST // revised final-cost / completion figures issued to the client
 }
 
 model DecisionRecord {
@@ -345,6 +347,7 @@ model Project {
   decisionRecords   DecisionRecord[]
   viewLogs          ViewLog[]
   forecastSignoffs  ForecastSignoff[]
+  forecastHistory   CostCodeForecastEntry[]
   // Client-facing "who to contact at J Group" list
   contacts          ProjectContact[]
   // Subcontractor directory (shown in Handover), Excel/CSV uploadable
@@ -355,6 +358,42 @@ model Project {
 
 // ─────────────────────────── Cost codes ──────────────────────
 // The shared key that ties Estimate ↔ Xero actuals ↔ Cost-to-Complete ↔ claims.
+
+/// Every per-cost-code forecast ever PUBLISHED to a client — append-only.
+///
+/// CostCode holds only the CURRENT forecast, so republishing overwrote the
+/// previous figure and the notice trail died with it. On a cost-plus job the
+/// question in dispute is "what were we told this line would finish at, and
+/// when" — that answer has to survive every later revision, so each publication
+/// is written here and never updated or deleted.
+///
+/// `revision` matches ForecastSignoff.revision, which is what ties a signature
+/// to the exact line movements it authorised.
+model CostCodeForecastEntry {
+  id         String @id @default(cuid())
+  projectId  String
+  costCodeId String
+  /// Ties this publication to the signature(s) that authorised it.
+  revision   String
+
+  /// Base cents (ex margin/GST), same basis as CostCode.forecastCents.
+  forecastCents Int
+  /// The line's approved budget at the moment of publication, so the movement
+  /// is readable from this row alone without recomputing history.
+  approvedBudgetCents Int
+  note String?
+
+  /// Frozen identity — the record must outlive the account that made it.
+  publishedAt      DateTime @default(now())
+  publishedByName  String
+  publishedByEmail String
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costCode CostCode @relation(fields: [costCodeId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, publishedAt])
+  @@index([costCodeId, publishedAt])
+}
 
 model CostCode {
   id          String  @id @default(cuid())
@@ -385,6 +424,7 @@ model CostCode {
   claimLines     ClaimLineItem[]
   variations     Variation[]
   variationLines VariationLineItem[]
+  forecastHistory CostCodeForecastEntry[]
 
   @@unique([projectId, code])
   @@index([projectId])

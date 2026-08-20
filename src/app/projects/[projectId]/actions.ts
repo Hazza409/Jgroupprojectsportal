@@ -5,10 +5,12 @@ import bcrypt from "bcryptjs";
 import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { dollarsToCents, exceedsInt4, tooLargeMessage, exMarginGst } from "@/lib/money";
+import { dollarsToCents, exceedsInt4, tooLargeMessage, exMarginGst, inclMarginGst, centsToNumber, formatCents } from "@/lib/money";
 import { forecastGate, restampForecastRevision, approverEmails } from "@/lib/forecast";
 import { getCompany } from "@/lib/company";
 import { validatePassword } from "@/lib/password";
+import { recordDecision } from "@/lib/audit";
+import { DecisionAction, DecisionSubject } from "@prisma/client";
 
 export interface SimpleResult { ok: boolean; message: string }
 
@@ -226,6 +228,11 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
     (project.forecastCompletionDate === null ||
       project.pendingForecastCompletionDate.getTime() !== project.forecastCompletionDate.getTime());
 
+  // Captured BEFORE the update below nulls the staging fields.
+  const signedRevision = project.pendingForecastRevision!;
+  const publishedBy = after.signed.map((s) => s.name).join(" & ");
+  const companyRates = await getCompany();
+
   await db.project.update({
     where: { id: projectId },
     data: {
@@ -244,7 +251,7 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
       forecastCompletionNote:
         project.pendingForecastCompletionDate !== null ? project.pendingForecastCompletionNote : undefined,
       forecastUpdatedAt: new Date(),
-      forecastUpdatedBy: after.signed.map((s) => s.name).join(" & "),
+      forecastUpdatedBy: publishedBy,
       // Clear the staging area — this revision is now the published truth.
       pendingForecastFinalCostCents: null,
       pendingForecastFinalCostNote: null,
@@ -261,9 +268,30 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
   // them. Done per row because each carries its own amount and note.
   const stagedLines = await db.costCode.findMany({
     where: { projectId, pendingForecastCents: { not: null } },
-    select: { id: true, pendingForecastCents: true, pendingForecastNote: true },
+    select: { id: true, code: true, name: true, pendingForecastCents: true, pendingForecastNote: true },
   });
   const publishedAt = new Date();
+
+  // Budgets as at this moment, so each history row records the movement it
+  // represented without anyone having to reconstruct the past.
+  const budgetAtPublish = new Map<string, number>();
+  if (stagedLines.length > 0) {
+    const codes = await db.costCode.findMany({
+      where: { projectId },
+      select: {
+        id: true,
+        estimateLines: { select: { totalCents: true } },
+        variations: { where: { status: "APPROVED" }, select: { totalCents: true } },
+      },
+    });
+    for (const c of codes) {
+      budgetAtPublish.set(
+        c.id,
+        c.estimateLines.reduce((a, l) => a + l.totalCents, 0) + c.variations.reduce((a, v) => a + v.totalCents, 0),
+      );
+    }
+  }
+
   for (const line of stagedLines) {
     await db.costCode.update({
       where: { id: line.id },
@@ -275,7 +303,53 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
         pendingForecastNote: null,
       },
     });
+    // Append-only history: CostCode keeps only the CURRENT figure, so without
+    // this the previous forecast — and the date it was given — would be gone
+    // the moment the line is republished. `revision` ties the row to the
+    // signature(s) that authorised it.
+    await db.costCodeForecastEntry.create({
+      data: {
+        projectId,
+        costCodeId: line.id,
+        revision: signedRevision,
+        forecastCents: line.pendingForecastCents!,
+        approvedBudgetCents: budgetAtPublish.get(line.id) ?? 0,
+        note: line.pendingForecastNote,
+        publishedAt,
+        publishedByName: publishedBy,
+        publishedByEmail: user.email,
+      },
+    });
   }
+
+  // The Decision Register is the document handed to a QS or lawyer. It covered
+  // only CLIENT decisions, so the moment J Group issued revised figures — the
+  // notification event a cost-plus dispute turns on — was absent from it.
+  await recordDecision({
+    projectId,
+    subjectType: DecisionSubject.FORECAST,
+    subjectId: signedRevision,
+    subjectRef: `Forecast revision ${signedRevision}`,
+    subjectTitle:
+      stagedLines.length > 0
+        ? `${stagedLines.length} cost line${stagedLines.length === 1 ? "" : "s"} reforecast`
+        : "Headline forecast figures",
+    action: DecisionAction.PUBLISHED,
+    actor: user,
+    amountCents:
+      project.pendingForecastFinalCostCents !== null
+        ? centsToNumber(project.pendingForecastFinalCostCents)
+        : null,
+    versionHash: signedRevision,
+    detail: [
+      `Issued to the client by ${publishedBy}.`,
+      ...stagedLines.map(
+        (l) =>
+          `${l.code} ${l.name}: forecast ${formatCents(inclMarginGst(l.pendingForecastCents!, companyRates))}` +
+          (l.pendingForecastNote ? ` — ${l.pendingForecastNote}` : ""),
+      ),
+    ].join(" "),
+  });
 
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/settings`);

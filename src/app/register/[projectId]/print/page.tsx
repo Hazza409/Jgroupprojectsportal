@@ -12,12 +12,17 @@ const ACTION_LABEL: Record<string, string> = {
   REJECTED: "Rejected",
   ACKNOWLEDGED: "Acknowledged (receipt)",
   ANSWERED: "Answered",
+  // J Group's own act, not a client decision — the register would otherwise
+  // show what the client agreed to but never when they were told.
+  PUBLISHED: "Issued to client",
 };
 
 /**
- * Decision Register — the immutable, dated record of every client decision on
- * the project: approvals, rejections, acknowledgements and query answers
- * (Jake §2). Exported untouched to a QS or lawyer. Append-only: nothing in this
+ * Decision Register — the immutable, dated record of every decision on the
+ * project: the client's approvals, rejections, acknowledgements and query
+ * answers, AND J Group's own issuing of revised forecast figures (Jake §2).
+ * Both halves matter in a dispute: what the client agreed to, and when they
+ * were told. Exported untouched to a QS or lawyer. Append-only: nothing in this
  * document can be edited after the fact; corrections appear as later entries.
  */
 export default async function DecisionRegisterPage({ params }: { params: { projectId: string } }) {
