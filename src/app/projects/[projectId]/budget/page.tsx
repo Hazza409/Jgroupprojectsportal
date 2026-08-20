@@ -77,6 +77,14 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
       <div className="space-y-2 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
         <p>
           All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
+          {/* The rate is company-wide, so it lives in Builder settings, not here.
+              Linking it saves hunting for where the number on this line comes from. */}
+          {isBuilder && (
+            <>
+              {" "}
+              <Link href="/builder/settings" className="underline underline-offset-2">Change the rate</Link>
+            </>
+          )}
         </p>
         {/*
           Standing disclaimer, wording supplied verbatim by Jake (§6). Its whole
