@@ -188,7 +188,7 @@ export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12
     // Complete as one Unallocated lump, silently.
     warnings.push(
       "No Budget Overview rows found, so this claim can't be split by cost code — " +
-        "its costs will show against Unallocated in Cost to Complete. Check the sheet has a " +
+        "its costs will show against Unallocated on the Budget tab. Check the sheet has a " +
         "'Budget Overview' heading with the cost-code rows directly beneath it.",
     );
   } else if (supplierLines.length === 0) {

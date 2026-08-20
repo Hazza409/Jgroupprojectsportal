@@ -21,7 +21,7 @@ export function MarkApprovedButton({
   function onClick() {
     if (
       !window.confirm(
-        `Record Claim #${claimNumber} as already approved?\n\nUse this for historical claims approved before this project was on the portal. The client is NOT notified, the claim's costs post to Cost to Complete, and this can't be undone.`,
+        `Record Claim #${claimNumber} as already approved?\n\nUse this for historical claims approved before this project was on the portal. The client is NOT notified, the claim's costs post to the Budget figures, and this can't be undone.`,
       )
     )
       return;

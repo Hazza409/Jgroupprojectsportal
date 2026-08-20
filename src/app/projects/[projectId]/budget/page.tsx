@@ -1,52 +1,103 @@
 import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
-import { formatCents } from "@/lib/money";
+import { formatCents, inclMarginGst } from "@/lib/money";
 import { getCompany } from "@/lib/company";
-import { computeCostToComplete, overrunSummary, budgetPosition } from "@/lib/claims";
+import { db } from "@/lib/db";
+import { computeCostToComplete, overrunSummary, budgetPosition, claimHeadlineCents } from "@/lib/claims";
 import { logView } from "@/lib/audit";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
+import { isConnected } from "@/lib/xero/tokens";
+import { XeroControls } from "../cost-to-complete/XeroControls";
+import { CurrentCostsImport } from "../cost-to-complete/CurrentCostsImport";
+import { rematchClaimCosts } from "../cost-to-complete/actions";
 
 /**
- * Budget — the FULL picture: every cost code, its budget, what's been spent,
- * and how much of the budget is used. Original Estimate stays the as-signed
- * baseline; overruns get their own tab (linked from the banner here).
+ * Budget — THE money page. The old Cost to Complete tab is folded in here
+ * (Harry, 21 Aug 2026): its builder tools (Xero sync, cost import, re-match,
+ * Excel export), the pending-claims panel and the unallocated diagnostics all
+ * live on this page now, and /cost-to-complete redirects here.
  *
- * Every figure comes from computeCostToComplete — the same single source as the
- * Overruns tab, Cost to Complete and the Overview — so nothing can disagree.
+ * Column design: the forecast shows as the ADJUSTMENT — the signed difference
+ * against the approved budget — sitting left of the budget column. Five
+ * full-size money columns in a row made every line a wall of similar numbers;
+ * the delta is the fact a reader actually wants.
+ *
+ * Every figure comes from computeCostToComplete — the same single source as
+ * Forecast Adjustments and the Overview — so nothing can disagree.
  */
-export default async function BudgetPage({ params }: { params: { projectId: string } }) {
+export default async function BudgetPage({
+  params,
+  searchParams,
+}: {
+  params: { projectId: string };
+  searchParams: { xero?: string };
+}) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
   const company = await getCompany();
 
-  const ctc = await computeCostToComplete(projectId, company);
-  await logView(projectId, user, `/projects/${projectId}/budget`, "Budget");
+  const [ctc, xeroConnected, xeroConn, pendingClaims, unallocatedSources] = await Promise.all([
+    computeCostToComplete(projectId, company),
+    isBuilder ? isConnected(projectId) : Promise.resolve(false),
+    isBuilder
+      ? db.xeroConnection.findUnique({ where: { projectId }, select: { lastSyncedAt: true } })
+      : Promise.resolve(null),
+    // Claims entered but not yet posted — costs reach these figures on
+    // APPROVAL, and without this panel the page is silent about the most
+    // common question: "I put the invoice in, why hasn't spend moved?"
+    isBuilder
+      ? db.progressClaim.findMany({
+          where: { projectId, status: { in: ["DRAFT", "SUBMITTED"] } },
+          orderBy: { claimNumber: "asc" },
+          select: {
+            id: true, claimNumber: true, status: true, periodLabel: true,
+            totalCents: true, lines: { select: { claimedAmountCents: true } },
+          },
+        })
+      : Promise.resolve([]),
+    // WHY money sits in Unallocated — the two causes need opposite fixes.
+    isBuilder
+      ? db.costActual.findMany({
+          where: { projectId, costCodeId: null, amountCents: { not: 0 } },
+          orderBy: { amountCents: "desc" },
+          select: { id: true, description: true, amountCents: true, xeroSourceId: true },
+        })
+      : Promise.resolve([]),
+    logView(projectId, user, `/projects/${projectId}/budget`, "Budget"),
+  ]);
+
+  const pending = pendingClaims
+    .map((c) => ({ ...c, headline: claimHeadlineCents(c, company) }))
+    .filter((c) => c.headline > 0);
+  const pendingTotal = pending.reduce((a, c) => a + c.headline, 0);
+  const unmatchedNames = unallocatedSources.filter((a) => !a.xeroSourceId?.endsWith(":remainder"));
+  const unitemised = unallocatedSources.filter((a) => a.xeroSourceId?.endsWith(":remainder"));
 
   // A published line forecast ADJUSTS the line's working budget: the Used bar
-  // reads against what the line is now expected to finish at, not the figure
-  // everyone already knows it will pass. Same rule as the whole-job bar (§2),
-  // applied per row. No forecast → the approved budget stands.
+  // reads against what the line is now expected to finish at. No forecast →
+  // the approved budget stands.
   const rows = ctc.rows.map((r) => {
     const workingBudgetCents = r.forecastCents ?? r.revisedCents;
     return {
       ...r,
       workingBudgetCents,
-      // Forecast wins over raw spend — same basis as the Adjustments tab.
+      // Signed adjustment against the approved budget — what the table shows.
+      adjustmentCents: r.forecastCents !== null ? r.forecastCents - r.revisedCents : null,
       over: r.forecastMovementCents !== null ? r.forecastMovementCents > 0 : r.currentCents > r.revisedCents,
       pct: pctUsed(r.currentCents, workingBudgetCents),
     };
   });
-  // Shared basis with the Overruns / Cost to Complete / Overview pages.
+  const netAdjustmentCents = rows.reduce((a, r) => a + (r.adjustmentCents ?? 0), 0);
+  const anyForecast = rows.some((r) => r.adjustmentCents !== null);
+
   const summary = overrunSummary(ctc);
   const overCount = summary.count;
   const totalOverCents = summary.totalOverCents;
   const watchCount = rows.filter((r) => !r.over && Number.isFinite(r.pct) && r.pct >= 90).length;
 
   const t = ctc.totals;
-  // Remaining counts against the FORECAST, not the estimate (Jake §2) — on cost
-  // plus the estimate was never a pot to draw down.
   const pos = await budgetPosition(projectId, ctc);
   const remaining = pos.remainingToForecastCents;
   const jobPct = pos.pctOfForecast;
@@ -61,8 +112,6 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
       label: remaining < 0 ? "Above forecast" : "Remaining to forecast",
       value: Math.abs(remaining),
       strong: true,
-      // Amber, not red: passing the forecast is information the client needs,
-      // not a breach of a committed figure.
       tone: remaining < 0 ? "text-amber-700 dark:text-amber-300" : "text-emerald-700 dark:text-emerald-300",
     },
   ];
@@ -73,7 +122,7 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         title="Budget"
         description={
           isBuilder
-            ? "Approved budget (estimate + approved variations) and forecast final cost against costs incurred, for every cost code."
+            ? "The whole money position: approved budget, forecast adjustments and costs incurred, per cost code. Current costs sync one-directionally from Xero."
             : "What each part of the build is estimated to cost, what it's forecast to finish at, and what's been spent so far."
         }
         action={
@@ -83,11 +132,43 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         }
       />
 
+      {/* ── Builder tools, folded in from the old Cost to Complete tab ── */}
+      {isBuilder && (
+        <div className="flex flex-wrap items-start gap-2">
+          <XeroControls
+            projectId={projectId}
+            connected={xeroConnected}
+            lastSyncedAt={
+              xeroConn?.lastSyncedAt
+                ? new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(
+                    xeroConn.lastSyncedAt,
+                  )
+                : null
+            }
+          />
+          <CurrentCostsImport projectId={projectId} />
+          {/* Re-links approved claims' lines to cost codes (fuzzy) + re-posts them. */}
+          <form action={rematchClaimCosts.bind(null, projectId)}>
+            <button className="btn-ghost" type="submit">Re-match claim costs</button>
+          </form>
+          <a className="btn-ghost" href={`/api/projects/${projectId}/export`}>Export to Excel</a>
+        </div>
+      )}
+
+      {searchParams.xero === "connected" && (
+        <div className="card border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-700 dark:text-emerald-200">
+          Xero connected. Click <strong>Sync now</strong> to pull current costs.
+        </div>
+      )}
+      {searchParams.xero === "error" && (
+        <div className="card border-red-500/30 bg-red-500/10 text-sm text-red-700 dark:text-red-200">
+          Xero connection failed. Check your app credentials and try again.
+        </div>
+      )}
+
       <div className="space-y-2 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
         <p>
           All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
-          {/* The rate is company-wide, so it lives in Builder settings, not here.
-              Linking it saves hunting for where the number on this line comes from. */}
           {isBuilder && (
             <>
               {" "}
@@ -95,11 +176,7 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
             </>
           )}
         </p>
-        {/*
-          Standing disclaimer, wording supplied verbatim by Jake (§6). Its whole
-          purpose is to sit in front of the client every time they open the page,
-          so it must never be behind a role check or a dismiss button.
-        */}
+        {/* Jake §6, verbatim — never behind a role check or a dismiss button. */}
         <p>
           Estimates are not a fixed price. Each cost line is an estimate that is reforecast against actual
           cost as the build progresses. The current approved budget is the original estimate plus approved
@@ -140,17 +217,47 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
               {" · "}
               <span>
                 no forecast published yet, so this reads against the approved budget
-                {isBuilder && " — publish one in Settings"}
+                {isBuilder && " — publish one on Forecast Adjustments"}
               </span>
             </>
           )}
         </p>
       </div>
 
-      {/*
-        Wording per Jake §4: "above its original estimate", never "over budget".
-        Amber, not red — a cost movement is information, not a breach.
-      */}
+      {/* Claims entered but not yet in these figures (was on Cost to Complete). */}
+      {isBuilder && pending.length > 0 && (
+        <div className="card border-amber-500/40 bg-amber-500/10">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+              {formatCents(pendingTotal)} claimed but not yet in these figures
+            </p>
+            <p className="text-xs text-amber-800/80 dark:text-amber-200/80">
+              Claim costs post to Spent when the claim is approved.
+            </p>
+          </div>
+          <ul className="mt-3 divide-y divide-amber-500/20">
+            {pending.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 text-sm">
+                <Link
+                  href={`/projects/${projectId}/progress-claims/${c.id}`}
+                  className="font-medium underline underline-offset-2"
+                >
+                  Claim #{c.claimNumber}
+                  {c.periodLabel ? ` — ${c.periodLabel}` : ""}
+                </Link>
+                <span className="flex items-center gap-3">
+                  <span className="tabular-nums">{formatCents(c.headline)}</span>
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-900 dark:text-amber-100">
+                    {c.status === "SUBMITTED" ? "Awaiting client" : "Draft"}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Wording per Jake §4: "above estimate", amber, never "over budget". */}
       {overCount > 0 && (
         <Link
           href={`/projects/${projectId}/overruns`}
@@ -182,8 +289,8 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         <div className="card p-0">
           <table className="w-full table-fixed text-xs sm:text-sm">
             <colgroup>
-              <col className="w-[7%]" /><col className="w-[19%]" /><col className="w-[12%]" />
-              <col className="w-[11%]" /><col className="w-[12%]" /><col className="w-[12%]" />
+              <col className="w-[7%]" /><col className="w-[20%]" /><col className="w-[12%]" />
+              <col className="w-[11%]" /><col className="w-[11%]" /><col className="w-[12%]" />
               <col className="w-[12%]" /><col className="w-[15%]" />
             </colgroup>
             <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
@@ -192,17 +299,20 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
                 <th className="px-2 py-2.5">Cost item</th>
                 <th className="px-2 py-2.5 text-right">Estimate</th>
                 <th className="px-2 py-2.5 text-right">Variations</th>
+                {/*
+                  The forecast as a DELTA, left of the budget it adjusts. The
+                  full forecast figure lives on Forecast Adjustments; here the
+                  signed difference is the fact the reader wants, and it spares
+                  the table a fifth full-size money column.
+                */}
+                <th className="px-2 py-2.5 text-right">Forecast adj.</th>
                 <th className="px-2 py-2.5 text-right">Approved budget</th>
-                <th className="px-2 py-2.5 text-right">Forecast</th>
                 <th className="px-2 py-2.5 text-right">Spent</th>
                 <th className="px-2 py-2.5">Used</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 align-top">
               {rows.map((r) => {
-                // "above estimate", flagged amber. Never red from spend alone
-                // (Jake §3): a front-loaded line early in the job is not a
-                // blowout, and red here reads as a self-reported failure.
                 const over = r.over;
                 return (
                   <tr key={r.id} className={over ? "bg-amber-500/5" : undefined}>
@@ -212,15 +322,21 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
                     <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap text-stone-500">
                       {r.variationsCents !== 0 ? `+${formatCents(r.variationsCents)}` : "—"}
                     </td>
-                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCents(r.revisedCents)}</td>
                     <td
                       className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${
-                        r.forecastCents !== null ? "font-medium" : "text-stone-400"
+                        r.adjustmentCents === null
+                          ? "text-stone-400"
+                          : r.adjustmentCents > 0
+                            ? "font-medium text-amber-800 dark:text-amber-200"
+                            : "font-medium text-emerald-700 dark:text-emerald-300"
                       }`}
                       title={r.forecastNote ?? undefined}
                     >
-                      {r.forecastCents !== null ? formatCents(r.forecastCents) : "—"}
+                      {r.adjustmentCents === null
+                        ? "—"
+                        : `${r.adjustmentCents >= 0 ? "+" : "−"}${formatCents(Math.abs(r.adjustmentCents))}`}
                     </td>
+                    <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCents(r.revisedCents)}</td>
                     <td className={`px-2 py-2 text-right tabular-nums whitespace-nowrap ${over ? "font-medium text-amber-800 dark:text-amber-200" : ""}`}>
                       {formatCents(r.currentCents)}
                     </td>
@@ -243,8 +359,16 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
                 <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">
                   {t.variationsCents !== 0 ? `+${formatCents(t.variationsCents)}` : "—"}
                 </td>
+                <td
+                  className={`px-2 py-2.5 text-right tabular-nums whitespace-nowrap ${
+                    !anyForecast ? "text-stone-400" : netAdjustmentCents > 0 ? "text-amber-800 dark:text-amber-200" : "text-emerald-700 dark:text-emerald-300"
+                  }`}
+                >
+                  {anyForecast
+                    ? `${netAdjustmentCents >= 0 ? "+" : "−"}${formatCents(Math.abs(netAdjustmentCents))}`
+                    : "—"}
+                </td>
                 <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.revisedCents)}</td>
-                <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap text-stone-400">—</td>
                 <td className="px-2 py-2.5 text-right tabular-nums whitespace-nowrap">{formatCents(t.currentCents)}</td>
                 <td className="px-2 py-2.5 tabular-nums text-stone-500">{fmtPct(jobPct)}</td>
               </tr>
@@ -253,23 +377,62 @@ export default async function BudgetPage({ params }: { params: { projectId: stri
         </div>
       )}
 
-      {rows.some((r) => r.forecastCents !== null) && (
+      {anyForecast && (
         <p className="text-xs text-stone-400">
-          Where a forecast has been published for a cost line, its Used bar reads against that forecast —
-          the line&apos;s current expected final cost — rather than the approved budget. The reasons are on
-          the Forecast Adjustments tab.
+          Forecast adj. is the published forecast&apos;s difference against that line&apos;s approved budget —
+          amber when it finishes above, green when below. Where one exists, the Used bar reads against the
+          forecast rather than the approved budget. Full figures and reasons are on the Forecast Adjustments tab.
         </p>
       )}
 
-      {/* Costs not matched to any cost code — they sit against no budget. */}
+      {/* WHY money is unallocated (was on Cost to Complete). Builder detail;
+          clients get the plain one-liner. */}
       {ctc.unallocated.currentCents !== 0 && (
         <div className="card border-amber-500/30">
           <p className="text-xs uppercase tracking-wide text-stone-400">Unallocated costs</p>
           <p className="mt-1 text-lg font-semibold tabular-nums">{formatCents(ctc.unallocated.currentCents)}</p>
-          <p className="mt-1 text-xs text-stone-500">
-            Not yet matched to a cost code, so these sit against no budget above.
-            {isBuilder && " Use “Re-match claim costs” on Cost to Complete to allocate them."}
-          </p>
+          {!isBuilder && (
+            <p className="mt-1 text-xs text-stone-500">
+              Not yet matched to a cost code, so these sit against no budget above.
+            </p>
+          )}
+          {isBuilder && unitemised.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-400">Not itemised on the sheet</p>
+              <p className="mt-1 text-sm text-stone-500">
+                These claims had no Budget Overview rows, so there was nothing to split their costs by.
+                Re-import the sheet with that section present.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {unitemised.map((u) => (
+                  <li key={u.id} className="flex justify-between gap-3 text-sm">
+                    <span>{u.description}</span>
+                    <span className="tabular-nums">{formatCents(inclMarginGst(u.amountCents, company))}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {isBuilder && unmatchedNames.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-stone-400">No matching cost code</p>
+              <p className="mt-1 text-sm text-stone-500">
+                These lines parsed, but their names match no cost code on this job. Rename at either end so
+                they agree, then press <strong>Re-match claim costs</strong> above.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {unmatchedNames.slice(0, 15).map((u) => (
+                  <li key={u.id} className="flex justify-between gap-3 text-sm">
+                    <span>{u.description}</span>
+                    <span className="tabular-nums">{formatCents(inclMarginGst(u.amountCents, company))}</span>
+                  </li>
+                ))}
+              </ul>
+              {unmatchedNames.length > 15 && (
+                <p className="mt-1 text-xs text-stone-400">+ {unmatchedNames.length - 15} more</p>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

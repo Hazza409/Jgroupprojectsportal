@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   function fail(reason: string, projectId?: string) {
     const url = projectId
-      ? new URL(`/projects/${projectId}/cost-to-complete?xero=error`, req.nextUrl.origin)
+      ? new URL(`/projects/${projectId}/budget?xero=error`, req.nextUrl.origin)
       : new URL(`/?xero=error`, req.nextUrl.origin);
     const res = NextResponse.redirect(url);
     res.cookies.delete("xero_oauth");
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   }
 
   const res = NextResponse.redirect(
-    new URL(`/projects/${parsed.projectId}/cost-to-complete?xero=connected`, req.nextUrl.origin),
+    new URL(`/projects/${parsed.projectId}/budget?xero=connected`, req.nextUrl.origin),
   );
   res.cookies.delete("xero_oauth");
   return res;

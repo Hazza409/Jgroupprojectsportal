@@ -86,7 +86,6 @@ export default async function ProjectOverview({ params }: { params: { projectId:
     { href: "estimate", label: "Original Estimate" },
     { href: "budget", label: "Budget" },
     { href: "overruns", label: "Forecast Adjustments" },
-    { href: "cost-to-complete", label: "Cost to Complete" },
     { href: "progress-claims", label: `Progress Claims (${claims})` },
     { href: "variations", label: "Variations" },
     { href: "schedule", label: `Schedule (${schedule})` },
@@ -213,20 +212,20 @@ export default async function ProjectOverview({ params }: { params: { projectId:
         </div>
       )}
 
-      {/* Cost to Complete summary — surfaced here so the numbers are on the
-          overview without clicking through. Full breakdown on the CTC page. */}
+      {/* Budget position — surfaced here so the numbers are on the overview
+          without clicking through. Full breakdown on the Budget tab. */}
       <div className="card">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-semibold">Cost to Complete</h2>
-          <Link href={`/projects/${projectId}/cost-to-complete`} className="text-sm text-stone-500 hover:text-ink">
-            View breakdown →
+          <h2 className="font-semibold">Budget position</h2>
+          <Link href={`/projects/${projectId}/budget`} className="text-sm text-stone-500 hover:text-ink">
+            View budget →
           </Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           {[
-            { label: "Current to Date", value: ctc.totals.currentCents },
-            { label: "Revised Estimate", value: ctc.totals.revisedCents },
-            { label: "Cost to Complete", value: ctc.totals.costToCompleteCents },
+            { label: "Spent to date", value: ctc.totals.currentCents },
+            { label: "Approved budget", value: ctc.totals.revisedCents },
+            { label: "Remaining", value: ctc.totals.costToCompleteCents },
           ].map((s) => (
             <div key={s.label}>
               <p className="text-xs uppercase tracking-wide text-stone-400">{s.label}</p>

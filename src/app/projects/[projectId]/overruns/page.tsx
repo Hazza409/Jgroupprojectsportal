@@ -251,7 +251,7 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
           <p className="mt-1 text-lg font-semibold tabular-nums">{formatCents(ctc.unallocated.currentCents)}</p>
           <p className="mt-1 text-xs text-stone-500">
             These sit against no cost code, so they aren&apos;t counted in any movement above.
-            {isBuilder && " Allocate them via “Re-match claim costs” on Cost to Complete for a true picture."}
+            {isBuilder && " Allocate them via “Re-match claim costs” on the Budget tab for a true picture."}
           </p>
         </div>
       )}
