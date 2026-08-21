@@ -52,9 +52,14 @@ export default async function EstimatePage({ params }: { params: { projectId: st
       {lines.length === 0 ? (
         <div className="card text-stone-500">No estimate line items yet.</div>
       ) : (
-        <div className="card p-0">
-          {/* table-fixed + colgroup so all columns fit the width (no sideways scroll). */}
-          <table className="w-full table-fixed text-xs sm:text-sm">
+        <div className="card p-0 overflow-x-auto">
+          {/*
+            table-fixed + colgroup keeps the column proportions; the min-width
+            gives them enough absolute room that eight-figure amounts can't be
+            clipped, and the wrapper scrolls horizontally on narrow screens
+            rather than the page doing it.
+          */}
+          <table className="w-full min-w-[60rem] table-fixed text-xs sm:text-sm">
             <colgroup>
               <col className="w-[8%]" />
               <col className="w-[20%]" />

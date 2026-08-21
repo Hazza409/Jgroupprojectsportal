@@ -85,8 +85,8 @@ export default async function VariationDetailPage({
           Descriptions + cost codes are editable at any status; adding/removing
           lines and amounts are draft-only. */}
       <form action={saveVariationLines.bind(null, projectId, variationId)}>
-        <div className="card p-0">
-          <table className="w-full table-fixed text-sm">
+        <div className="card p-0 overflow-x-auto">
+          <table className="w-full min-w-[46rem] table-fixed text-sm">
             <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
               <tr>
                 <th className="w-[42%] px-3 py-2.5">Description</th>

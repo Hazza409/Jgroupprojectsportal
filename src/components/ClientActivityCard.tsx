@@ -53,8 +53,8 @@ export async function ClientActivityCard({ projectId }: { projectId: string }) {
               ))}
           </div>
 
-          <div className="max-h-72 overflow-y-auto">
-            <table className="w-full table-fixed text-xs">
+          <div className="max-h-72 overflow-y-auto overflow-x-auto">
+            <table className="w-full min-w-[36rem] table-fixed text-xs">
               <colgroup>
                 <col className="w-[26%]" />
                 <col className="w-[40%]" />

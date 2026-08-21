@@ -51,8 +51,8 @@ export default async function MaintenanceSchedulePage({ params }: { params: { pr
       {items.length === 0 ? (
         <div className="card text-stone-500">No maintenance items yet.</div>
       ) : (
-        <div className="card p-0">
-          <table className="w-full text-sm">
+        <div className="card p-0 overflow-x-auto">
+          <table className="w-full min-w-[40rem] text-sm">
             <thead className="border-b border-stone-200 bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
               <tr>
                 <th className="px-4 py-3">Task</th>

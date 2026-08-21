@@ -351,7 +351,7 @@ export default async function ClaimDetailPage({
       {/* Manual claims don't carry sheet figures, but GST must still show as
           its own line rather than a blanket "amounts include GST" (Jake §5). */}
       {!fromSheet && claim.lines.length > 0 && (
-        <div className="card max-w-md">
+        <div className="card max-w-md overflow-x-auto">
           <p className="mb-2 text-xs uppercase tracking-wide text-stone-400">Claim summary</p>
           <table className="w-full text-sm">
             <tbody>
@@ -370,7 +370,7 @@ export default async function ClaimDetailPage({
       {fromSheet && (
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <div className="card p-0">
-            <div className="border-b border-stone-200 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-stone-500">
+            <div className="border-b border-stone-200 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-stone-500 overflow-x-auto">
               Budget overview
             </div>
             <table className="w-full text-sm">

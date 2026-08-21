@@ -184,12 +184,31 @@ export default async function BudgetPage({
         </p>
       </div>
 
-      {/* Headline position */}
-      <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      {/*
+        Headline position. Two-line labels ("Remaining to forecast") pushed
+        their value below the neighbouring cards' — so each card is a flex
+        column with the figure pinned to the bottom, and every value lines up
+        on one baseline whether its label wraps or not.
+
+        Six across only on very wide screens: eight-figure amounts on a $37M
+        job need the room, so it steps 2 → 3 → 6 rather than cramming.
+      */}
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
         {headline.map((h) => (
-          <div key={h.label} className="card">
-            <p className="text-xs uppercase tracking-wide text-stone-400">{h.label}</p>
-            <p className={`mt-2 tabular-nums ${h.strong ? "text-xl font-semibold" : "text-lg"} ${h.tone ?? ""}`}>
+          <div key={h.label} className="card flex h-full flex-col">
+            {/*
+              Fixed two-line label box, then the value. One uniform value size
+              with WEIGHT carrying the emphasis — mixing sizes put the figures
+              on four different baselines across the row, which is what looked
+              broken. Now every number starts on the same line whether its
+              label wraps or not.
+            */}
+            <p className="min-h-[2.5rem] text-xs uppercase leading-tight tracking-wide text-stone-400">{h.label}</p>
+            <p
+              className={`mt-1 text-lg tabular-nums whitespace-nowrap ${
+                h.strong ? "font-semibold" : ""
+              } ${h.tone ?? ""}`}
+            >
               {formatCents(h.value)}
             </p>
           </div>
@@ -303,8 +322,8 @@ export default async function BudgetPage({
       {rows.length === 0 ? (
         <div className="card text-stone-500">No cost codes yet. Import an estimate first.</div>
       ) : (
-        <div className="card p-0">
-          <table className="w-full table-fixed text-xs sm:text-sm">
+        <div className="card p-0 overflow-x-auto">
+          <table className="w-full min-w-[58rem] table-fixed text-xs sm:text-sm">
             <colgroup>
               <col className="w-[7%]" /><col className="w-[20%]" /><col className="w-[12%]" />
               <col className="w-[11%]" /><col className="w-[11%]" /><col className="w-[12%]" />

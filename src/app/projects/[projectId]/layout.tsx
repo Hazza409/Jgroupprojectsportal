@@ -80,7 +80,14 @@ export default async function ProjectLayout({
             {isBuilder ? `Client sees: ${viewLabel}` : viewLabel}
           </span>
         </div>
-        <div className="grid gap-6 md:grid-cols-[220px_1fr]">
+        {/*
+          min-w-0 on the CONTENT column is load-bearing. A grid `1fr` track is
+          minmax(auto, 1fr), and `auto` refuses to shrink below its content —
+          so one wide table pushed the entire page sideways instead of
+          scrolling inside its own card, which is what "numbers cut off and
+          going over the tabs" looked like on narrower screens.
+        */}
+        <div className="grid gap-6 md:grid-cols-[220px_minmax(0,1fr)]">
           <aside className="space-y-6 md:sticky md:top-6 md:self-start">
             <ProjectNav
               projectId={project.id}

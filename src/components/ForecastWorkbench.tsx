@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setLineForecast, signOffForecast } from "@/app/projects/[projectId]/actions";
+import { setLineForecast, signOffForecast, withdrawLineForecast } from "@/app/projects/[projectId]/actions";
 import { runAction } from "@/lib/actionResult";
 import { formatCents, moneyStructure, type MarginGstRates } from "@/lib/money";
 
@@ -60,6 +60,8 @@ export function ForecastWorkbench({
   const [openId, setOpenId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
+  // Undo asks first: it changes a figure the client can already see.
+  const [confirmUndo, setConfirmUndo] = useState<string | null>(null);
   // Two transitions so the UI can say WHICH thing it's doing: awaiting the
   // server action, vs re-fetching the page data afterwards. The second is what
   // used to look like a freeze.
@@ -81,6 +83,10 @@ export function ForecastWorkbench({
   }
   function signOff() {
     startActing(async () => afterAction(await runAction(() => signOffForecast(projectId))));
+  }
+  function undo(costCodeId: string) {
+    setConfirmUndo(null);
+    startActing(async () => afterAction(await runAction(() => withdrawLineForecast(projectId, costCodeId))));
   }
 
   // Movements first — that's what this tab is for. Forecast-above by size,
@@ -203,15 +209,48 @@ export function ForecastWorkbench({
                       <span className="text-xs text-stone-400">On track</span>
                     )}
                   </span>
-                  <button
-                    type="button"
-                    className="btn-ghost justify-self-end !px-2 !py-1 text-xs"
-                    onClick={() => { setOpenId(open ? null : r.id); setMsg(null); }}
-                    disabled={busy}
-                  >
-                    {open ? "Close" : isStaged || r.publishedCents !== null ? "Change" : "Forecast"}
-                  </button>
+                  <span className="flex justify-self-end gap-1">
+                    <button
+                      type="button"
+                      className="btn-ghost !px-2 !py-1 text-xs"
+                      onClick={() => { setOpenId(open ? null : r.id); setMsg(null); setConfirmUndo(null); }}
+                      disabled={busy}
+                    >
+                      {open ? "Close" : isStaged || r.publishedCents !== null ? "Change" : "Forecast"}
+                    </button>
+                    {r.publishedCents !== null && (
+                      <button
+                        type="button"
+                        className="btn-ghost !px-2 !py-1 text-xs"
+                        onClick={() => { setConfirmUndo(confirmUndo === r.id ? null : r.id); setMsg(null); }}
+                        disabled={busy}
+                        title="Remove this published forecast and revert the line to its approved budget"
+                      >
+                        Undo
+                      </button>
+                    )}
+                  </span>
                 </div>
+
+                {confirmUndo === r.id && (
+                  <div className="border-t border-dashed border-amber-500/40 bg-amber-500/10 px-4 py-3" role="alert">
+                    <p className="text-sm text-amber-900 dark:text-amber-100">
+                      Remove the published forecast of{" "}
+                      <span className="font-medium tabular-nums">{formatCents(r.publishedCents ?? 0)}</span> from{" "}
+                      {r.name}? The client sees this figure now; the line reverts to its approved budget of{" "}
+                      <span className="font-medium tabular-nums">{formatCents(r.budgetCents)}</span>. The original
+                      publication stays on the record and the withdrawal is logged.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" className="btn-primary !px-3 !py-1.5 text-sm" onClick={() => undo(r.id)} disabled={busy}>
+                        {acting ? "Removing…" : "Remove forecast"}
+                      </button>
+                      <button type="button" className="btn-ghost !px-3 !py-1.5 text-sm" onClick={() => setConfirmUndo(null)} disabled={busy}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {open && (
                   <div className="border-t border-dashed border-stone-200 bg-stone-50/60 px-4 py-3">

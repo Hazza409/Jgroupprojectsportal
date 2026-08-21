@@ -64,8 +64,8 @@ export default async function VariationsPage({ params }: { params: { projectId: 
       {variations.length === 0 ? (
         <div className="card text-stone-500">No variations yet.</div>
       ) : (
-        <div className="card p-0">
-          <table className="w-full table-fixed text-xs sm:text-sm">
+        <div className="card p-0 overflow-x-auto">
+          <table className="w-full min-w-[46rem] table-fixed text-xs sm:text-sm">
             <colgroup>
               <col className="w-[42%]" />
               <col className="w-[9%]" />

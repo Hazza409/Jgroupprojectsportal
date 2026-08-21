@@ -114,6 +114,7 @@ enum DecisionAction {
   ACKNOWLEDGED // client confirmed receipt — NOT approval
   ANSWERED // client responded to a query/decision
   PUBLISHED // J Group issued revised figures to the client (forecast sign-off)
+  WITHDRAWN // J Group retracted figures previously issued to the client
 }
 
 enum DecisionSubject {

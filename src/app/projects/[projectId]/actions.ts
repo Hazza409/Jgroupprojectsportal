@@ -476,3 +476,59 @@ export async function setLineForecast(
         : `Forecast staged for ${code.name} — publishes once signed off by ${approvers.join(", ")}.`,
   };
 }
+
+// ─────────────────────────────────────────────────────────────
+// Undo a PUBLISHED forecast adjustment on one cost code.
+//
+// Replacing a forecast was always possible (stage a new figure, sign off);
+// removing one was not, so a figure published by mistake could only be papered
+// over, never taken back. This reverts the line to its approved budget.
+//
+// It takes effect immediately rather than going through sign-off: an undo is
+// for a figure that should not have been issued, and making someone re-sign to
+// retract a mistake is how wrong numbers stay on a client's screen. The trail
+// still holds — the original publication remains in CostCodeForecastEntry
+// (append-only, never deleted), and the retraction is written to the Decision
+// Register, so the record reads "issued $X on the 5th, withdrawn on the 8th"
+// rather than quietly losing both.
+// ─────────────────────────────────────────────────────────────
+export async function withdrawLineForecast(projectId: string, costCodeId: string): Promise<SimpleResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) return { ok: false, message: "Builder access required." };
+
+  const code = await db.costCode.findFirst({
+    where: { id: costCodeId, projectId },
+    select: { id: true, code: true, name: true, forecastCents: true, forecastNote: true },
+  });
+  if (!code) return { ok: false, message: "That cost code isn't on this project." };
+  if (code.forecastCents === null) {
+    return { ok: false, message: "There's no published forecast on that line to undo." };
+  }
+
+  const company = await getCompany();
+  const withdrawn = inclMarginGst(code.forecastCents, company);
+
+  await db.costCode.update({
+    where: { id: code.id },
+    data: { forecastCents: null, forecastNote: null, forecastPublishedAt: null },
+  });
+
+  await recordDecision({
+    projectId,
+    subjectType: DecisionSubject.FORECAST,
+    subjectId: code.id,
+    subjectRef: `${code.code} ${code.name}`,
+    subjectTitle: "Forecast adjustment withdrawn",
+    action: DecisionAction.WITHDRAWN,
+    actor: user,
+    amountCents: withdrawn,
+    detail:
+      `Forecast of ${formatCents(withdrawn)} withdrawn by ${user.name}; the line reverts to its approved budget.` +
+      (code.forecastNote ? ` Original reason given: ${code.forecastNote}` : ""),
+  });
+
+  revalidatePath(`/projects/${projectId}/overruns`);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true, message: `Forecast withdrawn for ${code.name} — the line is back to its approved budget.` };
+}
