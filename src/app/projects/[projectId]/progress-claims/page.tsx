@@ -8,6 +8,7 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createClaim } from "./actions";
 import { ClaimHistoryImport } from "./ClaimHistoryImport";
+import { BulkPaymentStatus } from "./BulkPaymentStatus";
 
 export default async function ProgressClaimsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -23,6 +24,13 @@ export default async function ProgressClaimsPage({ params }: { params: { project
     include: { lines: { select: { claimedAmountCents: true } }, _count: { select: { reconLines: true } } },
   });
   const drawdown = await projectDrawdown(projectId, company);
+  // Approved claims still reading "not yet invoiced" — the state a carried-in
+  // history lands in, and the only time the bulk control has anything to do.
+  const unpaidApproved = isBuilder
+    ? await db.progressClaim.count({
+        where: { projectId, status: "APPROVED", paymentStatus: "NOT_INVOICED" },
+      })
+    : 0;
 
   return (
     <div>
@@ -43,8 +51,10 @@ export default async function ProgressClaimsPage({ params }: { params: { project
       />
 
       {isBuilder && (
-        <div className="mb-6">
+        <div className="mb-6 space-y-3">
           <ClaimHistoryImport projectId={projectId} />
+          {/* Only appears while approved claims still read "not yet invoiced". */}
+          <BulkPaymentStatus projectId={projectId} pending={unpaidApproved} />
         </div>
       )}
 

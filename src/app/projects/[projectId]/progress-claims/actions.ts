@@ -772,3 +772,83 @@ export async function importClaimHistory(projectId: string, formData: FormData):
       : `Nothing imported${skipped ? ` — all ${skipped} already existed.` : "."}`,
   };
 }
+
+/**
+ * Set payment status across every APPROVED claim at once.
+ *
+ * A job carried in mid-build arrives with years of claims that were invoiced
+ * and settled long ago, and every one of them defaults to "Not yet invoiced".
+ * Left alone the client sees 54 approved claims that appear never to have been
+ * billed — so this exists to correct the record in one move rather than 54.
+ *
+ * Dates come from each claim's OWN invoice date, not from today: the
+ * reconciliation sheet records when each was raised, and stamping the import
+ * date would put a false date on a payment record. Where a claim has no date
+ * at all, it is skipped rather than guessed at, and reported.
+ *
+ * Only claims still sitting at NOT_INVOICED are touched, so a status already
+ * set by hand is never overwritten.
+ */
+export async function setPaymentStatusForApproved(
+  projectId: string,
+  formData: FormData,
+): Promise<ReconImportResult> {
+  await builderOnly(projectId);
+
+  const raw = String(formData.get("paymentStatus") ?? "");
+  if (raw !== "INVOICED" && raw !== "PAID") {
+    return { ok: false, message: "Choose whether these were invoiced or invoiced and paid." };
+  }
+  const status = raw as ClaimPaymentStatus;
+
+  const claims = await db.progressClaim.findMany({
+    where: { projectId, status: ClaimStatus.APPROVED, paymentStatus: ClaimPaymentStatus.NOT_INVOICED },
+    select: { id: true, claimNumber: true, periodEnd: true, approvedAt: true },
+    orderBy: { claimNumber: "asc" },
+  });
+  if (claims.length === 0) {
+    return { ok: false, message: "No approved claims are sitting at “not yet invoiced”." };
+  }
+
+  const warnings: string[] = [];
+  const undated: number[] = [];
+  let updated = 0;
+
+  for (const c of claims) {
+    const when = c.periodEnd ?? c.approvedAt;
+    if (!when) {
+      undated.push(c.claimNumber);
+      continue;
+    }
+    await db.progressClaim.update({
+      where: { id: c.id },
+      data: {
+        paymentStatus: status,
+        invoicedAt: when,
+        paidAt: status === ClaimPaymentStatus.PAID ? when : null,
+      },
+    });
+    updated++;
+  }
+
+  if (undated.length > 0) {
+    warnings.push(
+      `Claim(s) ${undated.join(", ")} have no invoice date on the reconciliation sheet, so there is nothing ` +
+        `honest to stamp them with — they were left as they were. Set those by hand once you know the dates.`,
+    );
+  }
+  if (status === ClaimPaymentStatus.PAID) {
+    warnings.push(
+      `Payment dates were taken as each claim's invoice date: the reconciliation sheet records when a claim ` +
+        `was raised, not when it settled. Correct any that matter on the claim itself.`,
+    );
+  }
+
+  refresh(projectId);
+  revalidatePath(`/projects/${projectId}`);
+  return {
+    ok: true,
+    warnings,
+    message: `Marked ${updated} claim(s) as ${status === ClaimPaymentStatus.PAID ? "invoiced and paid" : "invoiced"}, each dated from its own invoice.`,
+  };
+}

@@ -67,6 +67,14 @@ export default async function ClaimDetailPage({
 
   // Receipt trail + labour backup (Jake §2, §5).
   const acknowledgements = await acknowledgementsForClaim(claimId);
+  // The immutable ledger for THIS claim. It has always been written — approve,
+  // reject, and the carried-in history import all record here — but the page
+  // never showed it, so the one place a reader looks for "who decided this and
+  // when" was blank while the evidence sat in the database.
+  const decisions = await db.decisionRecord.findMany({
+    where: { subjectType: "CLAIM", subjectId: claimId },
+    orderBy: { occurredAt: "asc" },
+  });
   const labourEntries = claim.labourEntries;
   const labourHoursTotal = labourEntries.reduce((a, e) => a + e.hours, 0);
   const labourAmountTotal = labourEntries.reduce((a, e) => a + e.amountCents, 0);
@@ -560,6 +568,26 @@ export default async function ClaimDetailPage({
             </table>
           )}
           <ClaimLineForm projectId={projectId} claimId={claimId} costCodes={costCodes} />
+        </div>
+      )}
+
+      {decisions.length > 0 && (
+        <div className="card">
+          <p className="text-xs uppercase tracking-wide text-stone-400">Decision record</p>
+          <ul className="mt-2 space-y-2 text-sm">
+            {decisions.map((d) => (
+              <li key={d.id} className="text-stone-600">
+                <span className="font-medium text-ink">
+                  {d.action === "APPROVED" ? "Approved" : d.action === "REJECTED" ? "Rejected" : d.action}
+                </span>
+                {" by "}{d.actorName}
+                {" · "}{fmtDateTime(d.occurredAt)}
+                {d.amountCents != null && ` · ${formatCents(d.amountCents)}`}
+                {d.versionHash && <span className="ml-1 font-mono text-[10px] text-stone-400">v{d.versionHash}</span>}
+                {d.detail && <p className="mt-0.5 text-xs text-stone-500">{d.detail}</p>}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
