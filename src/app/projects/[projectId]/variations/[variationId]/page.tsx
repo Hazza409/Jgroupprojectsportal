@@ -259,6 +259,11 @@ export default async function VariationDetailPage({
                 {" · "}{fmtDateTime(d.occurredAt)}
                 {d.amountCents != null && ` · ${formatCents(d.amountCents)}`}
                 {d.versionHash && <span className="ml-1 font-mono text-[10px] text-stone-400">v{d.versionHash}</span>}
+                {/* The circumstances of the decision — the authority statement
+                    the client was shown, or that an approval was taken outside
+                    the portal. Written since the ledger began but never
+                    displayed, which left rows looking barer than they are. */}
+                {d.detail && <p className="mt-0.5 text-xs text-stone-500">{d.detail}</p>}
               </li>
             ))}
           </ul>
