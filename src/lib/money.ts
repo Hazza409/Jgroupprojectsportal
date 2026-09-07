@@ -34,6 +34,32 @@ export function exMarginGst(inclCents: number, rates: MarginGstRates): number {
 
 /** Parse a user/Excel-entered dollar string or number into integer cents.
  *  Accounting-style parentheses negatives — "(1,234.56)" — parse as negative. */
+/**
+ * A builder's-margin percentage typed into a form.
+ *
+ * Blank returns null, meaning "inherit the company default" — deliberately
+ * distinct from 0, since a job genuinely can be run at cost and that must be
+ * recordable. Bounded because this multiplies the entire contract sum: a
+ * stray keystroke would silently restate the job rather than fail.
+ *
+ * Shared so the create-job and edit-job paths can't drift apart on what a
+ * valid rate is.
+ */
+export function parseMarginPercent(
+  input: unknown,
+): { ok: true; value: number | null } | { ok: false; message: string } {
+  const raw = String(input ?? "").trim();
+  if (raw === "") return { ok: true, value: null };
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0 || n > 100) {
+    return {
+      ok: false,
+      message: "Builder's margin must be a percentage between 0 and 100, or blank to use the company default.",
+    };
+  }
+  return { ok: true, value: n };
+}
+
 export function dollarsToCents(input: string | number | null | undefined): number {
   if (input === null || input === undefined || input === "") return 0;
   let n: number;

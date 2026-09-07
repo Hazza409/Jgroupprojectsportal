@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { Role } from "@prisma/client";
 import { assertBuilder } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { dollarsToCents } from "@/lib/money";
+import { dollarsToCents, parseMarginPercent } from "@/lib/money";
 import { validatePassword } from "@/lib/password";
 
 // Builder deletes a job and all its data (cascades). Irreversible.
@@ -42,6 +42,12 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
     return { ok: false, message: "Contract value is too large." };
   }
 
+  // Builder's margin for this contract. Set at creation because it grosses
+  // every client-facing figure on the job: created on the wrong rate, the
+  // estimate and variations are already misstated by the time anyone notices.
+  const margin = parseMarginPercent(formData.get("marginPercent"));
+  if (!margin.ok) return { ok: false, message: margin.message };
+
   // Optional client provisioning.
   const clientEmailRaw = String(formData.get("clientEmail") ?? "").trim().toLowerCase();
   const clientPassword = String(formData.get("clientPassword") ?? "").trim();
@@ -61,6 +67,7 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
           address,
           clientName,
           contractValueCents,
+          marginPercent: margin.value,
           memberships: { create: [{ userId: builder.id, role: Role.BUILDER }] },
         },
       });

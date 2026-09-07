@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createJob } from "../actions";
 
-export function CreateJobForm() {
+export function CreateJobForm({ companyMarginPercent }: { companyMarginPercent?: number }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +50,25 @@ export function CreateJobForm() {
             <label className="label" htmlFor="contractValue">Contract value ($)</label>
             <input id="contractValue" name="contractValue" type="number" step="0.01" className="input" placeholder="2850000.00" />
           </div>
+        </div>
+        <div className="sm:max-w-xs">
+          <label className="label" htmlFor="marginPercent">Builder&apos;s margin % for this job</label>
+          <input
+            id="marginPercent"
+            name="marginPercent"
+            type="number"
+            step="0.01"
+            min="0"
+            max="100"
+            className="input"
+            placeholder={companyMarginPercent !== undefined ? `${companyMarginPercent} (company default)` : "company default"}
+          />
+          <p className="mt-1 text-xs text-stone-400">
+            Margin is agreed per contract. Set it here if this job differs from the company default
+            {companyMarginPercent !== undefined ? ` of ${companyMarginPercent}%` : ""} — it grosses every
+            client-facing figure on the job, so starting on the wrong rate misstates the estimate and every
+            variation. Leave blank to follow the default.
+          </p>
         </div>
       </div>
 

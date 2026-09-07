@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { ProjectPhase, ProjectClientView, Role } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { dollarsToCents, exceedsInt4, tooLargeMessage, exMarginGst, inclMarginGst, centsToNumber, formatCents } from "@/lib/money";
+import { dollarsToCents, exceedsInt4, tooLargeMessage, exMarginGst, inclMarginGst, centsToNumber, formatCents, parseMarginPercent } from "@/lib/money";
 import { forecastGate, restampForecastRevision, approverEmails } from "@/lib/forecast";
 import { getProjectRates } from "@/lib/company";
 import { validatePassword } from "@/lib/password";
@@ -390,23 +390,15 @@ export async function updateJobDetails(projectId: string, formData: FormData): P
     return { ok: false, message: "Contract value is too large." };
   }
 
-  // Builder's margin for THIS contract. Blank means inherit the company
-  // default; an explicit rate is used for every client-facing figure on the
-  // job. Bounded because it multiplies the whole contract sum — a stray
-  // keystroke here would silently restate the job.
-  const marginRaw = String(formData.get("marginPercent") ?? "").trim();
-  let marginPercent: number | null = null;
-  if (marginRaw !== "") {
-    const n = Number(marginRaw);
-    if (!Number.isFinite(n) || n < 0 || n > 100) {
-      return { ok: false, message: "Builder's margin must be a percentage between 0 and 100, or blank to use the company default." };
-    }
-    marginPercent = n;
-  }
+  // Builder's margin for THIS contract — same rule as createJob, shared so the
+  // two paths can't disagree on what a valid rate is. Blank inherits the
+  // company default.
+  const margin = parseMarginPercent(formData.get("marginPercent"));
+  if (!margin.ok) return { ok: false, message: margin.message };
 
   await db.project.update({
     where: { id: projectId },
-    data: { name, address, contractValueCents, marginPercent },
+    data: { name, address, contractValueCents, marginPercent: margin.value },
   });
 
   revalidatePath(`/projects/${projectId}`, "layout");
