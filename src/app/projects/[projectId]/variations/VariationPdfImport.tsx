@@ -163,7 +163,13 @@ export function VariationPdfImport({ projectId }: { projectId: string }) {
                           <input
                             type="checkbox"
                             checked={!!approved[n]}
-                            onChange={(e) => setApproved((s) => ({ ...s, [n]: e.currentTarget.checked }))}
+                            // Read the value BEFORE the setter: the updater
+                            // callback runs after the handler returns, by
+                            // which point React has cleared currentTarget.
+                            onChange={(e) => {
+                              const on = e.currentTarget.checked;
+                              setApproved((s) => ({ ...s, [n]: on }));
+                            }}
                           />
                         )}
                       </td>
@@ -187,7 +193,10 @@ export function VariationPdfImport({ projectId }: { projectId: string }) {
                             type="date"
                             className="input !py-1 text-xs"
                             value={dates[n] ?? ""}
-                            onChange={(e) => setDates((s) => ({ ...s, [n]: e.currentTarget.value }))}
+                            onChange={(e) => {
+                              const when = e.currentTarget.value;
+                              setDates((s) => ({ ...s, [n]: when }));
+                            }}
                           />
                         ) : (
                           <span className="text-xs text-stone-400">—</span>
