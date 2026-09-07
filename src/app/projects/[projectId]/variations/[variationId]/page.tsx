@@ -8,6 +8,7 @@ import { getProjectRates } from "@/lib/company";
 import { StatusBadge } from "@/components/StatusBadge";
 import { submitVariation, decideVariation, attachQuote, saveVariationLines, addVariationLine, deleteVariationLine } from "../actions";
 import { AUTHORITY_STATEMENT, logView } from "@/lib/audit";
+import { DeleteVariationButton } from "../DeleteVariationButton";
 import { fmtDateTime } from "@/lib/dates";
 
 export default async function VariationDetailPage({
@@ -275,6 +276,24 @@ export default async function VariationDetailPage({
           <input name="file" type="file" required className="text-xs" />
           <button className="btn-ghost" type="submit">Attach quote</button>
         </form>
+      )}
+
+      {isBuilder && (v.status === "DRAFT" || v.status === "SUBMITTED") && (
+        <div className="card mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Remove this variation</p>
+          <p className="mt-1 mb-3 text-sm text-stone-500">
+            Available while a variation is a draft or still awaiting the client&apos;s decision. Once it has
+            been approved or rejected the decision is part of the contract record — reverse it with a new
+            variation instead.
+          </p>
+          <DeleteVariationButton
+            projectId={projectId}
+            variationId={v.id}
+            variationNumber={v.variationNumber}
+            title={v.title}
+            status={v.status}
+          />
+        </div>
       )}
     </div>
   );

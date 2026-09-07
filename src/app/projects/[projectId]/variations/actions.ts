@@ -404,6 +404,81 @@ export async function commitVariationPdfs(projectId: string, formData: FormData)
   };
 }
 
+/**
+ * Builder deletes a variation.
+ *
+ * What can go depends entirely on whether a client has been involved:
+ *
+ *   DRAFT      — internal workspace, never client-visible. Deleted outright;
+ *                there is nothing to preserve and nothing to explain.
+ *   SUBMITTED  — the client has been asked to decide. The variation goes, but
+ *                a WITHDRAWN entry stays in the Decision Register, because
+ *                "we put that to you and then pulled it" is a fact about the
+ *                job and must survive the record it described.
+ *   APPROVED   — refused. A client's approval and its date are a contract
+ *   REJECTED     record. Deleting one would erase evidence of an authorisation
+ *                (or a refusal) that money and scope now rest on. The way to
+ *                undo an approved variation is another variation reversing it,
+ *                which leaves both halves visible — the same rule the
+ *                re-importer follows when it refuses to wipe approved rows.
+ */
+export async function deleteVariation(projectId: string, variationId: string): Promise<ImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders delete variations");
+
+  const v = await db.variation.findFirst({
+    where: { id: variationId, projectId },
+    include: { lines: { orderBy: { id: "asc" }, select: { description: true, quantity: true, totalCents: true } } },
+  });
+  if (!v) return { ok: false, message: "Variation not found." };
+
+  if (v.status === VariationStatus.APPROVED || v.status === VariationStatus.REJECTED) {
+    const decided = v.status === VariationStatus.APPROVED ? "approved" : "rejected";
+    return {
+      ok: false,
+      message:
+        `Variation #${v.variationNumber} has been ${decided} by the client, so it can't be deleted — the ` +
+        `decision and its date are part of the contract record. To reverse it, raise a new variation that ` +
+        `credits this one back, so both sides stay visible.`,
+    };
+  }
+
+  const company = await getProjectRates(projectId);
+
+  // Evidence BEFORE the row goes: once deleted there is nothing left to
+  // describe it, so the register entry has to carry the detail itself.
+  if (v.status === VariationStatus.SUBMITTED) {
+    await recordDecision({
+      projectId,
+      subjectType: DecisionSubject.VARIATION,
+      subjectId: variationId,
+      subjectRef: `Variation #${v.variationNumber}`,
+      subjectTitle: v.title,
+      action: DecisionAction.WITHDRAWN,
+      actor: user,
+      amountCents: inclMarginGst(v.totalCents, company),
+      versionHash: contentFingerprint({ title: v.title, totalCents: v.totalCents, lines: v.lines }),
+      detail:
+        `Withdrawn and deleted by ${user.name} while awaiting the client's decision. ` +
+        `It was with the client at ${formatCents(inclMarginGst(v.totalCents, company))} (incl margin & GST).`,
+    });
+  }
+
+  await db.variation.delete({ where: { id: variationId } });
+
+  refresh(projectId);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}`);
+
+  return {
+    ok: true,
+    message:
+      v.status === VariationStatus.SUBMITTED
+        ? `Variation #${v.variationNumber} deleted. The withdrawal is recorded in the Decision Register.`
+        : `Variation #${v.variationNumber} deleted.`,
+  };
+}
+
 // Keep the cached variation.totalCents in step with its line items.
 async function recomputeVariationTotal(variationId: string) {
   const lines = await db.variationLineItem.findMany({ where: { variationId }, select: { totalCents: true } });
