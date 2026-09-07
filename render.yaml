@@ -30,7 +30,14 @@ services:
     #
     # ./node_modules/.bin/prisma rather than npx: the binary is already there
     # from the build (--include=dev), so this can't stall on a registry lookup.
-    preDeployCommand: ./node_modules/.bin/prisma migrate deploy
+    #
+    # ensure-admin runs here too, for the same reason: it opens a cold Prisma
+    # client and makes a round trip to the database, and at boot that happened
+    # BEFORE Next started listening — several seconds added to the deploy's 502
+    # window, every deploy, for a check that only does anything on a completely
+    # empty database. In preDeploy the old container is still serving while it
+    # runs, so it costs no downtime.
+    preDeployCommand: ./node_modules/.bin/prisma migrate deploy && node scripts/ensure-admin.js
     # NEXTAUTH_URL is taken from the public URL Render assigns this service.
     #
     # migrate deploy appears here AS WELL as in preDeploy, deliberately. When
@@ -40,6 +47,15 @@ services:
     # still applies pending migrations rather than starting an app whose queries
     # reference columns the database doesn't have — which kills every money page
     # at once. A one-second check is cheap insurance against a bricked site.
+    # Boot does the least it can: a no-op migration check, then serve. Anything
+    # that opens a database connection before Next listens is time the site
+    # spends returning 502.
+    #
+    # ensure-admin is deliberately NOT here any more. It only acts on a
+    # completely empty database — by which point the site has no company,
+    # projects or claims either, so being locked out is the least of the
+    # problems and is recoverable from the Render shell. That is not worth
+    # several seconds of downtime on every single deploy.
     startCommand: ./node_modules/.bin/prisma migrate deploy && NEXTAUTH_URL=$RENDER_EXTERNAL_URL npm run start
     healthCheckPath: /login
     disk:

@@ -1,5 +1,9 @@
 /**
- * ensure-admin — runs automatically at server startup (see package.json "start").
+ * ensure-admin — runs in Render's PRE-DEPLOY step (see render.yaml), not at
+ * server startup. It opens a cold Prisma client and makes a round trip, and on
+ * the boot path that delayed Next's listener on every deploy, lengthening the
+ * 502 window. In preDeploy the previous container is still serving while it
+ * runs, so it costs nothing.
  *
  * Purpose: a brand-new deployment has an empty database, which would lock
  * everyone out. This guarantees there is always at least one builder login to
