@@ -24,10 +24,23 @@ export interface ReconBudgetLine {
 }
 export interface ParsedRecon {
   meta: { job: string | null; invoiceRef: string | null; date: Date | null; periodLabel: string | null; invoiceNumber: number | null };
+  /** Which tab was actually read. */
+  sheetName: string;
   supplierLines: ReconSupplierLine[];
   budgetOverview: ReconBudgetLine[];
   costsCents: number;
   labourCents: number;
+  /** Labour "Per Invoice" row, To Date column — cumulative labour for the job. */
+  labourToDateCents: number;
+  /** Budget-overview rows summed by us (authoritative). */
+  toDateCents: number;
+  /**
+   * The sheet's OWN total-row figure for To Date, when it has one. Kept
+   * separately because a hand-maintained SUM range drifts out of step with the
+   * rows above it, and the caller should be told rather than silently handed
+   * one number or the other.
+   */
+  sheetToDateCents: number | null;
   marginPercent: number;
   marginCents: number;
   subtotalCents: number;
@@ -73,46 +86,175 @@ function findRowInColumn(rows: unknown[][], col: number, needle: string, from = 
   return null;
 }
 
-function pickSheet(wb: XLSX.WorkBook): { name: string; rows: unknown[][] } | null {
-  // Prefer a tab named like an invoice; else the densest sheet.
-  const named = wb.SheetNames.find((n) => /invoice/i.test(n));
-  const candidates = named ? [named, ...wb.SheetNames] : wb.SheetNames;
+/** Invoice number out of a tab name: "Invoice 55 - Aug-26(2)", "Inv 7 - Mar(1)-24". */
+export function tabInvoiceNumber(name: string): number | null {
+  const m = /^\s*inv(?:oice)?\s*(\d+)\b/i.exec(name.trim());
+  return m ? Number(m[1]) : null;
+}
+
+/** Every invoice tab in a reconciliation workbook, newest first. */
+export function listReconTabs(buf: Buffer): { name: string; invoiceNumber: number | null }[] {
+  const wb = XLSX.read(buf, { type: "buffer", bookSheets: true });
+  return wb.SheetNames.map((name) => ({ name, invoiceNumber: tabInvoiceNumber(name) })).sort(
+    (a, b) => (b.invoiceNumber ?? -1) - (a.invoiceNumber ?? -1),
+  );
+}
+
+function pickSheet(wb: XLSX.WorkBook, sheetName?: string): { name: string; rows: unknown[][] } | null {
+  const read = (name: string) => ({
+    name,
+    rows: XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, blankrows: true }),
+  });
+
+  // An explicit tab always wins — a running workbook holds every month of the
+  // job, and guessing which one the builder meant is not acceptable.
+  if (sheetName && wb.Sheets[sheetName]) return read(sheetName);
+
+  // Otherwise the HIGHEST invoice number, which is the current period. Taking
+  // the first tab matching /invoice/i instead only worked while the workbook
+  // happened to be ordered newest-first; re-order the tabs and it would
+  // silently import a two-year-old month.
+  const numbered = wb.SheetNames.map((n) => ({ n, i: tabInvoiceNumber(n) }))
+    .filter((x): x is { n: string; i: number } => x.i !== null)
+    .sort((a, b) => b.i - a.i);
+  if (numbered.length > 0) return read(numbered[0].n);
+
+  // No invoice-looking tab at all: fall back to the densest sheet.
+  const filled = (rows: unknown[][]) => rows.reduce((a, r) => a + r.filter((c) => c !== null && c !== "").length, 0);
   let best: { name: string; rows: unknown[][] } | null = null;
-  for (const name of candidates) {
-    const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, blankrows: true });
-    const filled = rows.reduce((a, r) => a + r.filter((c) => c !== null && c !== "").length, 0);
-    if (!best || filled > best.rows.reduce((a, r) => a + r.filter((c) => c !== null && c !== "").length, 0)) {
-      best = { name, rows };
-    }
-    if (named && name === named && filled > 5) break;
+  for (const name of wb.SheetNames) {
+    const cur = read(name);
+    if (!best || filled(cur.rows) > filled(best.rows)) best = cur;
   }
   return best;
 }
 
-export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12.5, defaultGstPercent = 10): ParsedRecon {
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/** Month index + year out of a period label like "Aug-26", "Sept-24", "mar-26". */
+function periodMonthYear(label: string | null): { month: number; year: number } | null {
+  if (!label) return null;
+  const m = /^([A-Za-z]{3,})\s*-?\s*(\d{2,4})?/.exec(label.trim());
+  if (!m) return null;
+  const month = MONTHS.findIndex((x) => m[1].toLowerCase().startsWith(x));
+  if (month < 0) return null;
+  const raw = m[2] ? Number(m[2]) : NaN;
+  if (!Number.isFinite(raw)) return null;
+  return { month, year: raw < 100 ? 2000 + raw : raw };
+}
+
+/**
+ * A progress claim is raised in, or shortly after, the period it covers. Score
+ * a candidate date by how far it falls outside that window — 0 is ideal, and
+ * bigger is worse. Used to choose between a stored date and its day/month swap.
+ */
+function periodFit(d: Date, period: { month: number; year: number }): number {
+  const monthsAfter = (d.getFullYear() - period.year) * 12 + (d.getMonth() - period.month);
+  if (monthsAfter < 0) return 1 - monthsAfter; // before the work: always wrong
+  if (monthsAfter > 1) return monthsAfter - 1; // long after: suspicious
+  return 0; // same month or the next one
+}
+
+/**
+ * The invoice date off the metadata row.
+ *
+ * Two things go wrong with this cell in a long-running workbook:
+ *
+ *  1. Early tabs hold it as TEXT ("14/12/23"), which a plain `instanceof Date`
+ *     check threw away — losing the date on most of the job.
+ *  2. Later tabs hold a real date that Excel produced by reading a typed
+ *     "08/02/2024" in US month-first order, so day and month are swapped and
+ *     the claim is dated months from the work it covers.
+ *
+ * Text is parsed day-first, which is unambiguous for how these are written.
+ * For a real date, the day/month swap is only applied when the tab's own
+ * period proves it — the swap has to fit the period better than the stored
+ * value does. Anything less certain is left alone and reported.
+ */
+function resolveInvoiceDate(
+  cell: unknown,
+  periodLabel: string | null,
+  tabName: string,
+  warnings: string[],
+): Date | null {
+  const fmt = (d: Date) => d.toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
+
+  if (typeof cell === "string") {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/.exec(cell.trim());
+    if (!m) return null;
+    const [dd, mm, yy] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return null;
+    const d = new Date(yy < 100 ? 2000 + yy : yy, mm - 1, dd);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  if (!(cell instanceof Date) || Number.isNaN(cell.getTime())) return null;
+
+  const period = periodMonthYear(periodLabel);
+  if (!period) return cell; // nothing to check it against
+
+  const day = cell.getDate();
+  const stored = periodFit(cell, period);
+  // A swap is only possible when the day could itself be a month.
+  if (day >= 1 && day <= 12) {
+    const swapped = new Date(cell.getFullYear(), day - 1, cell.getMonth() + 1);
+    if (!Number.isNaN(swapped.getTime()) && periodFit(swapped, period) < stored) {
+      warnings.push(
+        `Invoice date on "${tabName}" reads ${fmt(cell)}, which doesn't fit a ${periodLabel} claim. ` +
+          `Day and month look transposed (Excel reading a typed date month-first), so ${fmt(swapped)} ` +
+          `has been used. Worth correcting in the spreadsheet.`,
+      );
+      return swapped;
+    }
+  }
+  if (stored > 1) {
+    warnings.push(
+      `Invoice date on "${tabName}" reads ${fmt(cell)} but the tab covers ${periodLabel}. Used as-is — check it.`,
+    );
+  }
+  return cell;
+}
+
+export function parseReconciliationBuffer(
+  buf: Buffer,
+  defaultMarginPercent = 12.5,
+  defaultGstPercent = 10,
+  sheetName?: string,
+): ParsedRecon {
   const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
-  const picked = pickSheet(wb);
+  const picked = pickSheet(wb, sheetName);
   const warnings: string[] = [];
   const empty: ParsedRecon = {
     meta: { job: null, invoiceRef: null, date: null, periodLabel: null, invoiceNumber: null },
+    sheetName: picked?.name ?? "",
     supplierLines: [], budgetOverview: [], costsCents: 0, labourCents: 0,
+    labourToDateCents: 0, toDateCents: 0, sheetToDateCents: null,
     marginPercent: defaultMarginPercent, marginCents: 0, subtotalCents: 0, gstCents: 0, totalCents: 0, warnings,
   };
   if (!picked) { warnings.push("No worksheet found."); return empty; }
   const { name, rows } = picked;
 
-  // Metadata
+  // Metadata. The tab name is read FIRST: its period ("Aug-26") is the one
+  // piece of dating on the sheet that can't be mangled by Excel, so it's the
+  // evidence used to sanity-check the date cell below.
   const meta = empty.meta;
+  // Tab names drift over a long job: "Invoice 55 - Aug-26(2)", "Inv 43 -
+  // Nov-25(1)", "Invoice 29 - Apr(2)", plain "Inv 1". Requiring the full word
+  // "invoice" AND a month-year lost the invoice number on every "Inv N" tab —
+  // and the number is what orders the claim sequence, so losing it silently
+  // disabled the out-of-sequence guard. Take the number on its own, then the
+  // period label as a best effort.
+  const tabMatch = /^\s*inv(?:oice)?\s*(\d+)\s*(?:[-–—]\s*(.+))?$/i.exec(name.trim());
+  meta.invoiceNumber = tabMatch ? Number(tabMatch[1]) : null;
+  const rest = tabMatch?.[2]?.trim() ?? "";
+  // Prefer a clean "Aug-26" out of "Aug-26(2)"; else keep whatever's there.
+  meta.periodLabel = /([A-Za-z]{3,}\s*-?\s*\d{2,4})/.exec(rest)?.[1] ?? (rest || null);
+
   const jobCell = findCell(rows, "job");
   if (jobCell) {
     meta.job = s(rows[jobCell.r][jobCell.c + 1]) || null;
     meta.invoiceRef = s(rows[jobCell.r][jobCell.c + 2]) || null;
-    const dv = rows[jobCell.r][jobCell.c + 3];
-    meta.date = dv instanceof Date ? dv : null;
+    meta.date = resolveInvoiceDate(rows[jobCell.r][jobCell.c + 3], meta.periodLabel, name, warnings);
   }
-  const tabMatch = name.match(/invoice\s*(\d+)\s*-\s*([A-Za-z]+-?\d+)/i);
-  meta.invoiceNumber = tabMatch ? Number(tabMatch[1]) : null;
-  meta.periodLabel = tabMatch ? tabMatch[2] : null;
 
   // Supplier detail (Supplier | Doc # | Allocation | Amount). `base` = label column.
   const supHdrCell = findCell(rows, "supplier");
@@ -136,12 +278,13 @@ export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12
   // Budget Overview (cost code | Current | Prior | To Date)
   const boCell = findCell(rows, "budget overview");
   const budgetOverview: ReconBudgetLine[] = [];
+  let boStopRow: number | null = null;
   if (boCell) {
     const base = boCell.c;
     for (let r = boCell.r + 1; r < rows.length; r++) {
       const label = s(rows[r][base]);
-      if (!label) break; // totals row has empty label → stop
-      if (/labour hours/i.test(label)) break;
+      if (!label) { boStopRow = r; break; } // totals row has empty label → stop
+      if (/labour hours/i.test(label)) { boStopRow = r; break; }
       if (num(rows[r][base + 1]) === null && num(rows[r][base + 2]) === null && num(rows[r][base + 3]) === null) continue;
       budgetOverview.push({
         name: label,
@@ -152,9 +295,34 @@ export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12
     }
   }
 
-  // Labour this period — "Per Invoice" row, Current column (label col + 1).
+  // Labour — "Per Invoice" row: Current at label col + 1, To Date at + 3.
   const labCell = findCell(rows, "per invoice");
   const labourCents = labCell ? cents(rows[labCell.r][labCell.c + 1]) : 0;
+  const labourToDateCents = labCell ? cents(rows[labCell.r][labCell.c + 3]) : 0;
+
+  // Cumulative cost to date. We SUM THE ROWS rather than read the sheet's own
+  // total: on a long job, cost codes get appended below a hand-written SUM
+  // range and the total silently stops counting them. Both figures are
+  // returned, and a mismatch is warned about — the rows are what we trust.
+  const toDateCents = budgetOverview.reduce((a, b) => a + b.toDateCents, 0);
+  const sheetToDateCents =
+    boCell && boStopRow !== null && num(rows[boStopRow]?.[boCell.c + 3]) !== null
+      ? cents(rows[boStopRow][boCell.c + 3])
+      : null;
+  // Only worth reporting when the sheet HAS a total and it's short: a blank or
+  // zero total row (common on the earliest tabs of an old job) is just not
+  // filled in, and we use the row values regardless.
+  if (sheetToDateCents !== null && sheetToDateCents > 0 && Math.abs(sheetToDateCents - toDateCents) > 100) {
+    const diff = (Math.abs(toDateCents - sheetToDateCents) / 100).toLocaleString("en-AU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    warnings.push(
+      `Budget Overview total row disagrees with its own cost-code rows by $${diff} on "${name}" — ` +
+        `the rows add to more than the total claims. Its SUM range probably stops short of the last ` +
+        `cost code(s). Using the row values; check the spreadsheet formula.`,
+    );
+  }
 
   // Costs this period — the supplier "Total" row (exact match in the supplier
   // LABEL column so a supplier named "Total Tools" can't hijack it), else sum.
@@ -195,5 +363,9 @@ export function parseReconciliationBuffer(buf: Buffer, defaultMarginPercent = 12
     warnings.push("No supplier invoice rows found — the supplier backup for this claim will be empty.");
   }
 
-  return { meta, supplierLines, budgetOverview, costsCents, labourCents, marginPercent, marginCents, subtotalCents, gstCents, totalCents, warnings };
+  return {
+    meta, sheetName: name, supplierLines, budgetOverview, costsCents, labourCents,
+    labourToDateCents, toDateCents, sheetToDateCents,
+    marginPercent, marginCents, subtotalCents, gstCents, totalCents, warnings,
+  };
 }

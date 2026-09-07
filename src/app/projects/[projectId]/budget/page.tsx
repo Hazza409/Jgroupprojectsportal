@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { formatCents, inclMarginGst } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { db } from "@/lib/db";
 import { computeCostToComplete, overrunSummary, budgetPosition, claimHeadlineCents } from "@/lib/claims";
 import { logView } from "@/lib/audit";
@@ -10,6 +10,7 @@ import { BudgetBar, pctUsed, fmtPct } from "@/components/BudgetBar";
 import { isConnected } from "@/lib/xero/tokens";
 import { XeroControls } from "../cost-to-complete/XeroControls";
 import { CurrentCostsImport } from "../cost-to-complete/CurrentCostsImport";
+import { OpeningPositionImport } from "../cost-to-complete/OpeningPositionImport";
 import { rematchClaimCosts } from "../cost-to-complete/actions";
 
 /**
@@ -36,7 +37,7 @@ export default async function BudgetPage({
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
 
   const [ctc, xeroConnected, xeroConn, pendingClaims, unallocatedSources] = await Promise.all([
     computeCostToComplete(projectId, company),
@@ -147,6 +148,7 @@ export default async function BudgetPage({
             }
           />
           <CurrentCostsImport projectId={projectId} />
+          <OpeningPositionImport projectId={projectId} />
           {/* Re-links approved claims' lines to cost codes (fuzzy) + re-posts them. */}
           <form action={rematchClaimCosts.bind(null, projectId)}>
             <button className="btn-ghost" type="submit">Re-match claim costs</button>

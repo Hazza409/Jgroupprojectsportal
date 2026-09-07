@@ -4,7 +4,7 @@ import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import { PrintButton } from "./PrintButton";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { projectDrawdown, claimHeadlineCents } from "@/lib/claims";
 
 const fmtDate = (d: Date | null) =>
@@ -30,7 +30,9 @@ export default async function ClaimPrintPage({ params }: { params: { claimId: st
   // client-view guard doesn't cover it: enforce it here too — a client on the
   // Handover view must not reach financial documents by deep link.
   if (user.role === "CLIENT" && claim.project.clientView === "HANDOVER") notFound();
-  const company = await getCompany();
+  // Margin is per-project, so the rate must come from THIS claim's project —
+  // the portal default would misstate a job contracted on another rate.
+  const company = await getProjectRates(claim.projectId);
 
   const summary = [
     { label: "Labour this period", value: claim.labourCents },

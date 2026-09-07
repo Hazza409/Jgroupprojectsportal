@@ -13,12 +13,18 @@ export function JobDetailsCard({
   name,
   address,
   contractDollars,
+  marginPercent,
+  companyMarginPercent,
 }: {
   projectId: string;
   name: string;
   address: string | null;
   /** Plain "3795456.70" — the number input can't take $ or commas. */
   contractDollars: string;
+  /** This job's own margin, or "" when it inherits the company default. */
+  marginPercent: string;
+  /** The company default, shown so the inherited rate isn't a mystery. */
+  companyMarginPercent: number;
 }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [saving, start] = useTransition();
@@ -61,6 +67,26 @@ export function JobDetailsCard({
           <p className="mt-1 text-xs text-stone-400">
             The headline figure on the job card. Nothing is calculated from it — Cost to Complete works from
             the estimate and approved variations.
+          </p>
+        </div>
+        <div>
+          <label htmlFor="jobMargin" className="mb-1 block text-sm">Builder&apos;s margin % for this job</label>
+          <input
+            id="jobMargin"
+            name="marginPercent"
+            type="number"
+            step="0.01"
+            min="0"
+            max="100"
+            defaultValue={marginPercent}
+            className="input"
+            placeholder={`${companyMarginPercent} (company default)`}
+          />
+          <p className="mt-1 text-xs text-stone-400">
+            Margin is agreed per contract, so set it here when this job differs from the company default of{" "}
+            {companyMarginPercent}%. Leave blank to follow the default. It is applied to every client-facing
+            figure on the job — estimate, variations, budget and claims — so the wrong rate restates the
+            contract sum.
           </p>
         </div>
         <div className="flex items-center gap-3">

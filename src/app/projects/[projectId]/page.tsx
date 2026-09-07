@@ -2,7 +2,7 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst, centsToNumber } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { computeCostToComplete, projectDrawdown, overrunSummary } from "@/lib/claims";
 import { logView } from "@/lib/audit";
 import { fmtDate } from "@/lib/dates";
@@ -13,7 +13,7 @@ import { ClientViewControl } from "@/components/ClientViewControl";
 export default async function ProjectOverview({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
 
   const [project, estimateLines, approvedClaims, claims, approvedVars, pendingVars, schedule, events, photos] =
     await Promise.all([

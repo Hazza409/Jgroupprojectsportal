@@ -27,6 +27,30 @@ export const getCompany = cache(async (): Promise<Company> => {
   });
 });
 
+/**
+ * Company settings with THIS project's builder's margin applied.
+ *
+ * Margin is negotiated per contract — 8 Bower St is 12.5% while the portal
+ * default is 12% — and grossing a job at the wrong rate misstates its contract
+ * sum and everything derived from it. Anything that turns a base cost into a
+ * client-facing figure must read the rate through here, not through
+ * getCompany(); getCompany() remains correct for branding, which is genuinely
+ * portal-wide.
+ *
+ * Shaped as a Company so it drops straight into inclMarginGst / exMarginGst /
+ * moneyStructure / computeCostToComplete without changing their signatures.
+ * GST is statutory, so it is never overridden per project.
+ */
+export const getProjectRates = cache(async (projectId: string): Promise<Company> => {
+  const [company, project] = await Promise.all([
+    getCompany(),
+    db.project.findUnique({ where: { id: projectId }, select: { marginPercent: true } }),
+  ]);
+  const override = project?.marginPercent;
+  if (override === null || override === undefined || !Number.isFinite(override)) return company;
+  return { ...company, marginPercent: override };
+});
+
 /** Short name for compact contexts (home-screen label, email subjects). */
 export function companyShortName(company: Company): string {
   return company.shortName || company.name;

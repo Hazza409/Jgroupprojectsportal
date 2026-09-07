@@ -32,12 +32,24 @@ export interface ParsedEstimate {
 const HEADER_ALIASES: Record<keyof ColumnMap, string[]> = {
   costCode: ["cost code", "code", "cost_code"],
   costCodeName: ["cost code description", "cost code name", "code description", "cost item", "cost description"],
-  description: ["line item description", "line item", "line description", "description", "item", "scope", "trade"],
+  description: ["line item description", "line item", "line description", "description", "item", "scope", "trade", "item description"],
   quantity: ["qty", "quantity", "qnty"],
   unit: ["unit", "uom", "units"],
   unitCost: ["cost per quantity", "cost per qty", "unit cost", "rate", "unit price", "unitcost", "$/unit"],
-  total: ["overall cost", "total", "amount", "line total", "subtotal", "total cost"],
+  // "ext cost" / "extended cost": Buildxact's name for the base line total
+  // (qty × rate, before margin and GST).
+  total: ["overall cost", "total", "amount", "line total", "subtotal", "total cost", "ext cost", "extended cost"],
 };
+
+// Some estimate exports carry the code and its name in ONE cell, e.g.
+// "1032 - Floor and wall tiling", with no separate description column. Split
+// them so cost codes are created as 1032 / "Floor and wall tiling" rather than
+// 41 codes whose code IS the whole string (which then never match a
+// reconciliation sheet's "Floor and Wall Tiling").
+function splitCombinedCode(raw: string): { code: string; name: string | null } {
+  const m = /^\s*([A-Za-z0-9.\-_]+?)\s+[-–—]\s+(.+)$/.exec(raw);
+  return m ? { code: m[1].trim(), name: m[2].trim() } : { code: raw.trim(), name: null };
+}
 
 interface ColumnMap {
   costCode: number;
@@ -49,8 +61,16 @@ interface ColumnMap {
   total: number;
 }
 
+// Header text → comparison key. Periods become spaces so "Qty." matches "qty"
+// and "Ext. Cost" matches "ext cost"; runs of whitespace collapse. Without
+// this, an export whose headers merely carry trailing punctuation fails to
+// map any column and the whole file is rejected as headerless.
 function normalise(s: unknown): string {
-  return String(s ?? "").trim().toLowerCase();
+  return String(s ?? "")
+    .toLowerCase()
+    .replace(/\./g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 /** Locate the header row + map each logical column to its index. */
@@ -100,7 +120,15 @@ export function parseEstimateBuffer(buf: Buffer): ParsedEstimate {
     // estimate) — but only when they have no qty/rate of their own.
     const qtyCell = cell(map.quantity);
     const hasQty = qtyCell !== undefined && qtyCell !== null && String(qtyCell).trim() !== "";
-    if (/^(sub[\s-]?total|total|grand total)\b/i.test(description) && !hasQty && !cell(map.unitCost)) continue;
+    // "Price/m²" is a RATE in the export footer, not money for the job —
+    // without it here, a $13,565/m² rate imports as a $13,565 budget line.
+    if (
+      /^(sub[\s-]?total|total|grand total|price\s*\/\s*m|cost\s*\/\s*m|rate\s*\/\s*m)/i.test(description) &&
+      !hasQty &&
+      !cell(map.unitCost)
+    ) {
+      continue;
+    }
 
     // Blank qty defaults to 1 (lump-sum line); an EXPLICIT 0 stays 0; garbage
     // text ("2 ea") falls back to 1.
@@ -116,9 +144,15 @@ export function parseEstimateBuffer(buf: Buffer): ParsedEstimate {
       );
     }
 
+    // Cost code: prefer an explicit name column; otherwise accept a combined
+    // "1032 - Floor and wall tiling" cell and split it.
+    const rawCode = cell(map.costCode) ? String(cell(map.costCode)).trim() : "";
+    const explicitName = cell(map.costCodeName) ? String(cell(map.costCodeName)).trim() : null;
+    const split = rawCode ? splitCombinedCode(rawCode) : { code: "", name: null };
+
     lines.push({
-      costCode: cell(map.costCode) ? String(cell(map.costCode)).trim() : null,
-      costCodeName: cell(map.costCodeName) ? String(cell(map.costCodeName)).trim() : null,
+      costCode: split.code || null,
+      costCodeName: explicitName ?? split.name,
       description,
       quantity,
       unit: cell(map.unit) ? String(cell(map.unit)).trim() : null,

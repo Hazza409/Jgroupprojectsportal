@@ -2,16 +2,17 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, inclMarginGst } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { VariationsUploadForm } from "./VariationsUploadForm";
+import { VariationPdfImport } from "./VariationPdfImport";
 
 export default async function VariationsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
 
   // DRAFT variations are the builder's workspace and must never reach a client
   // (Jake §1). Enforced in the query, not just hidden in the UI.
@@ -53,6 +54,7 @@ export default async function VariationsPage({ params }: { params: { projectId: 
       {isBuilder && (
         <div className="mb-6 space-y-3">
           <VariationsUploadForm projectId={projectId} />
+          <VariationPdfImport projectId={projectId} />
           <div>
             <Link href={`/projects/${projectId}/variations/new`} className="btn-ghost">
               + Add a variation manually

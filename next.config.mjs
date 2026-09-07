@@ -42,6 +42,12 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "25mb",
     },
+    // unpdf (variation-PDF reading) resolves its pdf.js build through
+    // import.meta at runtime, which webpack can't follow — it bundles with a
+    // "Critical dependency" warning and then can't find the build when the
+    // action actually runs. Left external, it's required from node_modules on
+    // the server exactly as it is under Node, which is how it was verified.
+    serverComponentsExternalPackages: ["unpdf"],
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

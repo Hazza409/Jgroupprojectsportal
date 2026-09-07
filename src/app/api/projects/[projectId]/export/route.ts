@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/auth";
 import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { buildProjectWorkbook } from "@/lib/excel/exportProject";
 
 // Download a full-project Excel workbook (Summary, Cost to Complete, Estimate,
@@ -23,7 +23,7 @@ export async function GET(_req: Request, { params }: { params: { projectId: stri
     return new NextResponse("Not found", { status: 404 });
   }
 
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
   const { buffer, filename } = await buildProjectWorkbook(projectId, company, {
     forClient: user.role === "CLIENT",
   });

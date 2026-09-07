@@ -31,6 +31,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
       name: true,
       address: true,
       contractValueCents: true,
+      marginPercent: true,
       forecastFinalCostCents: true,
       forecastCompletionDate: true,
       forecastUpdatedAt: true,
@@ -56,6 +57,8 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
         name={project.name}
         address={project.address}
         contractDollars={(centsToNumber(project.contractValueCents) / 100).toFixed(2)}
+        marginPercent={project.marginPercent === null ? "" : String(project.marginPercent)}
+        companyMarginPercent={company.marginPercent}
       />
       <ForecastCard
         projectId={projectId}

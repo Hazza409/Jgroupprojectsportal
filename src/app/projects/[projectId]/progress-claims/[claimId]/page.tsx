@@ -4,7 +4,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
 import { formatCents } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { projectDrawdown, claimHeadlineCents } from "@/lib/claims";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ClaimLineForm } from "./ClaimLineForm";
@@ -80,7 +80,7 @@ export default async function ClaimDetailPage({
   // Invoice-on-invoice drawdown position for THIS claim. claimHeadlineCents is
   // the single client-facing basis (inc margin+GST) shared with the register,
   // ledger, overview, and print — so "This claim" agrees across every page.
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
   const headline = claimHeadlineCents(claim, company);
   const drawdown = await projectDrawdown(projectId, company);
   const priorDrawnCents = drawdown.rows

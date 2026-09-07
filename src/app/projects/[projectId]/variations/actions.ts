@@ -7,8 +7,9 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, lineTotalCents, formatCents, inclMarginGst } from "@/lib/money";
-import { getCompany, companyShortName } from "@/lib/company";
+import { companyShortName, getProjectRates } from "@/lib/company";
 import { parseVariationsBuffer } from "@/lib/excel/parseVariations";
+import { parseVariationPdfBuffer } from "@/lib/pdf/parseVariationPdf";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { matchCostCodeId, projectCodeRefs } from "@/lib/claims";
 import { recordDecision, contentFingerprint, AUTHORITY_STATEMENT } from "@/lib/audit";
@@ -141,17 +142,38 @@ export async function importVariations(projectId: string, formData: FormData): P
       orderBy: { variationNumber: "desc" },
       select: { variationNumber: true },
     });
-    // Allocate numbers sequentially — @@unique([projectId, variationNumber])
-    // means we must NOT race; create one variation at a time inside the tx.
+    // Numbering: use the sheet's own VO number where it gives one, because
+    // that is the reference the client and the paperwork use — renumbering a
+    // signed "VO 1025" to "#1" breaks the link between the portal and the
+    // documents. Fall back to sequential only for rows with no number, and
+    // skip a number already taken rather than colliding on
+    // @@unique([projectId, variationNumber]). One create at a time, no race.
     let next = (last?.variationNumber ?? 0) + 1;
+    const used = new Set(
+      (await tx.variation.findMany({ where: { projectId }, select: { variationNumber: true } })).map(
+        (v) => v.variationNumber,
+      ),
+    );
     for (const v of parsed.variations) {
+      let number: number;
+      if (v.number !== null && Number.isInteger(v.number) && v.number > 0 && !used.has(v.number)) {
+        number = v.number;
+      } else {
+        while (used.has(next)) next++;
+        number = next;
+        if (v.number !== null && used.has(v.number)) {
+          parsed.warnings.push(`VO ${v.number} is already on this job — "${v.title}" imported as #${number} instead.`);
+        }
+      }
+      used.add(number);
+
       // Variation-level code = title match (the per-line default); each line
       // then matches its own description, falling back to the variation code.
       const varCode = matchCostCodeId(v.title, codes);
       await tx.variation.create({
         data: {
           projectId,
-          variationNumber: next++,
+          variationNumber: number,
           title: v.title,
           description: v.description,
           status: v.status,
@@ -179,6 +201,206 @@ export async function importVariations(projectId: string, formData: FormData): P
     message: `${replace ? "Replaced all variations —" : "Imported"} ${parsed.variations.length} variation(s).`,
     rowCount: parsed.variations.length,
     warnings: parsed.warnings,
+  };
+}
+
+// ── Variation PDFs ────────────────────────────────────────────
+// The signed variation document is the record the client actually holds, and
+// a job that transfers in mid-build arrives as a folder of them. Reading them
+// directly keeps three things that retyping loses: the variation NUMBER the
+// client knows it by ("V-01025", not "#4"), the date on the document, and the
+// document itself as the evidence behind the figure.
+
+export interface PdfVariationPreview {
+  file: string;
+  reference: string | null;
+  number: number | null;
+  title: string;
+  date: string | null; // ISO, for the form's date input
+  lineCount: number;
+  /** Base, ex margin and ex GST — what gets stored. */
+  totalCents: number;
+  /** Inc margin + GST — what the document shows the client. */
+  clientTotalCents: number;
+  /** Already on the job (same number) — importing again would collide. */
+  existing: boolean;
+  warnings: string[];
+}
+
+export interface PdfImportResult extends ImportResult {
+  previews?: PdfVariationPreview[];
+}
+
+async function readVariationPdfs(formData: FormData, marginPercent: number) {
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  const parsed: { file: File; v: Awaited<ReturnType<typeof parseVariationPdfBuffer>>; buf: Buffer }[] = [];
+  for (const file of files) {
+    if (!/\.pdf$/i.test(file.name)) continue;
+    const buf = Buffer.from(await file.arrayBuffer());
+    parsed.push({ file, buf, v: await parseVariationPdfBuffer(buf, file.name, marginPercent) });
+  }
+  return parsed;
+}
+
+/** Parse without writing anything, so the builder can check before committing. */
+export async function previewVariationPdfs(projectId: string, formData: FormData): Promise<PdfImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders import variations");
+
+  const company = await getProjectRates(projectId);
+  const parsed = await readVariationPdfs(formData, company.marginPercent);
+  if (parsed.length === 0) return { ok: false, message: "No PDF files uploaded." };
+
+  const numbers = parsed.map((p) => p.v.number).filter((n): n is number => n !== null);
+  const clash = numbers.length
+    ? await db.variation.findMany({
+        where: { projectId, variationNumber: { in: numbers } },
+        select: { variationNumber: true },
+      })
+    : [];
+  const taken = new Set(clash.map((c) => c.variationNumber));
+
+  return {
+    ok: true,
+    message: `Read ${parsed.length} variation document(s).`,
+    previews: parsed
+      .map(({ file, v }) => ({
+        file: file.name,
+        reference: v.reference,
+        number: v.number,
+        title: v.title,
+        date: v.date ? v.date.toISOString().slice(0, 10) : null,
+        lineCount: v.lines.length,
+        totalCents: v.totalCents,
+        clientTotalCents: inclMarginGst(v.totalCents, company),
+        existing: v.number !== null && taken.has(v.number),
+        warnings: v.warnings,
+      }))
+      .sort((a, b) => (a.number ?? 0) - (b.number ?? 0)),
+  };
+}
+
+/**
+ * Create the variations. Approval is taken from the form, not guessed from the
+ * document — the signature blocks on these are blank even for variations the
+ * client has agreed to, so only the builder can say which are live.
+ *
+ * An approved one is stamped with the date it was ACTUALLY approved, and the
+ * Decision Register says plainly that it was carried in at onboarding rather
+ * than decided in the portal. Stamping today's date on a 2025 approval would
+ * put a false date on a contract record.
+ */
+export async function commitVariationPdfs(projectId: string, formData: FormData): Promise<PdfImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders import variations");
+
+  const company = await getProjectRates(projectId);
+  const parsed = await readVariationPdfs(formData, company.marginPercent);
+  if (parsed.length === 0) return { ok: false, message: "No PDF files uploaded." };
+
+  const codes = await projectCodeRefs(projectId);
+  const store = await storage();
+  const warnings: string[] = [];
+  let created = 0;
+  let approved = 0;
+  let skipped = 0;
+
+  for (const { file, buf, v } of parsed) {
+    warnings.push(...v.warnings);
+    if (v.number === null) {
+      warnings.push(`${file.name}: no "Variation No" on the document — skipped.`);
+      skipped++;
+      continue;
+    }
+    // Numbers are the client's reference and must not be reassigned, so a
+    // collision is reported rather than renumbered around.
+    const clash = await db.variation.findFirst({
+      where: { projectId, variationNumber: v.number },
+      select: { id: true },
+    });
+    if (clash) {
+      warnings.push(`${v.reference ?? v.number}: already on this job — left alone.`);
+      skipped++;
+      continue;
+    }
+
+    const key = formData.get(`approved_${v.number}`) ? "1" : "";
+    const isApproved = key === "1";
+    const onRaw = String(formData.get(`approvedOn_${v.number}`) ?? "").trim();
+    const approvedOn = isApproved ? (onRaw ? new Date(onRaw) : v.date) : null;
+    if (isApproved && (!approvedOn || Number.isNaN(approvedOn.getTime()))) {
+      warnings.push(`${v.reference ?? v.number}: marked approved but no valid approval date — imported as draft.`);
+    }
+    const liveApproval = isApproved && approvedOn instanceof Date && !Number.isNaN(approvedOn.getTime());
+
+    // Store the source document first: it is the evidence for the figure, and
+    // a variation without it is worth less than no variation at all.
+    const storedKey = buildKey({ projectId, category: "variations", originalName: `${Date.now()}-${file.name}` });
+    await store.put({ key: storedKey, body: buf, contentType: "application/pdf" });
+
+    const varCode = matchCostCodeId(v.title, codes);
+    const detailBits = [
+      v.notes,
+      v.reference ? `Source document: ${file.name} (${v.reference})` : `Source document: ${file.name}`,
+      v.date ? `Dated ${v.date.toLocaleDateString("en-AU", { dateStyle: "medium" })}` : null,
+    ].filter(Boolean);
+
+    const variation = await db.variation.create({
+      data: {
+        projectId,
+        variationNumber: v.number,
+        title: v.title,
+        description: detailBits.join(" — "),
+        status: liveApproval ? VariationStatus.APPROVED : VariationStatus.DRAFT,
+        approvedAt: liveApproval ? approvedOn : null,
+        totalCents: v.totalCents,
+        costCodeId: varCode,
+        lines: {
+          create: v.lines.map((l) => ({
+            description: l.description,
+            quantity: l.quantity,
+            unit: l.unit,
+            unitCostCents: l.unitCostCents,
+            totalCents: l.totalCents,
+            costCodeId: matchCostCodeId(l.description, codes) ?? varCode,
+          })),
+        },
+      },
+      include: { lines: { orderBy: { id: "asc" }, select: { description: true, quantity: true, totalCents: true } } },
+    });
+    created++;
+
+    if (liveApproval) {
+      approved++;
+      await recordDecision({
+        projectId,
+        subjectType: DecisionSubject.VARIATION,
+        subjectId: variation.id,
+        subjectRef: `Variation ${v.reference ?? `#${v.number}`}`,
+        subjectTitle: v.title,
+        action: DecisionAction.APPROVED,
+        actor: user,
+        amountCents: inclMarginGst(v.totalCents, company),
+        versionHash: contentFingerprint({ title: v.title, totalCents: v.totalCents, lines: variation.lines }),
+        detail:
+          `Historical approval carried in when this job was brought onto the dashboard. Approved ` +
+          `${approvedOn!.toLocaleDateString("en-AU", { dateStyle: "medium" })}, outside the portal; ` +
+          `recorded by ${user.name} on import. Source document: ${file.name}.`,
+      });
+    }
+  }
+
+  refresh(projectId);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}`);
+
+  return {
+    ok: created > 0,
+    rowCount: created,
+    warnings,
+    message: created
+      ? `Imported ${created} variation(s), ${approved} as approved${skipped ? `, ${skipped} skipped` : ""}.`
+      : `Nothing imported${skipped ? ` — ${skipped} skipped.` : "."}`,
   };
 }
 
@@ -284,7 +506,7 @@ export async function submitVariation(projectId: string, variationId: string) {
     include: { project: { select: { name: true } } },
   });
   if (v) {
-    const company = await getCompany();
+    const company = await getProjectRates(projectId);
     await notifyProject(
       projectId,
       `Variation for approval — ${v.project.name}`,
@@ -311,7 +533,7 @@ export async function decideVariation(projectId: string, variationId: string, ap
     include: { lines: { orderBy: { id: "asc" }, select: { description: true, quantity: true, totalCents: true } } },
   });
   if (!before) throw new Error("Variation is not awaiting a decision");
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
   const approvedAmount = inclMarginGst(before.totalCents, company);
   const versionHash = contentFingerprint({
     title: before.title,

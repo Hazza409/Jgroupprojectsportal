@@ -4,7 +4,7 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage } from "@/lib/storage";
 import { formatCents, inclMarginGst } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { StatusBadge } from "@/components/StatusBadge";
 import { submitVariation, decideVariation, attachQuote, saveVariationLines, addVariationLine, deleteVariationLine } from "../actions";
 import { AUTHORITY_STATEMENT, logView } from "@/lib/audit";
@@ -18,7 +18,7 @@ export default async function VariationDetailPage({
   const user = await assertProjectAccess(params.projectId);
   const { projectId, variationId } = params;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
 
   const v = await db.variation.findFirst({
     where: { id: variationId, projectId },

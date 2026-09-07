@@ -1,7 +1,7 @@
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, sumCents, inclMarginGst } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import Link from "next/link";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { UploadForm } from "./UploadForm";
@@ -10,7 +10,7 @@ import { AddLineForm } from "./AddLineForm";
 export default async function EstimatePage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
 
   const [lines, lastImport] = await Promise.all([
     db.estimateLineItem.findMany({

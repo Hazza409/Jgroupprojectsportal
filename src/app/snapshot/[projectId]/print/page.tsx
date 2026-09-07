@@ -3,7 +3,7 @@ import { getSessionUser } from "@/auth";
 import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents, inclMarginGst } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { computeCostToComplete, projectDrawdown } from "@/lib/claims";
 import { PrintButton } from "./PrintButton";
 
@@ -23,7 +23,7 @@ export default async function SnapshotPage({ params }: { params: { projectId: st
   if (!project) notFound();
   if (user.role === "CLIENT" && project.clientView === "HANDOVER") notFound();
 
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
   const [ctc, drawdown, pendingVars] = await Promise.all([
     computeCostToComplete(projectId, company),
     projectDrawdown(projectId, company),

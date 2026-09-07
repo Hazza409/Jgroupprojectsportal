@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { formatCents, inclMarginGst, centsToNumber, moneyStructure } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { computeCostToComplete, overrunSummary } from "@/lib/claims";
 import { correctCostName } from "@/lib/houseStyle";
 import { forecastGate } from "@/lib/forecast";
@@ -30,7 +30,7 @@ export default async function OverrunsPage({ params }: { params: { projectId: st
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
 
   // Everything in parallel — this page previously awaited seven fetches in a
   // row, which on a remote database was seconds of blank wait per render.

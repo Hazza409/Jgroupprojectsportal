@@ -9,7 +9,7 @@ import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, formatCents } from "@/lib/money";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getCompany, companyShortName, getProjectRates } from "@/lib/company";
 import { fmtDateShort } from "@/lib/dates";
 import { materializeClaimActuals, matchCostCodeId, projectCodeRefs, claimHeadlineCents } from "@/lib/claims";
 import { recordDecision, contentFingerprint, hasAcknowledged, AUTHORITY_STATEMENT, ACKNOWLEDGEMENT_STATEMENT } from "@/lib/audit";
@@ -131,7 +131,7 @@ export async function importReconSheet(
   if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload the reconciliation .xlsx file." };
 
   const buf = Buffer.from(await file.arrayBuffer());
-  const reconCompany = await getCompany();
+  const reconCompany = await getProjectRates(projectId);
   const parsed = parseReconciliationBuffer(buf, reconCompany.marginPercent, reconCompany.gstPercent);
   if (parsed.budgetOverview.length === 0 && parsed.supplierLines.length === 0) {
     return { ok: false, message: parsed.warnings[0] ?? "Could not read the reconciliation sheet." };
@@ -353,7 +353,7 @@ export async function submitClaim(projectId: string, claimId: string) {
     include: { project: { select: { name: true } }, lines: { select: { claimedAmountCents: true } } },
   });
   if (claim) {
-    const total = claimHeadlineCents(claim, await getCompany());
+    const total = claimHeadlineCents(claim, await getProjectRates(projectId));
     await notifyProject(
       projectId,
       `Progress claim for review — ${claim.project.name}`,
@@ -379,7 +379,7 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
     include: { lines: { orderBy: { id: "asc" }, select: { description: true, claimedAmountCents: true } } },
   });
   if (!before) throw new Error("Claim is not awaiting a decision");
-  const decidedAmount = claimHeadlineCents(before, await getCompany());
+  const decidedAmount = claimHeadlineCents(before, await getProjectRates(projectId));
   const versionHash = contentFingerprint({
     claimNumber: before.claimNumber,
     totalCents: before.totalCents,
@@ -421,7 +421,7 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
     revalidatePath(`/projects/${projectId}`); // overview drawn-down
 
     // Headline = recon total (inc GST) when built from a sheet, else grossed line sum.
-    const total = claimHeadlineCents(claim, await getCompany());
+    const total = claimHeadlineCents(claim, await getProjectRates(projectId));
     await notifyBuilders(`Progress claim approved — ${claim.project.name}`, [
       `${user.name} (${user.role.toLowerCase()}) approved Claim #${claim.claimNumber} on ${claim.project.name}.`,
       `Approved amount: ${formatCents(total)}`,

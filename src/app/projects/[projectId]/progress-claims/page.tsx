@@ -2,7 +2,7 @@ import Link from "next/link";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents } from "@/lib/money";
-import { getCompany, companyShortName } from "@/lib/company";
+import { companyShortName, getProjectRates } from "@/lib/company";
 import { projectDrawdown, claimHeadlineCents } from "@/lib/claims";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -12,7 +12,7 @@ export default async function ProgressClaimsPage({ params }: { params: { project
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
 
   // Drafts are the builder's workspace — a client only ever sees ISSUED claims
   // (submitted onward). Enforced here, not just hidden in the UI.

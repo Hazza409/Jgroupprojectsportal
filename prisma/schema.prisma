@@ -297,6 +297,12 @@ model Project {
   // The portal must NEVER calculate or infer these.
   //
   // PUBLISHED set — what the CLIENT sees. Only ever written by publishing a
+  // Builder's margin for THIS job, when it differs from the company default.
+  // Margin is negotiated per contract — one job at 12.5% and another at 18% is
+  // normal — and grossing a job at the wrong rate misstates its contract sum
+  // and every figure derived from it. Null means "use the company default".
+  marginPercent              Float?
+
   // fully signed-off revision, so an in-progress edit can't leak to the client
   // and the last published figure stays visible until the new one is signed.
   forecastFinalCostCents     BigInt?
@@ -349,6 +355,7 @@ model Project {
   viewLogs          ViewLog[]
   forecastSignoffs  ForecastSignoff[]
   forecastHistory   CostCodeForecastEntry[]
+  costCodeAliases   CostCodeAlias[]
   // Client-facing "who to contact at J Group" list
   contacts          ProjectContact[]
   // Subcontractor directory (shown in Handover), Excel/CSV uploadable
@@ -426,9 +433,37 @@ model CostCode {
   variations     Variation[]
   variationLines VariationLineItem[]
   forecastHistory CostCodeForecastEntry[]
+  aliases         CostCodeAlias[]
 
   @@unique([projectId, code])
   @@index([projectId])
+}
+
+// ── Cost-code aliases ─────────────────────────────────────────
+// A reconciliation sheet names trades in its own words, and they don't always
+// match the estimate: "Swimming Pool" against a "Pools" cost code, or two
+// sheet lines ("Mechanical", "Mechanical Ventilation") that both belong to one
+// budget line. Fuzzy matching can't close those safely — merging two trades is
+// a commercial decision, not a spelling one — so the mapping is recorded here
+// once and reused on every later import.
+//
+// Many aliases to one cost code, which is what makes a merge possible. Scoped
+// per project: the same words can mean different codes on different jobs.
+model CostCodeAlias {
+  id         String   @id @default(cuid())
+  projectId  String
+  costCodeId String
+  // Normalised source name (see normalizeCostName) — the matching key.
+  alias      String
+  // As it was written in the sheet, for display.
+  sourceLabel String
+  createdAt  DateTime @default(now())
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  costCode CostCode @relation(fields: [costCodeId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, alias])
+  @@index([costCodeId])
 }
 
 // ─────────────────────────── Estimate ────────────────────────

@@ -40,12 +40,24 @@ function editDistance(a: string, b: string): number {
 export interface CodeRef {
   id: string;
   name: string;
+  /**
+   * Explicit source-name mappings recorded for this code (already normalised).
+   * These beat both exact-name and fuzzy matching: a builder saying "Swimming
+   * Pool is our Pools code" is a decision, and it must not be second-guessed
+   * by a spelling heuristic. Several aliases on one code is how two sheet
+   * lines merge into a single budget line.
+   */
+  aliases?: string[];
 }
 
 /** Match a claim-line description to a cost code, or null. Pass codes sorted by code for determinism. */
 export function matchCostCodeId(description: string, codes: CodeRef[]): string | null {
   const target = normalizeCostName(description);
   if (!target) return null;
+
+  // Tier 0: an alias the builder set by hand. Checked first and never fuzzy —
+  // it is the authoritative answer for that source name.
+  for (const c of codes) if (c.aliases?.includes(target)) return c.id;
 
   // Tier 1: exact normalized match.
   for (const c of codes) if (normalizeCostName(c.name) === target) return c.id;
@@ -93,13 +105,14 @@ export function claimHeadlineCents(
   return inclMarginGst(sumCents(claim.lines.map((l) => l.claimedAmountCents)), company);
 }
 
-/** A project's cost codes in deterministic order, for matching. */
+/** A project's cost codes in deterministic order, with their aliases, for matching. */
 export async function projectCodeRefs(projectId: string): Promise<CodeRef[]> {
-  return db.costCode.findMany({
+  const codes = await db.costCode.findMany({
     where: { projectId },
     orderBy: { code: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, aliases: { select: { alias: true } } },
   });
+  return codes.map((c) => ({ id: c.id, name: c.name, aliases: c.aliases.map((a) => a.alias) }));
 }
 
 /**

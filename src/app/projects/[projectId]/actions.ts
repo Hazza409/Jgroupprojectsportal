@@ -7,7 +7,7 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { dollarsToCents, exceedsInt4, tooLargeMessage, exMarginGst, inclMarginGst, centsToNumber, formatCents } from "@/lib/money";
 import { forecastGate, restampForecastRevision, approverEmails } from "@/lib/forecast";
-import { getCompany } from "@/lib/company";
+import { getProjectRates } from "@/lib/company";
 import { validatePassword } from "@/lib/password";
 import { recordDecision } from "@/lib/audit";
 import { DecisionAction, DecisionSubject } from "@prisma/client";
@@ -151,7 +151,7 @@ export async function setForecasts(projectId: string, formData: FormData): Promi
   await restampForecastRevision(projectId);
 
   revalidatePath(`/projects/${projectId}/settings`);
-  const gate = await forecastGate(projectId, await getCompany());
+  const gate = await forecastGate(projectId, await getProjectRates(projectId));
   return {
     ok: true,
     message: gate.unconfigured
@@ -170,7 +170,7 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
   const user = await assertProjectAccess(projectId);
   if (user.role !== Role.BUILDER) return { ok: false, message: "Builder access required." };
 
-  const gate = await forecastGate(projectId, await getCompany());
+  const gate = await forecastGate(projectId, await getProjectRates(projectId));
   if (!gate.hasPending) return { ok: false, message: "There are no staged figures to sign off." };
   // When named approvers ARE configured, only they may sign. When none are
   // configured the control isn't enforced (the UI says so) and any builder may.
@@ -212,7 +212,7 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
     update: {},
   });
 
-  const after = await forecastGate(projectId, await getCompany());
+  const after = await forecastGate(projectId, await getProjectRates(projectId));
   if (!after.complete) {
     revalidatePath(`/projects/${projectId}/settings`);
     return { ok: true, message: `Signed off. Still awaiting: ${after.outstanding.join(", ")}.` };
@@ -231,7 +231,7 @@ export async function signOffForecast(projectId: string): Promise<SimpleResult> 
   // Captured BEFORE the update below nulls the staging fields.
   const signedRevision = project.pendingForecastRevision!;
   const publishedBy = after.signed.map((s) => s.name).join(" & ");
-  const companyRates = await getCompany();
+  const companyRates = await getProjectRates(projectId);
 
   await db.project.update({
     where: { id: projectId },
@@ -390,13 +390,26 @@ export async function updateJobDetails(projectId: string, formData: FormData): P
     return { ok: false, message: "Contract value is too large." };
   }
 
+  // Builder's margin for THIS contract. Blank means inherit the company
+  // default; an explicit rate is used for every client-facing figure on the
+  // job. Bounded because it multiplies the whole contract sum — a stray
+  // keystroke here would silently restate the job.
+  const marginRaw = String(formData.get("marginPercent") ?? "").trim();
+  let marginPercent: number | null = null;
+  if (marginRaw !== "") {
+    const n = Number(marginRaw);
+    if (!Number.isFinite(n) || n < 0 || n > 100) {
+      return { ok: false, message: "Builder's margin must be a percentage between 0 and 100, or blank to use the company default." };
+    }
+    marginPercent = n;
+  }
+
   await db.project.update({
     where: { id: projectId },
-    data: { name, address, contractValueCents },
+    data: { name, address, contractValueCents, marginPercent },
   });
 
-  revalidatePath(`/projects/${projectId}`);
-  revalidatePath(`/projects/${projectId}/settings`);
+  revalidatePath(`/projects/${projectId}`, "layout");
   revalidatePath("/builder");
   revalidatePath("/projects");
   return { ok: true, message: "Job details saved." };
@@ -429,7 +442,7 @@ export async function setLineForecast(
     select: { id: true, name: true },
   });
   if (!code) return { ok: false, message: "That cost code isn't on this project." };
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
 
   const raw = String(formData.get("forecast") ?? "").trim();
   const note = String(formData.get("note") ?? "").trim() || null;
@@ -505,7 +518,7 @@ export async function withdrawLineForecast(projectId: string, costCodeId: string
     return { ok: false, message: "There's no published forecast on that line to undo." };
   }
 
-  const company = await getCompany();
+  const company = await getProjectRates(projectId);
   const withdrawn = inclMarginGst(code.forecastCents, company);
 
   await db.costCode.update({
