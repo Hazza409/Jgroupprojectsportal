@@ -49,6 +49,15 @@ export interface RecordDecisionInput {
   amountCents?: number | null;
   versionHash?: string | null;
   detail?: string | null;
+  /**
+   * When the decision was actually made. Defaults to now, which is right for
+   * anything decided in the portal. Set it only when recording a decision that
+   * happened elsewhere and earlier — a job brought onto the dashboard
+   * mid-build arrives with approvals already given, and stamping those with
+   * today's date puts a false date on a contract record. The `detail` line
+   * should then say when it was recorded, so both facts are on the row.
+   */
+  occurredAt?: Date;
 }
 
 /** Append one immutable row to the decision ledger. */
@@ -68,6 +77,7 @@ export async function recordDecision(input: RecordDecisionInput) {
       amountCents: input.amountCents ?? null,
       versionHash: input.versionHash ?? null,
       detail: input.detail ?? null,
+      ...(input.occurredAt ? { occurredAt: input.occurredAt } : {}),
     },
   });
 }
