@@ -382,10 +382,14 @@ export async function commitVariationPdfs(projectId: string, formData: FormData)
         actor: user,
         amountCents: inclMarginGst(v.totalCents, company),
         versionHash: contentFingerprint({ title: v.title, totalCents: v.totalCents, lines: variation.lines }),
+        // Dated when the client actually approved, not when it was typed in.
+        // The register is a record of decisions, and this decision was made on
+        // the date printed on the document.
+        occurredAt: approvedOn!,
         detail:
-          `Historical approval carried in when this job was brought onto the dashboard. Approved ` +
-          `${approvedOn!.toLocaleDateString("en-AU", { dateStyle: "medium" })}, outside the portal; ` +
-          `recorded by ${user.name} on import. Source document: ${file.name}.`,
+          `Historical approval carried in when this job was brought onto the dashboard — approved outside ` +
+          `the portal and recorded by ${user.name} on ${new Date().toLocaleDateString("en-AU", { dateStyle: "medium" })}. ` +
+          `Source document: ${file.name}.`,
       });
     }
   }
