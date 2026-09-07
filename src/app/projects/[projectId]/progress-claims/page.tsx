@@ -7,6 +7,7 @@ import { projectDrawdown, claimHeadlineCents } from "@/lib/claims";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createClaim } from "./actions";
+import { ClaimHistoryImport } from "./ClaimHistoryImport";
 
 export default async function ProgressClaimsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
@@ -40,6 +41,12 @@ export default async function ProgressClaimsPage({ params }: { params: { project
           ) : null
         }
       />
+
+      {isBuilder && (
+        <div className="mb-6">
+          <ClaimHistoryImport projectId={projectId} />
+        </div>
+      )}
 
       {claims.length === 0 ? (
         <div className="card text-stone-500">No progress claims yet.</div>

@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, formatCents } from "@/lib/money";
 import { notifyBuilders, notifyProject } from "@/lib/email";
-import { parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
+import { listReconTabs, parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
 import { getCompany, companyShortName, getProjectRates } from "@/lib/company";
 import { fmtDateShort } from "@/lib/dates";
 import { materializeClaimActuals, matchCostCodeId, projectCodeRefs, claimHeadlineCents } from "@/lib/claims";
@@ -515,4 +515,260 @@ export async function deleteClaimLabour(projectId: string, claimId: string, entr
   await builderOnly(projectId);
   await db.claimLabourEntry.deleteMany({ where: { id: entryId, claim: { id: claimId, projectId } } });
   refresh(projectId, claimId);
+}
+
+// ── Claim history for a job brought on mid-build ───────────────
+// A job that transfers in has already run for years, and its whole record
+// lives in one reconciliation workbook — a tab per invoice. Importing them one
+// at a time through the normal flow means four operations each; over 54
+// invoices that is not a workflow, it is an afternoon of clicking.
+//
+// Three things this gets right that the one-at-a-time route cannot:
+//
+//  * Money comes from each month's CURRENT column, not the running To Date.
+//    On a long sheet those disagree — a hand-maintained To Date drifts from
+//    the movements above it — and the monthly figures are the ones that
+//    reconcile to what was actually invoiced.
+//  * Dates are resolved with the SEQUENCE as evidence. A date that goes
+//    backwards against the previous invoice, where swapping day and month
+//    fixes it, is a transposed date (Excel reading a typed d/m/y as m/d/y),
+//    and nothing else can prove that.
+//  * The source workbook is stored ONCE and each claim points at its tab,
+//    rather than 54 copies of the same file.
+
+export interface ClaimHistoryTab {
+  invoiceNumber: number;
+  tab: string;
+  periodLabel: string | null;
+  date: string | null;
+  dateFixed: boolean;
+  costCodes: number;
+  suppliers: number;
+  totalCents: number;
+  exists: boolean;
+}
+
+export interface ClaimHistoryResult extends ReconImportResult {
+  tabs?: ClaimHistoryTab[];
+  totalCents?: number;
+  imported?: number;
+}
+
+/** Day/month swapped, when the day could itself be a month. */
+function swapDayMonth(d: Date): Date | null {
+  const day = d.getDate();
+  if (day < 1 || day > 12) return null;
+  const s = new Date(d.getFullYear(), day - 1, d.getMonth() + 1);
+  return Number.isNaN(s.getTime()) ? null : s;
+}
+
+/**
+ * Parse every invoice tab, in invoice order, and repair dates that run
+ * backwards. Progress claims are raised in sequence, so a date earlier than
+ * the previous claim's is wrong by definition; if swapping day and month
+ * makes it later, that is the answer.
+ */
+async function readHistory(buf: Buffer, marginPercent: number, gstPercent: number) {
+  const tabs = listReconTabs(buf).filter((t) => t.invoiceNumber !== null) as { name: string; invoiceNumber: number }[];
+  tabs.sort((a, b) => a.invoiceNumber - b.invoiceNumber);
+
+  const parsed = tabs.map((t) => ({
+    tab: t.name,
+    invoiceNumber: t.invoiceNumber,
+    p: parseReconciliationBuffer(buf, marginPercent, gstPercent, t.name),
+    dateFixed: false,
+  }));
+
+  let previous: Date | null = null;
+  for (const row of parsed) {
+    const d = row.p.meta.date;
+    if (d && previous && d <= previous) {
+      const swapped = swapDayMonth(d);
+      if (swapped && swapped > previous) {
+        row.p.meta.date = swapped;
+        row.dateFixed = true;
+      }
+    }
+    if (row.p.meta.date) previous = row.p.meta.date;
+  }
+  return parsed;
+}
+
+export async function previewClaimHistory(projectId: string, formData: FormData): Promise<ClaimHistoryResult> {
+  await builderOnly(projectId);
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, message: "No file uploaded." };
+  if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload the reconciliation .xlsx file." };
+
+  const company = await getProjectRates(projectId);
+  const rows = await readHistory(Buffer.from(await file.arrayBuffer()), company.marginPercent, company.gstPercent);
+  if (rows.length === 0) return { ok: false, message: "No invoice tabs found in that workbook." };
+
+  const existing = await db.progressClaim.findMany({ where: { projectId }, select: { claimNumber: true } });
+  const taken = new Set(existing.map((c) => c.claimNumber));
+
+  return {
+    ok: true,
+    message: `${rows.length} invoice tab(s) read.`,
+    totalCents: rows.reduce((a, r) => a + r.p.totalCents, 0),
+    tabs: rows.map((r) => ({
+      invoiceNumber: r.invoiceNumber,
+      tab: r.tab,
+      periodLabel: r.p.meta.periodLabel,
+      date: r.p.meta.date ? r.p.meta.date.toISOString().slice(0, 10) : null,
+      dateFixed: r.dateFixed,
+      costCodes: r.p.budgetOverview.filter((b) => b.currentCents !== 0).length,
+      suppliers: r.p.supplierLines.length,
+      totalCents: r.p.totalCents,
+      exists: taken.has(r.invoiceNumber),
+    })),
+  };
+}
+
+export async function importClaimHistory(projectId: string, formData: FormData): Promise<ClaimHistoryResult> {
+  const user = await builderOnly(projectId);
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, message: "No file uploaded." };
+  if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload the reconciliation .xlsx file." };
+
+  // Up to and including this invoice. The CURRENT invoice is still being
+  // built in the spreadsheet, so it is raised as a live claim rather than
+  // carried in as history.
+  const upTo = Number(formData.get("upTo"));
+  if (!Number.isFinite(upTo) || upTo < 1) return { ok: false, message: "Choose the last invoice to bring in." };
+
+  const buf = Buffer.from(await file.arrayBuffer());
+  const company = await getProjectRates(projectId);
+  const rows = (await readHistory(buf, company.marginPercent, company.gstPercent)).filter(
+    (r) => r.invoiceNumber <= upTo,
+  );
+  if (rows.length === 0) return { ok: false, message: "No invoice tabs at or below that number." };
+
+  const warnings: string[] = [];
+  const codes = await projectCodeRefs(projectId);
+  if (codes.length === 0) {
+    return { ok: false, message: "Import the estimate first — claim lines are matched to its cost codes." };
+  }
+
+  // A carried-in opening position is the SAME money in aggregate form. Leaving
+  // it alongside the claims would count every month twice, so it goes.
+  const cleared = await db.costActual.deleteMany({
+    where: { projectId, OR: [{ xeroSourceId: { startsWith: "opening:" } }, { xeroSourceId: { startsWith: "import:" } }] },
+  });
+  if (cleared.count > 0) {
+    warnings.push(
+      `Removed the carried-in opening position (${cleared.count} row(s)). The claims below now carry the ` +
+        `spend instead — the same money, month by month rather than as one lump.`,
+    );
+  }
+
+  // The workbook once, not once per claim.
+  const store = await storage();
+  const key = buildKey({ projectId, category: "claims", originalName: `${Date.now()}-${file.name}` });
+  await store.put({ key, body: buf, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+  let created = 0;
+  let skipped = 0;
+  let fixedDates = 0;
+  let totalCents = 0;
+
+  for (const row of rows) {
+    const p = row.p;
+    const exists = await db.progressClaim.findFirst({
+      where: { projectId, claimNumber: row.invoiceNumber },
+      select: { id: true },
+    });
+    if (exists) {
+      skipped++;
+      continue;
+    }
+    if (row.dateFixed) fixedDates++;
+
+    const claim = await db.progressClaim.create({
+      data: {
+        projectId,
+        claimNumber: row.invoiceNumber,
+        status: ClaimStatus.APPROVED,
+        periodEnd: p.meta.date ?? undefined,
+        approvedAt: p.meta.date ?? undefined,
+        submittedAt: p.meta.date ?? undefined,
+        submittedById: user.id,
+        periodLabel: p.meta.periodLabel,
+        reconInvoiceRef: p.meta.invoiceRef,
+        reconSheetKey: key,
+        reconSheetName: `${file.name} — ${row.tab}`,
+        labourCents: p.labourCents,
+        costsCents: p.costsCents,
+        marginPercent: p.marginPercent,
+        marginCents: p.marginCents,
+        subtotalCents: p.subtotalCents,
+        gstCents: p.gstCents,
+        totalCents: p.totalCents,
+        // Money per cost code is this month's movement, NOT the running total.
+        lines: {
+          create: p.budgetOverview
+            .filter((b) => b.currentCents !== 0)
+            .map((b) => ({
+              costCodeId: matchCostCodeId(b.name, codes),
+              description: b.name,
+              claimedAmountCents: b.currentCents,
+              priorCents: b.priorCents,
+              toDateCents: b.toDateCents,
+            })),
+        },
+        reconLines: {
+          create: p.supplierLines.map((l) => ({
+            supplier: l.supplier,
+            documentNumber: l.documentNumber,
+            allocation: l.allocation,
+            amountCents: l.amountCents,
+          })),
+        },
+      },
+    });
+    created++;
+    totalCents += p.totalCents;
+
+    // Post this claim's lines into the cost feed, which is what makes spend
+    // accumulate per cost code.
+    await materializeClaimActuals(projectId, claim.id);
+
+    await recordDecision({
+      projectId,
+      subjectType: DecisionSubject.CLAIM,
+      subjectId: claim.id,
+      subjectRef: `Progress Claim #${row.invoiceNumber}`,
+      subjectTitle: p.meta.periodLabel ?? row.tab,
+      action: DecisionAction.APPROVED,
+      actor: user,
+      amountCents: p.totalCents,
+      occurredAt: p.meta.date ?? undefined,
+      detail:
+        `Historical claim carried in when this job was brought onto the dashboard — invoiced and settled ` +
+        `outside the portal, recorded by ${user.name} on ${new Date().toLocaleDateString("en-AU", { dateStyle: "medium" })}. ` +
+        `Source: ${file.name}, tab "${row.tab}"${p.meta.invoiceRef ? `, ${p.meta.invoiceRef}` : ""}.`,
+    });
+  }
+
+  if (fixedDates > 0) {
+    warnings.push(
+      `${fixedDates} invoice date(s) ran backwards against the previous claim and were corrected by ` +
+        `swapping day and month — Excel had read a typed d/m/y date month-first. Worth fixing in the sheet.`,
+    );
+  }
+  if (skipped > 0) warnings.push(`${skipped} invoice(s) already existed as claims and were left alone.`);
+
+  refresh(projectId);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}`);
+
+  return {
+    ok: created > 0,
+    imported: created,
+    totalCents,
+    warnings,
+    message: created
+      ? `Carried in ${created} claim(s) up to invoice #${upTo}, ${formatCents(totalCents)} invoiced in total (inc margin & GST).`
+      : `Nothing imported${skipped ? ` — all ${skipped} already existed.` : "."}`,
+  };
 }
