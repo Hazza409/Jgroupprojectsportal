@@ -61,14 +61,34 @@ const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "
 
 const money = (s: string) => dollarsToCents(s.replace(/[$,\s]/g, ""));
 
-/** "Oct 10th, 2025" / "May 4th, 2026" → Date. */
+/** "Oct 10th, 2025", "May 4th, 2026" or "22 August 2025" → Date. */
 function parseDocDate(raw: string): Date | null {
-  const m = /([A-Za-z]{3,})\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/.exec(raw);
-  if (!m) return null;
-  const month = MONTHS.findIndex((x) => m[1].toLowerCase().startsWith(x));
+  // Month-first ("Oct 10th, 2025") and day-first ("22 August 2025") are both
+  // in use across the templates; neither order is ambiguous because the month
+  // is spelled out.
+  const monthFirst = /([A-Za-z]{3,})\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})/.exec(raw);
+  const dayFirst = /(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,})\s+(\d{4})/.exec(raw);
+  const parts = monthFirst
+    ? { monthWord: monthFirst[1], day: monthFirst[2], year: monthFirst[3] }
+    : dayFirst
+      ? { monthWord: dayFirst[2], day: dayFirst[1], year: dayFirst[3] }
+      : null;
+  if (!parts) return null;
+  const month = MONTHS.findIndex((x) => parts.monthWord.toLowerCase().startsWith(x));
   if (month < 0) return null;
-  const d = new Date(Number(m[3]), month, Number(m[2]));
+  const d = new Date(Number(parts.year), month, Number(parts.day));
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * Money as these documents write it, including accounting negatives:
+ * "($1,246,157.55)" is a CREDIT. Read as a positive it silently inflates a
+ * variation by twice the credit — on one of these that is $1.2m.
+ */
+function docMoney(raw: string): number {
+  const negative = /^\s*\(.*\)\s*$/.test(raw);
+  const n = dollarsToCents(raw.replace(/[()$,\s]/g, ""));
+  return negative ? -n : n;
 }
 
 /**
@@ -79,6 +99,128 @@ function deMargin(cents: number, marginPercent: number): number {
   return Math.round(cents / (1 + marginPercent / 100));
 }
 
+/**
+ * The "CONTRACT VARIATION" template:
+ *
+ *   J GROUP PROJECTS
+ *   CONTRACT VARIATION
+ *   Variation No: VO 1015    Project: 394 Wyong Road, Duffys Forest
+ *   Date: 22 August 2025     Job No: J-01024
+ *   Status: Approved         Client: Katharine Davis-Rice
+ *   REVISED Entry Front Door
+ *   Includes blackened steel surrounding door/window frames…
+ *   Description Qty UOM Amount (ex GST)
+ *   Supply and Install Entry Front Door (includes frame/glazing) 1 qty $45,000.00
+ *   Subtotal (ex GST) $45,000.00
+ *   GST (10%) $4,500.00
+ *   TOTAL (inc GST) $49,500.00
+ *
+ * Unlike the older layout this one PRINTS its approval status, so the builder
+ * doesn't have to tell us which are live — the document already says.
+ *
+ * "Amount (ex GST)" is ex-GST but already carries builder's margin, the same
+ * basis as the older template, so it is de-margined on the way in.
+ */
+function parseContractVariation(
+  text: string,
+  fileName: string,
+  marginPercent: number,
+  warnings: string[],
+): ParsedPdfVariation {
+  const grab = (re: RegExp) => re.exec(text)?.[1]?.trim() ?? null;
+
+  const reference = grab(/Variation No:\s*([A-Za-z]*\s*\d+)/i)?.replace(/\s+/g, " ") ?? null;
+  const number = reference ? Number(reference.replace(/[^0-9]/g, "")) || null : null;
+  const customerName = grab(/Client:\s*(.+)/i);
+  const jobRef = grab(/Job No:\s*(\S+)/i);
+  const date = parseDocDate(grab(/Date:\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i) ?? "");
+
+  // "Status: Approved   Client: …" — take only what precedes the next label.
+  const statusText = grab(/Status:\s*(.+?)(?:\s{2,}|\s+Client:|\n)/i) ?? "";
+  const approved = /^approved\b/i.test(statusText);
+  if (!approved && statusText) {
+    warnings.push(`${fileName}: document states status "${statusText}" — imported as a draft.`);
+  }
+
+  // Title is the line after the Status/Client row; anything further before the
+  // table header is scope detail.
+  const head = grab(/Client:[^\n]*\n([\s\S]*?)\n\s*Description\s+Qty/i) ?? "";
+  const headLines = head.split("\n").map((l) => l.trim()).filter(Boolean);
+  const title = headLines[0] ?? fileName.replace(/\.pdf$/i, "");
+  const notes = headLines.slice(1).join(" ").replace(/\s+/g, " ").trim() || null;
+
+  const money = (s: string) => dollarsToCents(s.replace(/[$,\s]/g, ""));
+  const printedSubtotalCents = (() => {
+    const v = grab(/Subtotal \(ex GST\)\s*\$?(-?[\d,]+\.\d{2})/i);
+    return v === null ? null : money(v);
+  })();
+  const printedTotalCents = (() => {
+    const v = grab(/TOTAL \(inc GST\)\s*\$?(-?[\d,]+\.\d{2})/i);
+    return v === null ? null : money(v);
+  })();
+
+  // Rows end with "<qty> <uom> $<amount>". The description may sit on the same
+  // line, or — where the document carries a scope paragraph — on the lines
+  // ABOVE it, with the amount line holding nothing else. Text is therefore
+  // accumulated until an amount closes a row, rather than assuming one line
+  // per item.
+  const block = /Description\s+Qty\s+UOM\s+Amount \(ex GST\)([\s\S]*?)Subtotal \(ex GST\)/i.exec(text)?.[1] ?? "";
+  const lines: ParsedPdfVariationLine[] = [];
+  const row = /^(.*?)\s*(-?[\d.]+)\s+([A-Za-z][A-Za-z0-9./]*)\s+(\(?\s*-?\$?[\d,]+\.\d{2}\s*\)?)$/;
+  let pending: string[] = [];
+  for (const raw of block.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = row.exec(line);
+    if (!m) {
+      pending.push(line);
+      continue;
+    }
+    const description = [...pending, m[1]].join(" ").replace(/\s+/g, " ").trim();
+    pending = [];
+    const qty = Number(m[2]);
+    const q = Number.isFinite(qty) && qty !== 0 ? qty : 1;
+    const gross = docMoney(m[4]);
+    if (!description) continue;
+    lines.push({
+      description,
+      quantity: q,
+      unit: m[3] || null,
+      unitCostCents: deMargin(Math.round(gross / q), marginPercent),
+      totalCents: deMargin(gross, marginPercent),
+    });
+  }
+
+  if (lines.length === 0) warnings.push(`${fileName}: no variation line items could be read.`);
+
+  const totalCents = lines.reduce((a, l) => a + l.totalCents, 0);
+  if (printedSubtotalCents !== null && lines.length > 0) {
+    const regrossed = Math.round(totalCents * (1 + marginPercent / 100));
+    if (Math.abs(regrossed - printedSubtotalCents) > 100) {
+      warnings.push(
+        `${fileName}: line items come to $${(regrossed / 100).toFixed(2)} once builder's margin is added ` +
+          `back, but the document says $${(printedSubtotalCents / 100).toFixed(2)}.`,
+      );
+    }
+  }
+
+  return {
+    number,
+    reference,
+    title,
+    customerName,
+    jobRef,
+    date,
+    notes,
+    lines,
+    totalCents,
+    printedSubtotalCents,
+    printedTotalCents,
+    status: approved ? VariationStatus.APPROVED : VariationStatus.DRAFT,
+    warnings,
+  };
+}
+
 export async function parseVariationPdfBuffer(
   buf: Buffer,
   fileName: string,
@@ -87,6 +229,13 @@ export async function parseVariationPdfBuffer(
   const pdf = await getDocumentProxy(new Uint8Array(buf));
   const { text } = await extractText(pdf, { mergePages: true });
   const warnings: string[] = [];
+
+  // Two variation templates are in use. The "CONTRACT VARIATION" one states
+  // its own approval status on the page, which the older one does not, so it
+  // is worth recognising rather than forcing into the same shape.
+  if (/CONTRACT VARIATION/i.test(text)) {
+    return parseContractVariation(text, fileName, marginPercent, warnings);
+  }
 
   const grab = (re: RegExp) => re.exec(text)?.[1]?.trim() ?? null;
 

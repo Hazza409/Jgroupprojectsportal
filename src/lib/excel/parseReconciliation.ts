@@ -88,7 +88,12 @@ function findRowInColumn(rows: unknown[][], col: number, needle: string, from = 
 
 /** Invoice number out of a tab name: "Invoice 55 - Aug-26(2)", "Inv 7 - Mar(1)-24". */
 export function tabInvoiceNumber(name: string): number | null {
-  const m = /^\s*inv(?:oice)?\s*(\d+)\b/i.exec(name.trim());
+  // Deliberately loose about what follows "inv": real workbooks contain
+  // "Invvoice 27" and "Inv41" alongside "Invoice 27", and a tab whose number
+  // doesn't parse is skipped by the history import — losing a whole month's
+  // money silently. LETTERS only after "inv", never \w: \w swallows digits, so
+  // "Inv41" would greedily read as invoice 4 and then 1.
+  const m = /^\s*inv[a-z]*\s*(\d+)\b/i.exec(name.trim());
   return m ? Number(m[1]) : null;
 }
 
@@ -243,9 +248,11 @@ export function parseReconciliationBuffer(
   // and the number is what orders the claim sequence, so losing it silently
   // disabled the out-of-sequence guard. Take the number on its own, then the
   // period label as a best effort.
-  const tabMatch = /^\s*inv(?:oice)?\s*(\d+)\s*(?:[-–—]\s*(.+))?$/i.exec(name.trim());
-  meta.invoiceNumber = tabMatch ? Number(tabMatch[1]) : null;
-  const rest = tabMatch?.[2]?.trim() ?? "";
+  // The number comes from tabInvoiceNumber so there is ONE definition of what
+  // an invoice tab is called — a second copy here drifted out of step with it
+  // and left "Invvoice 27" numberless while the tab lister found it fine.
+  meta.invoiceNumber = tabInvoiceNumber(name);
+  const rest = /^\s*inv[a-z]*\s*\d+\s*[-–—]\s*(.+)$/i.exec(name.trim())?.[1]?.trim() ?? "";
   // Prefer a clean "Aug-26" out of "Aug-26(2)"; else keep whatever's there.
   meta.periodLabel = /([A-Za-z]{3,}\s*-?\s*\d{2,4})/.exec(rest)?.[1] ?? (rest || null);
 

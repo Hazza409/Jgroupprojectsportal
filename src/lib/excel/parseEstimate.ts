@@ -30,7 +30,10 @@ export interface ParsedEstimate {
 }
 
 const HEADER_ALIASES: Record<keyof ColumnMap, string[]> = {
-  costCode: ["cost code", "code", "cost_code"],
+  // "acct code": the same Buildxact column, headed differently on some
+  // exports. Without it the whole estimate imports with no cost codes at
+  // all, which silently removes every budget line to match spend against.
+  costCode: ["cost code", "code", "cost_code", "acct code", "account code", "acct"],
   costCodeName: ["cost code description", "cost code name", "code description", "cost item", "cost description"],
   description: ["line item description", "line item", "line description", "description", "item", "scope", "trade", "item description"],
   quantity: ["qty", "quantity", "qnty"],
