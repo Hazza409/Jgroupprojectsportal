@@ -555,6 +555,13 @@ model ProgressClaim {
   gstCents        Int     @default(0)
   totalCents      Int     @default(0) // inc GST — the headline claim amount
 
+  // A deposit the client paid up front, being repaid by reducing what they owe
+  // on this invoice. SEPARATE money: it buys no work, so it is deliberately not
+  // part of totalCents and never moves the budget drawdown. Held here so the
+  // claim can still reconcile to the invoice the client actually received.
+  depositCreditCents Int     @default(0)
+  depositLabel       String? // as written, e.g. "less Deposit - Instalment 2"
+
   submittedById  String?
   submittedAt    DateTime?
   approvedAt     DateTime?

@@ -186,6 +186,8 @@ export async function importReconSheet(
         subtotalCents: parsed.subtotalCents,
         gstCents: parsed.gstCents,
         totalCents: parsed.totalCents,
+        depositCreditCents: parsed.depositCents,
+        depositLabel: parsed.depositLabel,
       },
     });
 
@@ -703,7 +705,12 @@ export async function importClaimHistory(projectId: string, formData: FormData):
         marginCents: p.marginCents,
         subtotalCents: p.subtotalCents,
         gstCents: p.gstCents,
+        // totalCents is the WORK done. A deposit repayment nets off the cash
+        // the client pays, not the value of the work, so it is recorded beside
+        // the claim rather than inside it.
         totalCents: p.totalCents,
+        depositCreditCents: p.depositCents,
+        depositLabel: p.depositLabel,
         // Money per cost code is this month's movement, NOT the running total.
         lines: {
           create: p.budgetOverview

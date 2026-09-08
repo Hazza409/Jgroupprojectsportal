@@ -118,6 +118,20 @@ export default async function ClaimDetailPage({
         { label: "Subtotal (ex-GST)", value: claim.subtotalCents, strong: true },
         { label: "GST", value: claim.gstCents },
         { label: "Total claimed (inc GST)", value: claim.totalCents, strong: true },
+        // A deposit the client paid up front, repaid by reducing what they owe
+        // here. Shown BELOW the claim total, not inside it: it buys no work, so
+        // it must not move the drawdown — but without it the claim wouldn't
+        // reconcile to the invoice the client actually received.
+        ...(claim.depositCreditCents !== 0
+          ? [
+              { label: claim.depositLabel ?? "less deposit repaid", value: -claim.depositCreditCents },
+              {
+                label: "Amount invoiced",
+                value: claim.totalCents - claim.depositCreditCents,
+                strong: true,
+              },
+            ]
+          : []),
       ]
     : [
         { label: "Works this period (ex margin & GST)", value: lineBase },

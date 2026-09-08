@@ -35,6 +35,21 @@ export interface ParsedRecon {
   /** Budget-overview rows summed by us (authoritative). */
   toDateCents: number;
   /**
+   * "Total Costs, Labour, Margin & GST" — the value of the WORK this period,
+   * before any deposit repayment is netted off. On sheets that carry no
+   * deposit line this equals totalCents.
+   */
+  grossCents: number;
+  /**
+   * "less Deposit - Instalment N" — money the client paid up front being
+   * repaid by reducing what they owe on this invoice. It is SEPARATE from the
+   * contract sum: it buys no work, so it must never move the budget drawdown.
+   * Held apart from the claim total for exactly that reason.
+   */
+  depositCents: number;
+  /** The deposit line as written, e.g. "less Deposit - Instalment 2". */
+  depositLabel: string | null;
+  /**
    * The sheet's OWN total-row figure for To Date, when it has one. Kept
    * separately because a hand-maintained SUM range drifts out of step with the
    * rows above it, and the caller should be told rather than silently handed
@@ -233,6 +248,7 @@ export function parseReconciliationBuffer(
     sheetName: picked?.name ?? "",
     supplierLines: [], budgetOverview: [], costsCents: 0, labourCents: 0,
     labourToDateCents: 0, toDateCents: 0, sheetToDateCents: null,
+    grossCents: 0, depositCents: 0, depositLabel: null,
     marginPercent: defaultMarginPercent, marginCents: 0, subtotalCents: 0, gstCents: 0, totalCents: 0, warnings,
   };
   if (!picked) { warnings.push("No worksheet found."); return empty; }
@@ -351,7 +367,22 @@ export function parseReconciliationBuffer(
   const gstCents = gstCell ? cents(rows[gstCell.r][gstCell.c + 3]) : Math.round((labourCents + costsCents + marginCents) * (defaultGstPercent / 100));
   const totalCell = findCell(rows, "total amount per invoice");
   const subtotalCents = labourCents + costsCents + marginCents;
-  const totalCents = totalCell ? cents(rows[totalCell.r][totalCell.c + 3]) : subtotalCents + gstCents;
+  const netCents = totalCell ? cents(rows[totalCell.r][totalCell.c + 3]) : subtotalCents + gstCents;
+
+  // A deposit the client paid up front, repaid by reducing later invoices. The
+  // sheet nets it off "Total amount per invoice", so that figure is CASH, not
+  // work. Take the work value from the line above it where the sheet gives
+  // one; otherwise the two are the same thing.
+  const depositCell = findCell(rows, "less deposit");
+  const depositCents = depositCell ? cents(rows[depositCell.r][depositCell.c + 3]) : 0;
+  const depositLabel = depositCell ? s(rows[depositCell.r][depositCell.c]) || null : null;
+  const grossCell = findCell(rows, "total costs, labour, margin");
+  const grossCents = grossCell ? cents(rows[grossCell.r][grossCell.c + 3]) : netCents + depositCents;
+
+  // The claim carries the WORK, never the cash-after-deposit: a claim total net
+  // of a repayment would understate the drawdown, and an invoice that is only a
+  // repayment (no work) would post a NEGATIVE claim, reading as work un-done.
+  const totalCents = grossCents;
 
   if (supplierLines.length === 0 && budgetOverview.length === 0) {
     warnings.push("Could not find supplier or budget-overview rows — check the sheet matches the expected reconciliation format.");
@@ -373,6 +404,7 @@ export function parseReconciliationBuffer(
   return {
     meta, sheetName: name, supplierLines, budgetOverview, costsCents, labourCents,
     labourToDateCents, toDateCents, sheetToDateCents,
+    grossCents, depositCents, depositLabel,
     marginPercent, marginCents, subtotalCents, gstCents, totalCents, warnings,
   };
 }
