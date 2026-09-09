@@ -18,6 +18,22 @@
 //   4. Set `inForce: true`. Until then the pages render marked as drafts and
 //      nothing asks a client to accept them.
 
+/**
+ * The contracting entity. Named here once so the terms, the privacy policy and
+ * anything else legal read from a single source — a portal that says "J Group
+ * Projects" in one document and a different entity in another is an argument
+ * waiting to happen about who the client actually contracted with.
+ */
+export const LEGAL_ENTITY = {
+  name: "J Group Projects Pty Ltd",
+  abn: "65 649 858 617",
+} as const;
+
+/** "J Group Projects Pty Ltd (ABN 65 649 858 617)" */
+export function legalEntityLine(): string {
+  return `${LEGAL_ENTITY.name} (ABN ${LEGAL_ENTITY.abn})`;
+}
+
 export type LegalDocSlug = "terms" | "privacy" | "cookies";
 
 export interface LegalSection {
@@ -58,8 +74,10 @@ const TERMS: LegalDoc = {
   sections: [
     {
       heading: "Who these terms are between, and how they are accepted",
+      body:
+        "This portal is provided by J Group Projects Pty Ltd (ABN 65 649 858 617), referred to below as " +
+        "J Group. These terms govern your use of it.",
       mustCover: [
-        "Identify J Group Projects by legal entity and ABN — not the trading name alone.",
         "Say who the other party is: the client under the building contract, and any additional people they ask us to give access to (co-owners, architect, family office).",
         "State that using the portal, or clicking to accept, forms agreement to these terms.",
         "The portal records who accepted which version and when. Say that plainly — it is evidence, and it should not be a surprise.",
@@ -89,6 +107,19 @@ const TERMS: LegalDoc = {
         "State that a forecast is an estimate and does not commit either party.",
         "Cover figures carried in from before a job joined the portal — several jobs were onboarded with historical claims and approvals recorded retrospectively, and the records say so on their face.",
         "Address rounding: figures are grossed for margin and GST at display time and can differ by a cent or two between screens.",
+      ],
+    },
+    {
+      heading: "The construction programme is indicative",
+      body:
+        "The programme shown in this portal is J Group's best current view of how the build is expected " +
+        "to run. It is indicative and subject to change. Dates move for reasons inside and outside our " +
+        "control — weather, availability of trades and materials, statutory approvals, variations, and " +
+        "decisions still to be made. Publishing a programme, or updating one, is not a commitment to any " +
+        "date shown and does not vary any date agreed under the building contract.",
+      mustCover: [
+        "Confirm this against the building contract's own provisions on time: any contractual date for practical completion, and the extension-of-time machinery, live in the contract and must not be cut across by this clause.",
+        "Decide whether a published programme can start time running for any contractual purpose (a delay notice, an EOT claim). It should not, unless the contract says so.",
       ],
     },
     {
@@ -148,8 +179,11 @@ const PRIVACY: LegalDoc = {
   sections: [
     {
       heading: "Who is responsible for your information",
+      body:
+        "J Group Projects Pty Ltd (ABN 65 649 858 617) is responsible for the personal information held " +
+        "in this portal.",
       mustCover: [
-        "The J Group Projects legal entity and ABN, and a contact point for privacy enquiries.",
+        "A contact point for privacy enquiries — a monitored address, not a personal one.",
         "Whether J Group is an APP entity under the Privacy Act 1988 (Cth). Small businesses under $3m turnover can be exempt — but the exemption is narrow, and holding this volume of client financial information makes voluntarily complying the safer position.",
       ],
     },

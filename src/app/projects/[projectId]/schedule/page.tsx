@@ -34,6 +34,17 @@ export default async function SchedulePage({ params }: { params: { projectId: st
         }
       />
 
+      {/* Shown to everyone, builder and client alike, and never behind a
+          dismiss button: a client reading dates off a programme is exactly the
+          person who needs to know they can move. The terms of use say the same
+          thing — this is where it is actually read. */}
+      <div className="mb-6 rounded-md border border-stone-200 bg-stone-100/50 px-4 py-2 text-sm text-stone-600">
+        Dates are indicative and subject to change. The programme is J Group&apos;s best current view of the
+        build and is updated as it progresses; it is not a commitment to any date shown, and does not vary
+        any date agreed under the building contract.{" "}
+        <Link href="/legal/terms" className="underline underline-offset-2">Terms of use</Link>
+      </div>
+
       {isBuilder && (
         <div className="mb-6 space-y-3">
           <ScheduleUploadForm projectId={projectId} />
