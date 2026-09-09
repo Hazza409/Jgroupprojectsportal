@@ -6,7 +6,17 @@
 databases:
   - name: jgroup-db
     databaseName: jgroup
-    plan: free # free Postgres expires after 90 days — upgrade in the dashboard for production
+    # UPGRADE THIS. A free Render Postgres EXPIRES and is then DELETED with all
+    # of its data — there is no backup on the free plan. Render's current
+    # documented terms are 30 days from creation plus a 14-day grace period;
+    # this database was created under earlier terms (the note here used to say
+    # 90 days), so the only reliable expiry date is the one on the database's
+    # own page in the Render dashboard. Check it there, not here.
+    #
+    # Upgrading is in place: the database and its data are kept and only the
+    # compute plan changes, so there is no dump/restore and DATABASE_URL does
+    # not move. Paid plans also add the automatic backups the free one lacks.
+    plan: free
 
 services:
   - type: web
