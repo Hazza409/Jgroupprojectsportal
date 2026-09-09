@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LegalLinks } from "@/components/LegalLinks";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { Role } from "@prisma/client";
@@ -35,10 +36,11 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.25em] text-stone-500">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-[11px] uppercase tracking-[0.25em] text-stone-500">
         <span>{company.tagline}</span>
         <span className="hidden sm:inline">{company.location}</span>
       </div>
+      <LegalLinks className="mt-3 justify-center sm:justify-start" />
     </main>
   );
 }

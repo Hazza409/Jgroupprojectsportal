@@ -255,6 +255,28 @@ model User {
   authoredEvents  CalendarEvent[]     @relation("EventAuthor")
   submittedClaims ProgressClaim[]     @relation("ClaimSubmitter")
   eventResponses  CalendarEventResponse[]
+  termsAcceptances TermsAcceptance[]
+}
+
+// One person's acceptance of ONE version of the terms of use.
+//
+// Recorded per user rather than per project: the terms govern use of the
+// portal, which a person may reach across several jobs. Keyed by version so a
+// change to the wording is a new agreement — a previous acceptance is never
+// silently carried over onto text nobody agreed to. The content fingerprint
+// pins exactly what was on screen, so a later edit cannot be passed off as
+// what was accepted.
+model TermsAcceptance {
+  id          String   @id @default(cuid())
+  userId      String
+  version     String
+  contentHash String
+  acceptedAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, version])
+  @@index([userId])
 }
 
 // Join between User and Project. This is the row-level scoping anchor:

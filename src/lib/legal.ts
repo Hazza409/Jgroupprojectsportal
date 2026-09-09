@@ -1,0 +1,268 @@
+// ── Legal documents ──────────────────────────────────────────
+// Terms of use, privacy policy and cookie notice, as STRUCTURE with drafting
+// notes rather than finished wording.
+//
+// The wording is deliberately absent. This portal fronts multi-million-dollar
+// construction contracts, and terms that interact with a building contract are
+// a solicitor's work: clauses that merely sound right would give J Group
+// documents nobody qualified has reviewed, which is worse than having none.
+// Each section below therefore states WHAT IT MUST COVER and why it matters
+// for this particular app, so the drafting is a filling-in exercise.
+//
+// HOW TO PUT THESE INTO FORCE
+//   1. Replace each section's `body` with the settled wording.
+//   2. Delete its `mustCover` notes (they only render while a doc is a draft).
+//   3. Bump `version` — acceptances record the version they agreed to, so a
+//      new version is a new agreement and previously recorded acceptances are
+//      not silently carried over.
+//   4. Set `inForce: true`. Until then the pages render marked as drafts and
+//      nothing asks a client to accept them.
+
+export type LegalDocSlug = "terms" | "privacy" | "cookies";
+
+export interface LegalSection {
+  heading: string;
+  /** Settled wording. Empty while the section is still a skeleton. */
+  body?: string;
+  /** What this clause has to do, and why it matters here. Drafting guidance. */
+  mustCover?: string[];
+}
+
+export interface LegalDoc {
+  slug: LegalDocSlug;
+  title: string;
+  /** One line under the title. */
+  summary: string;
+  /**
+   * Bumped whenever the wording changes. Acceptance is recorded against a
+   * version, so a change makes previous acceptances stale rather than
+   * silently re-applying them to text nobody agreed to.
+   */
+  version: string;
+  /**
+   * False until a solicitor has settled the wording. While false the page
+   * shows a draft notice, the drafting guidance is visible, and no client is
+   * asked to accept anything — an acceptance recorded against placeholder text
+   * would be a legal fiction, and worse than no record.
+   */
+  inForce: boolean;
+  sections: LegalSection[];
+}
+
+const TERMS: LegalDoc = {
+  slug: "terms",
+  title: "Terms of Use",
+  summary: "The terms on which J Group Projects provides access to this portal.",
+  version: "0.1-draft",
+  inForce: false,
+  sections: [
+    {
+      heading: "Who these terms are between, and how they are accepted",
+      mustCover: [
+        "Identify J Group Projects by legal entity and ABN — not the trading name alone.",
+        "Say who the other party is: the client under the building contract, and any additional people they ask us to give access to (co-owners, architect, family office).",
+        "State that using the portal, or clicking to accept, forms agreement to these terms.",
+        "The portal records who accepted which version and when. Say that plainly — it is evidence, and it should not be a surprise.",
+      ],
+    },
+    {
+      heading: "These terms do not vary the building contract",
+      mustCover: [
+        "THE MOST IMPORTANT CLAUSE HERE. State that the portal is a means of sharing information and that nothing in it varies, replaces or waives any term of the building contract.",
+        "Say which prevails if a figure or document in the portal conflicts with the contract or a formally issued notice — it must be the contract.",
+        "Cover whether a contractual notice can be validly GIVEN through the portal, or whether notices must still follow the contract's notice provisions. Getting this wrong in either direction is the main litigation risk: a client could argue a dashboard figure bound J Group, or that a notice shown here satisfied a contractual requirement.",
+      ],
+    },
+    {
+      heading: "Approvals given through the portal",
+      mustCover: [
+        "Clients approve variations and progress claims in this portal, and each approval is recorded with a timestamp and a fingerprint of exactly what was on screen.",
+        "State the legal effect of clicking approve: is it authorisation of the works and the associated cost adjustment under the contract, or an in-principle agreement pending a signed variation?",
+        "This wording is already displayed to clients at the point of approval and stored on every approval record. It lives in AUTHORITY_STATEMENT in src/lib/audit.ts and is marked TODO(Andrew) — settle it here and there together, because they must say the same thing.",
+        "Cover approvals recorded by J Group on the client's behalf when a decision was given outside the portal (by email or in a meeting), which the system supports and labels as such.",
+      ],
+    },
+    {
+      heading: "Status of the figures shown",
+      mustCover: [
+        "Distinguish the categories the portal actually displays: the approved budget (estimate plus approved variations), forecast adjustments (J Group's current expectation, not an agreed change), spend to date, and progress claims issued.",
+        "State that a forecast is an estimate and does not commit either party.",
+        "Cover figures carried in from before a job joined the portal — several jobs were onboarded with historical claims and approvals recorded retrospectively, and the records say so on their face.",
+        "Address rounding: figures are grossed for margin and GST at display time and can differ by a cent or two between screens.",
+      ],
+    },
+    {
+      heading: "Accounts and access",
+      mustCover: [
+        "Each person gets their own login; credentials must not be shared.",
+        "The client must tell J Group when someone should no longer have access.",
+        "J Group may suspend or withdraw access, and when.",
+        "Note honestly what account security exists today: password sign-in, sessions that persist for 30 days, and no multi-factor authentication.",
+      ],
+    },
+    {
+      heading: "Availability",
+      mustCover: [
+        "No promise of uninterrupted availability; the portal may be unavailable during deployment or maintenance.",
+        "The portal is a convenience, not the contractual record of the project. J Group's own records prevail if the portal is unavailable or wrong.",
+      ],
+    },
+    {
+      heading: "Intellectual property and confidentiality",
+      mustCover: [
+        "Ownership of drawings, specifications, estimates and cost breakdowns published to the portal, and what the client may do with them.",
+        "Confidentiality: pricing, supplier invoices and subcontractor rates are commercially sensitive.",
+        "Ownership of the portal software and branding itself.",
+      ],
+    },
+    {
+      heading: "Liability",
+      mustCover: [
+        "Limitation of liability for reliance on portal information, subject to Australian Consumer Law, which cannot be excluded.",
+        "Note that the Australian Consumer Law and the Home Building Act 1989 (NSW) both constrain what a builder can exclude for residential work — a limitation drafted too broadly may be unenforceable and can itself be a problem.",
+      ],
+    },
+    {
+      heading: "Changes to these terms",
+      mustCover: [
+        "How changes are notified and when they take effect.",
+        "The portal versions these terms and records acceptance per version, so a material change should require fresh acceptance rather than passive notice.",
+      ],
+    },
+    {
+      heading: "Governing law",
+      mustCover: [
+        "Governing law and jurisdiction. The projects are in New South Wales.",
+        "Any dispute-resolution step required before proceedings.",
+      ],
+    },
+  ],
+};
+
+const PRIVACY: LegalDoc = {
+  slug: "privacy",
+  title: "Privacy Policy",
+  summary: "What personal information this portal holds, why, and what you can do about it.",
+  version: "0.1-draft",
+  inForce: false,
+  sections: [
+    {
+      heading: "Who is responsible for your information",
+      mustCover: [
+        "The J Group Projects legal entity and ABN, and a contact point for privacy enquiries.",
+        "Whether J Group is an APP entity under the Privacy Act 1988 (Cth). Small businesses under $3m turnover can be exempt — but the exemption is narrow, and holding this volume of client financial information makes voluntarily complying the safer position.",
+      ],
+    },
+    {
+      heading: "What this portal collects",
+      mustCover: [
+        "Account details: name, email address, role, and a hashed password (passwords are never stored in readable form).",
+        "Project information that identifies people: client names, contract sums, variation and claim histories, payment records, and uploaded documents.",
+        "DISCLOSE THE VIEW LOG. The portal records which pages a client opens and when, so that 'I was never shown that variation' can be answered. It is internal and never shown to clients — but recording it without disclosing it is the problem, not the recording.",
+        "Decision records: who approved or rejected what, when, and for how much. These are immutable by design.",
+      ],
+    },
+    {
+      heading: "Why we collect it",
+      mustCover: [
+        "Administering the building contract, issuing and evidencing progress claims and variations, and keeping a record of decisions.",
+        "State that the evidentiary purpose is deliberate — the record exists to protect both parties — and that it is kept accordingly.",
+      ],
+    },
+    {
+      heading: "Who else can see it",
+      mustCover: [
+        "J Group staff.",
+        "Other people the client has asked us to give access to on their own project. Access is scoped per project: a client sees only their own job.",
+        "Service providers, which currently are: Render (application and database hosting), the email provider used for notifications, and Xero where cost data is synchronised.",
+        "Confirm where each provider stores data and whether any of it leaves Australia — Render regions and the email provider need checking before this can be stated.",
+      ],
+    },
+    {
+      heading: "How long it is kept",
+      mustCover: [
+        "A retention period, informed by the limitation periods for building work in NSW — the Home Building Act statutory warranty periods are six years for major defects and two years otherwise, and records are worth keeping at least that long.",
+        "Note that decision records are append-only and are not deleted or edited, only superseded. Say so, because it is a limit on any deletion request.",
+      ],
+    },
+    {
+      heading: "Access, correction and complaints",
+      mustCover: [
+        "How someone asks for a copy of their information or asks for a correction, and the response timeframe.",
+        "That a correction to a decision record is made by adding a further record, never by altering the original.",
+        "Complaints: to J Group first, then to the OAIC.",
+      ],
+    },
+    {
+      heading: "Security",
+      mustCover: [
+        "Describe the protections honestly: encrypted transport, hashed passwords, per-project access control, and security headers.",
+        "Do not overstate. There is currently no multi-factor authentication, sessions last 30 days, and there has been no independent security assessment. A privacy policy that claims more protection than exists is its own liability.",
+        "What happens on a data breach, and the Notifiable Data Breaches scheme.",
+      ],
+    },
+  ],
+};
+
+const COOKIES: LegalDoc = {
+  slug: "cookies",
+  title: "Cookie Notice",
+  summary: "What this portal stores on your device, and why there is no consent banner.",
+  version: "0.1-draft",
+  inForce: false,
+  sections: [
+    {
+      heading: "What is stored",
+      body:
+        "Signing in sets a small number of cookies that keep you signed in and protect the sign-in form " +
+        "against cross-site request forgery. Your light or dark theme choice is saved in your browser's " +
+        "local storage so the portal looks the same next time you visit. That is everything this portal " +
+        "stores on your device.",
+      mustCover: [
+        "Factually accurate as at this version: the only cookies are NextAuth's session token, CSRF token and callback URL, plus a theme preference in localStorage. Re-check if analytics, embedded media or a chat widget is ever added.",
+      ],
+    },
+    {
+      heading: "There is no tracking",
+      body:
+        "This portal contains no analytics, advertising or third-party tracking of any kind. Nothing you " +
+        "do here is shared with an advertising network, and no cookie follows you to another website.",
+    },
+    {
+      heading: "Why you are not asked to consent",
+      body:
+        "Consent is required for cookies that are not necessary to provide a service you asked for. The " +
+        "cookies here are necessary: without them you cannot stay signed in. Asking you to agree to " +
+        "something the portal cannot work without would imply a choice that does not exist, so we tell " +
+        "you what is stored instead of asking permission for it.",
+      mustCover: [
+        "The factual description above is accurate. The LEGAL CONCLUSION that no consent is required should still be confirmed — it rests on the strictly-necessary exemption under the ePrivacy Directive and equivalent Australian guidance, and on there being no non-essential cookies, which is true today.",
+      ],
+    },
+    {
+      heading: "Clearing them",
+      body:
+        "You can clear cookies and site data at any time through your browser settings. Doing so signs " +
+        "you out and resets your theme preference; it does not affect any project information, which is " +
+        "stored on our servers rather than on your device.",
+    },
+  ],
+};
+
+export const LEGAL_DOCS: Record<LegalDocSlug, LegalDoc> = {
+  terms: TERMS,
+  privacy: PRIVACY,
+  cookies: COOKIES,
+};
+
+export const LEGAL_ORDER: LegalDocSlug[] = ["terms", "privacy", "cookies"];
+
+/** Whether a client should be asked to accept the terms at all. */
+export function termsInForce(): boolean {
+  return TERMS.inForce;
+}
+
+/** The version a client would be accepting right now. */
+export function currentTermsVersion(): string {
+  return TERMS.version;
+}
