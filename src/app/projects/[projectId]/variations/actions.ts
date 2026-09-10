@@ -712,6 +712,21 @@ export async function decideVariation(projectId: string, variationId: string, ap
         ],
       );
     }
+  } else {
+    // A rejected variation told nobody either. Scope the client has declined
+    // is exactly what J Group must not carry on building.
+    const v = await db.variation.findUnique({
+      where: { id: variationId },
+      include: { project: { select: { name: true } } },
+    });
+    if (v) {
+      await notifyBuilders(`Variation REJECTED — ${v.project.name}`, [
+        `${user.name} (${user.role.toLowerCase()}) rejected a variation on ${v.project.name}.`,
+        `VO #${v.variationNumber}: ${v.title}`,
+        `It was for ${formatCents(inclMarginGst(v.totalCents, company))} (incl margin & GST).`,
+        `Do not proceed with this scope. Speak to the client before re-issuing.`,
+      ]);
+    }
   }
 
   refresh(projectId, variationId);

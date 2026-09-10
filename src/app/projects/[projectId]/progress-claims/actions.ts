@@ -429,6 +429,17 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
       `Approved amount: ${formatCents(total)}`,
       `Open the ${companyShortName(await getCompany())} dashboard — the Xero invoice push is a separate, manual step.`,
     ]);
+  } else {
+    // A rejection told nobody. The client could decline a claim worth
+    // hundreds of thousands and the only trace was a status on a page no one
+    // had reason to reload — the single most important thing to be told about
+    // a claim, and it was the one event that sent nothing.
+    const total = claimHeadlineCents(claim, await getProjectRates(projectId));
+    await notifyBuilders(`Progress claim REJECTED — ${claim.project.name}`, [
+      `${user.name} (${user.role.toLowerCase()}) rejected Claim #${claim.claimNumber} on ${claim.project.name}.`,
+      `The claim was for ${formatCents(total)} (incl margin & GST).`,
+      `It stays on the job as rejected. Speak to the client before re-issuing.`,
+    ]);
   }
   refresh(projectId, claimId);
 }

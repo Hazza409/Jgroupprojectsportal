@@ -117,3 +117,107 @@ async function sendLines(to: string[], subject: string, lines: string[]): Promis
     await driver.send({ to: [addr], subject, html, text, fromName: company.name });
   }
 }
+
+// ── Audience-aware notification ───────────────────────────────
+// notifyProject sends ONE message to clients and builders together, which
+// forces every notification into wording that suits neither: a client reading
+// "Claim #55 submitted for review" does not need the Xero reminder, and a
+// builder does not need telling how to approve it.
+//
+// This sends a DIFFERENT message to each side of the same event. Either half
+// may be omitted when only one audience needs to hear about it.
+
+export interface AudienceMessage {
+  subject: string;
+  lines: string[];
+}
+
+export async function notifyProjectSplit(
+  projectId: string,
+  opts: {
+    client?: AudienceMessage;
+    builder?: AudienceMessage;
+    /** Don't email the person who caused the event. */
+    excludeUserId?: string;
+  },
+): Promise<void> {
+  try {
+    const { clients, pms } = await projectMemberEmails(projectId, { excludeUserId: opts.excludeUserId });
+    if (opts.client && clients.length > 0) {
+      await sendLines(Array.from(new Set(clients)), opts.client.subject, opts.client.lines);
+    }
+    if (opts.builder) {
+      // The builder side goes to the whole team, not only those with a
+      // membership row: a client rejecting a claim is something J Group needs
+      // to see even if the PM who set the job up has moved on.
+      const team = await builderRecipients();
+      const to = Array.from(new Set([...team, ...pms]));
+      if (to.length > 0) await sendLines(to, opts.builder.subject, opts.builder.lines);
+    }
+  } catch (e) {
+    console.error("[email] notifyProjectSplit failed:", e);
+  }
+}
+
+/**
+ * Which driver is live and whether it can actually send. Surfaced to builders
+ * so "did the client get an email?" has an answer that isn't a guess — this
+ * app spent weeks logging to the console because an app password could not be
+ * created, and nothing on screen said so.
+ */
+export function emailStatus(): {
+  driver: string;
+  sends: boolean;
+  detail: string;
+} {
+  const kind = process.env.EMAIL_DRIVER ?? "console";
+  if (kind === "resend") {
+    const key = !!process.env.RESEND_API_KEY;
+    return {
+      driver: "Resend",
+      sends: key,
+      detail: key ? "Sending through Resend." : "EMAIL_DRIVER is resend but RESEND_API_KEY is not set — nothing sends.",
+    };
+  }
+  if (kind === "smtp" || kind === "gmail") {
+    const ok = !!process.env.SMTP_USER && !!process.env.SMTP_PASS;
+    return {
+      driver: `SMTP (${process.env.SMTP_USER ?? "no sender set"})`,
+      sends: ok,
+      detail: ok
+        ? `Sending as ${process.env.SMTP_USER}.`
+        : "EMAIL_DRIVER is smtp but SMTP_USER/SMTP_PASS are not both set — nothing sends.",
+    };
+  }
+  return {
+    driver: "Console",
+    sends: false,
+    detail:
+      "No mail provider configured, so notifications are only written to the server log — no client or " +
+      "builder receives anything. Set EMAIL_DRIVER in Render to switch sending on.",
+  };
+}
+
+/** Send one message to one address, so a builder can prove sending works. */
+export async function sendTestEmail(to: string): Promise<{ ok: boolean; message: string }> {
+  const status = emailStatus();
+  try {
+    await sendLines(
+      [to],
+      "Test email from the J Group dashboard",
+      [
+        "This is a test, sent from the dashboard's notification settings.",
+        `Active mail driver: ${status.driver}.`,
+        "If you are reading this in your inbox, client and builder notifications will send.",
+      ],
+    );
+    return {
+      ok: true,
+      message: status.sends
+        ? `Sent to ${to}. If it doesn't arrive within a few minutes, check spam and the sender's reputation.`
+        : `Nothing was actually sent — the driver is ${status.driver}. ${status.detail}`,
+    };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "Sending failed." };
+  }
+}

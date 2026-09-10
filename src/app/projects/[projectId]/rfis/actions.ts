@@ -5,7 +5,7 @@ import { Role, RfiStatus, RfiKind } from "@prisma/client";
 import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
-import { notifyProject } from "@/lib/email";
+import { notifyBuilders, notifyProject } from "@/lib/email";
 import { getCompany, companyShortName } from "@/lib/company";
 import { recordDecision } from "@/lib/audit";
 import { DecisionAction, DecisionSubject } from "@prisma/client";
@@ -138,6 +138,17 @@ export async function answerRfi(projectId: string, rfiId: string, formData: Form
     actor: user,
     detail: answer,
   });
+
+  // The builder asked the question and is usually waiting on it to carry on.
+  // Recording the answer in the ledger but telling nobody meant the reply sat
+  // unseen until someone happened to reopen the page.
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
+  const noun = rfi.kind === RfiKind.DECISION ? "Decision" : "Question";
+  await notifyBuilders(`${noun} answered — ${project?.name ?? "project"}`, [
+    `${user.name} answered ${noun.toLowerCase()} #${rfi.number} on ${project?.name ?? "the project"}.`,
+    `${rfi.subject}`,
+    `Answer: ${answer}`,
+  ]);
   refresh(projectId);
 }
 

@@ -3,6 +3,7 @@
 // Company (white-label) settings actions — builder only. SAAS-PLAN M1.
 
 import { revalidatePath } from "next/cache";
+import { sendTestEmail } from "@/lib/email";
 import { assertBuilder } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { getCompany } from "@/lib/company";
@@ -124,4 +125,18 @@ export async function removeLogo(): Promise<SettingsResult> {
   }
   refreshBranding();
   return { ok: true, message: "Logo removed — using the built-in mark." };
+}
+
+/**
+ * Send one test email so a builder can prove notifications work, rather than
+ * discovering months later that a client never received anything.
+ */
+export async function sendNotificationTest(formData: FormData): Promise<SettingsResult> {
+  await assertBuilder();
+  const to = String(formData.get("to") ?? "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    return { ok: false, message: "Enter a valid email address to send the test to." };
+  }
+  const res = await sendTestEmail(to);
+  return { ok: res.ok, message: res.message };
 }

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { EmailStatusCard } from "./EmailStatusCard";
+import { emailStatus } from "@/lib/email";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { Role } from "@prisma/client";
@@ -15,6 +17,7 @@ export default async function CompanySettingsPage() {
   if (user.role !== Role.BUILDER) redirect("/projects");
 
   const company = await getCompany();
+  const mail = emailStatus();
   const logoUrl = company.logoKey ? await (await storage()).url(company.logoKey) : null;
 
   return (
@@ -30,6 +33,14 @@ export default async function CompanySettingsPage() {
           </p>
         </div>
         <SettingsForm company={company} logoUrl={logoUrl} />
+        <div className="mt-6">
+          <EmailStatusCard
+            driver={mail.driver}
+            sends={mail.sends}
+            detail={mail.detail}
+            defaultTo={user.email}
+          />
+        </div>
       </main>
     </>
   );
