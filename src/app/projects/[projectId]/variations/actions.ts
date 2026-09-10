@@ -132,6 +132,13 @@ export async function importVariations(projectId: string, formData: FormData): P
   });
 
   const codes = await projectCodeRefs(projectId);
+  // Collected inside the transaction, written after it: the ledger is
+  // append-only evidence and should not be rolled back with a failed import.
+  const approvedRecords: {
+    id: string; number: number; title: string; totalCents: number;
+    approvedOn: Date | null;
+    lines: { description: string; quantity: number; totalCents: number }[];
+  }[] = [];
   await db.$transaction(async (tx) => {
     // Reset on replace: wipe existing variations first — but NEVER approved
     // ones. A client's approval (and its date) is a contract record; a re-import
@@ -170,7 +177,7 @@ export async function importVariations(projectId: string, formData: FormData): P
       // Variation-level code = title match (the per-line default); each line
       // then matches its own description, falling back to the variation code.
       const varCode = matchCostCodeId(v.title, codes);
-      await tx.variation.create({
+      const created = await tx.variation.create({
         data: {
           projectId,
           variationNumber: number,
@@ -194,9 +201,48 @@ export async function importVariations(projectId: string, formData: FormData): P
             })),
           },
         },
+        include: { lines: { orderBy: { id: "asc" }, select: { description: true, quantity: true, totalCents: true } } },
       });
+
+      // An approved variation MUST leave a decision record. This path created
+      // them approved and wrote nothing, so a client approval could exist on
+      // the job with no entry in the register that is supposed to evidence it
+      // — which was true of three variations on a live job until an audit
+      // caught it. Same treatment the PDF import gives: dated when the client
+      // actually approved, and saying plainly that it came in on an import.
+      if (v.status === VariationStatus.APPROVED) {
+        approvedRecords.push({
+          id: created.id,
+          number,
+          title: v.title,
+          totalCents: v.totalCents,
+          approvedOn: v.approvedOn,
+          lines: created.lines,
+        });
+      }
     }
   });
+
+  const company = await getProjectRates(projectId);
+  for (const rec of approvedRecords) {
+    await recordDecision({
+      projectId,
+      subjectType: DecisionSubject.VARIATION,
+      subjectId: rec.id,
+      subjectRef: `Variation #${rec.number}`,
+      subjectTitle: rec.title,
+      action: DecisionAction.APPROVED,
+      actor: user,
+      amountCents: inclMarginGst(rec.totalCents, company),
+      versionHash: contentFingerprint({ title: rec.title, totalCents: rec.totalCents, lines: rec.lines }),
+      occurredAt: rec.approvedOn ?? undefined,
+      detail:
+        `Approval carried in from a variation schedule imported by ${user.name} on ` +
+        `${new Date().toLocaleDateString("en-AU", { dateStyle: "medium" })}` +
+        `${rec.approvedOn ? `; the client approved it on ${rec.approvedOn.toLocaleDateString("en-AU", { dateStyle: "medium" })}` : ""}. ` +
+        `Source: ${file.name}.`,
+    });
+  }
 
   refresh(projectId);
   return {
