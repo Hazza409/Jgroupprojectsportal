@@ -6,17 +6,14 @@
 databases:
   - name: jgroup-db
     databaseName: jgroup
-    # UPGRADE THIS. A free Render Postgres EXPIRES and is then DELETED with all
-    # of its data — there is no backup on the free plan. Render's current
-    # documented terms are 30 days from creation plus a 14-day grace period;
-    # this database was created under earlier terms (the note here used to say
-    # 90 days), so the only reliable expiry date is the one on the database's
-    # own page in the Render dashboard. Check it there, not here.
-    #
-    # Upgrading is in place: the database and its data are kept and only the
-    # compute plan changes, so there is no dump/restore and DATABASE_URL does
-    # not move. Paid plans also add the automatic backups the free one lacks.
-    plan: free
+    # Paid plan, upgraded 2026-09-10 after the free tier's expiry-and-delete
+    # risk was flagged. It must STAY at or above this: Render refuses to
+    # downgrade a database via blueprint sync ("cannot downgrade database from
+    # Basic-1gb to Free"), and this file saying `free` while the live database
+    # was Basic-1gb is exactly what broke the sync. The paid plan is also where
+    # automatic backups start — the free one had none, and this database holds
+    # every client job.
+    plan: basic-1gb
 
 services:
   - type: web
