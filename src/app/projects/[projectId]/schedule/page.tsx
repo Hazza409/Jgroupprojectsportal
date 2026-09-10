@@ -42,7 +42,7 @@ export default async function SchedulePage({ params }: { params: { projectId: st
         Dates are indicative and subject to change. The programme is J Group&apos;s best current view of the
         build and is updated as it progresses; it is not a commitment to any date shown, and does not vary
         any date agreed under the building contract.{" "}
-        <Link href="/legal/terms" className="underline underline-offset-2">Terms of use</Link>
+        <Link href="/legal/notice" className="underline underline-offset-2">Portal notice</Link>
       </div>
 
       {isBuilder && (

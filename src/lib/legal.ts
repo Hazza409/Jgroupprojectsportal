@@ -34,7 +34,7 @@ export function legalEntityLine(): string {
   return `${LEGAL_ENTITY.name} (ABN ${LEGAL_ENTITY.abn})`;
 }
 
-export type LegalDocSlug = "terms" | "privacy" | "cookies";
+export type LegalDocSlug = "notice" | "terms" | "privacy" | "cookies";
 
 export interface LegalSection {
   heading: string;
@@ -64,6 +64,95 @@ export interface LegalDoc {
   inForce: boolean;
   sections: LegalSection[];
 }
+
+// ── Interim portal notice ────────────────────────────────────
+// Live wording, deliberately narrow in what it attempts.
+//
+// The clauses in a full terms of use that genuinely need a solicitor are the
+// ones that CREATE or EXCLUDE rights: liability limits, indemnities, IP
+// ownership. Wrong wording there actively harms J Group, which is why the
+// terms remain a skeleton.
+//
+// Everything below only disclaims or states fact — that the building contract
+// governs, that figures move, that decisions are recorded. None of it grants
+// J Group anything or takes anything from the client, so it can stand without
+// legal drafting and still do the most valuable job: making it explicit that
+// a number on a dashboard is not a contractual commitment.
+//
+// It is a NOTICE, not an agreement. Nobody is asked to accept it, which keeps
+// it clear of the acceptance machinery and of any argument about whether an
+// interim document formed part of the contract.
+const NOTICE: LegalDoc = {
+  slug: "notice",
+  title: "Portal Notice",
+  summary: "How to read what this portal shows you, while the full terms of use are prepared.",
+  version: "1.0",
+  inForce: true,
+  sections: [
+    {
+      heading: "What this portal is",
+      body:
+        "This portal is provided by J Group Projects Pty Ltd (ABN 65 649 858 617) so you can see how your " +
+        "project is progressing — the budget, costs incurred, progress claims, variations, programme and " +
+        "site information, in one place and kept current. It is a way of sharing information with you. It " +
+        "is not the contract, and it is not a substitute for talking to us.",
+    },
+    {
+      heading: "Your building contract governs",
+      body:
+        "Nothing shown in this portal varies, replaces or waives any term of your building contract. If " +
+        "anything here differs from the contract, or from a notice or document formally issued under it, " +
+        "the contract and that document prevail. Where your contract requires a notice to be given in a " +
+        "particular way, this portal does not change that — showing something here is not the giving of a " +
+        "contractual notice.",
+    },
+    {
+      heading: "Figures change as the job runs",
+      body:
+        "The approved budget is the original estimate plus variations you have approved. A forecast is our " +
+        "current expectation of a final cost, not an agreed change, and it can move. Spend to date reflects " +
+        "costs recorded up to that moment and continues to change as invoices come in. Amounts include " +
+        "builder's margin and GST, and can differ by a cent or two between screens through rounding.",
+    },
+    {
+      heading: "The programme is indicative",
+      body:
+        "Dates in the schedule are our best current view and are subject to change — for reasons both " +
+        "inside and outside our control, including weather, availability of trades and materials, " +
+        "statutory approvals, variations, and decisions still to be made. Publishing or updating a " +
+        "programme is not a commitment to any date shown.",
+    },
+    {
+      heading: "What we record when you use it",
+      body:
+        "When you approve or decline something here, we record who did it, when, and exactly what was on " +
+        "screen at the time. We also keep an internal log of which pages have been opened. This is so both " +
+        "of us can establish later what was shown and what was decided; it protects you as much as it does " +
+        "us. A full privacy policy is being prepared and will set this out properly.",
+    },
+    {
+      heading: "Some records predate the portal",
+      body:
+        "Where a project was already under way before it was brought onto this portal, its earlier claims, " +
+        "variations and approvals have been carried across from our records. Those entries say so on their " +
+        "face, and show the date the decision was originally made rather than the date it was entered here.",
+    },
+    {
+      heading: "If something looks wrong, tell us",
+      body:
+        "Please raise anything that looks incorrect or unclear with your J Group contact rather than " +
+        "relying on it. We would far rather correct a figure than have you act on one that is wrong.",
+    },
+    {
+      heading: "This is an interim notice",
+      body:
+        "A full terms of use and privacy policy are being prepared. This notice is provided in the " +
+        "meantime so you know how to read what the portal shows. It is not an agreement, it does not ask " +
+        "anything of you, and it does not limit anyone's rights or obligations under the building contract " +
+        "or at law.",
+    },
+  ],
+};
 
 const TERMS: LegalDoc = {
   slug: "terms",
@@ -284,12 +373,13 @@ const COOKIES: LegalDoc = {
 };
 
 export const LEGAL_DOCS: Record<LegalDocSlug, LegalDoc> = {
+  notice: NOTICE,
   terms: TERMS,
   privacy: PRIVACY,
   cookies: COOKIES,
 };
 
-export const LEGAL_ORDER: LegalDocSlug[] = ["terms", "privacy", "cookies"];
+export const LEGAL_ORDER: LegalDocSlug[] = ["notice", "terms", "privacy", "cookies"];
 
 /** Whether a client should be asked to accept the terms at all. */
 export function termsInForce(): boolean {

@@ -182,7 +182,11 @@ export default async function BudgetPage({
         <p>
           Estimates are not a fixed price. Each cost line is an estimate that is reforecast against actual
           cost as the build progresses. The current approved budget is the original estimate plus approved
-          variations only, and is not a cap on final cost.
+          variations only, and is not a cap on final cost.{" "}
+          {/* The money page is where a client is most likely to read a figure
+              as a commitment, so the notice that says otherwise belongs here
+              rather than only in a footer. */}
+          <Link href="/legal/notice" className="underline underline-offset-2">How to read these figures</Link>
         </p>
       </div>
 
