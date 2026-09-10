@@ -22,7 +22,13 @@ export interface ParsedVariationLine {
 }
 
 export interface ParsedVariation {
-  number: number | null; // VO # from the sheet (informational — the importer auto-numbers)
+  number: number | null; // VO # from the sheet — the importer keeps it where it can
+  /**
+   * When the client actually approved it. Carried from the sheet so a
+   * historical approval isn't stamped with the date it happened to be typed
+   * in — a false date on a contract record.
+   */
+  approvedOn: Date | null;
   title: string;
   description: string | null;
   status: VariationStatus;
@@ -44,6 +50,7 @@ type ColumnKey =
   | "unit"
   | "unitCost"
   | "status"
+  | "approvedOn"
   | "total";
 
 const HEADER_ALIASES: Record<ColumnKey, string[]> = {
@@ -55,11 +62,40 @@ const HEADER_ALIASES: Record<ColumnKey, string[]> = {
   unit: ["unit", "uom", "units"],
   unitCost: ["unit cost", "rate", "unit price", "unitcost", "$/unit", "cost"],
   status: ["status", "state"],
+  approvedOn: ["approved date", "approved on", "date approved", "approval date", "approved"],
   total: ["total", "amount", "line total", "subtotal", "total cost"],
 };
 
 function normalise(s: unknown): string {
   return String(s ?? "").trim().toLowerCase();
+}
+
+/**
+ * A date cell from the sheet. Excel hands back either a Date (when the cell is
+ * formatted as one) or text; both appear in real sheets, and a date that
+ * silently fails to parse becomes an approval stamped with today, which is the
+ * thing this exists to prevent.
+ */
+function parseSheetDate(raw: unknown): Date | null {
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw;
+  // A bare number is an Excel date serial (days since 1899-12-30). Belt and
+  // braces alongside cellDates: read as text it would become the year 45954.
+  if (typeof raw === "number" && raw > 20000 && raw < 80000) {
+    const d = new Date(Date.UTC(1899, 11, 30) + raw * 86400000);
+    return Number.isNaN(d.getTime()) ? null : new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  const t = String(raw ?? "").trim();
+  if (!t) return null;
+  // d/m/y — the Australian order these sheets are written in.
+  const dmy = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/.exec(t);
+  if (dmy) {
+    const [dd, mm, yy] = [Number(dmy[1]), Number(dmy[2]), Number(dmy[3])];
+    if (mm < 1 || mm > 12) return null;
+    const d = new Date(yy < 100 ? 2000 + yy : yy, mm - 1, dd);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 function parseStatus(raw: unknown): VariationStatus {
@@ -95,7 +131,9 @@ function findHeader(rows: unknown[][]): { headerRow: number; map: Partial<Record
 }
 
 export function parseVariationsBuffer(buf: Buffer): ParsedVariations {
-  const wb = XLSX.read(buf, { type: "buffer" });
+  // cellDates so a date column arrives as a Date rather than an Excel serial
+  // number — without it "24/10/25" reads back as the year 45954.
+  const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
   const sheet = wb.Sheets[wb.SheetNames[0]];
   if (!sheet) return { variations: [], warnings: ["No worksheet found"] };
 
@@ -152,6 +190,7 @@ export function parseVariationsBuffer(buf: Buffer): ParsedVariations {
         title: effectiveTitle,
         description: desc || null,
         status: parseStatus(cell(map.status)),
+        approvedOn: parseSheetDate(cell(map.approvedOn)),
         lines: [],
         totalCents: 0,
       };

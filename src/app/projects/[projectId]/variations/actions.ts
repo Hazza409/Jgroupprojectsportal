@@ -178,7 +178,10 @@ export async function importVariations(projectId: string, formData: FormData): P
           description: v.description,
           status: v.status,
           totalCents: v.totalCents,
-          approvedAt: v.status === VariationStatus.APPROVED ? new Date() : null,
+          // The date the client actually approved, where the sheet gives one.
+          // Falling back to today would put a false date on a contract record
+          // for anything approved before it was typed in.
+          approvedAt: v.status === VariationStatus.APPROVED ? (v.approvedOn ?? new Date()) : null,
           costCodeId: varCode,
           lines: {
             create: v.lines.map((l) => ({
