@@ -211,11 +211,15 @@ export async function sendTestEmail(to: string): Promise<{ ok: boolean; message:
         "If you are reading this in your inbox, client and builder notifications will send.",
       ],
     );
+    // ok tracks whether a MESSAGE ACTUALLY LEFT, not whether the call threw.
+    // The console driver "succeeds" at writing to a log, and reporting that as
+    // success in green while the text says nothing was sent is exactly the
+    // confusion this card exists to remove.
     return {
-      ok: true,
+      ok: status.sends,
       message: status.sends
         ? `Sent to ${to}. If it doesn't arrive within a few minutes, check spam and the sender's reputation.`
-        : `Nothing was actually sent — the driver is ${status.driver}. ${status.detail}`,
+        : `Nothing left the server — the driver is ${status.driver}. ${status.detail}`,
     };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : "Sending failed." };
