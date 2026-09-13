@@ -87,6 +87,28 @@ redeploys. Database schema changes are applied automatically on each deploy
 
 ---
 
+## The `overrides` block in package.json
+
+`package.json` can't hold comments, so the reasoning lives here. Render builds with
+`npm install`, not `npm ci`, so these have to be declared in the file — a one-off
+`--legacy-peer-deps` on a local machine would not survive a deploy.
+
+- **`postcss` / `nanoid`** — both arrive nested inside `next`, which pins older copies
+  carrying file-read and path-traversal advisories. Neither is reachable through this
+  app (they run at build time, on our own CSS), but the override costs nothing and
+  keeps `npm audit` honest, so a real advisory isn't lost in a list of stale ones.
+- **`next-auth` → `nodemailer`** — `next-auth` declares an *optional* peer dependency
+  on `nodemailer@^7`, used only by its Email sign-in provider. This app signs in with
+  the Credentials provider, so that code path never runs, but the stale peer range
+  blocks `nodemailer` from being upgraded past 7.x — and `nodemailer` is the library
+  that sends every claim, variation and site-update email. `$nodemailer` points it at
+  whatever version the root `dependencies` asks for.
+
+Check the position with `npm audit --omit=dev` (production only — dev-tool advisories
+don't ship to the server and drown out the ones that matter).
+
+---
+
 ## Alternatives
 
 - **Railway** — same idea as Render (managed Postgres + a disk volume); deploy from
