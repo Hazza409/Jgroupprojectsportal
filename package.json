@@ -16,7 +16,8 @@
     "seed": "tsx prisma/seed.ts",
     "seed:bower": "tsx prisma/seed-bower.ts",
     "seed:demo": "tsx prisma/seed-demo.ts",
-    "make:samples": "tsx scripts/make-samples.ts"
+    "make:samples": "tsx scripts/make-samples.ts",
+    "seed:tenants": "tsx prisma/seed-tenants.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
