@@ -4,13 +4,13 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { Role } from "@prisma/client";
 import { CompanyMark } from "@/components/CompanyMark";
-import { getCompany } from "@/lib/company";
+import { getDefaultCompany } from "@/lib/company";
 
 // Public landing. Echoes the brand cover: bold uppercase grotesque on ebony black.
 export default async function HomePage() {
   const user = await getSessionUser();
   if (user) redirect(user.role === Role.BUILDER ? "/builder" : "/projects");
-  const company = await getCompany();
+  const company = await getDefaultCompany();
 
   return (
     <main className="relative flex min-h-screen flex-col justify-between overflow-hidden bg-base px-6 py-10 sm:px-12 sm:py-14">
