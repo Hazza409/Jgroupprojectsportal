@@ -3,15 +3,17 @@
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { Role } from "@prisma/client";
-import { assertBuilder } from "@/lib/scope";
+import { assertBuilder, assertBuilderForProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { dollarsToCents, parseMarginPercent } from "@/lib/money";
 import { validatePassword } from "@/lib/password";
 
 // Builder deletes a job and all its data (cascades). Irreversible.
+// Tenancy: assertBuilderForProject refuses a projectId outside the caller's
+// company, and the delete where-clause pins companyId as a second guard.
 export async function deleteJob(projectId: string): Promise<void> {
-  await assertBuilder();
-  await db.project.delete({ where: { id: projectId } });
+  const builder = await assertBuilderForProject(projectId);
+  await db.project.delete({ where: { id: projectId, companyId: builder.companyId } });
   revalidatePath("/builder");
 }
 
@@ -63,6 +65,7 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
     const projectId = await db.$transaction(async (tx) => {
       const project = await tx.project.create({
         data: {
+          companyId: builder.companyId,
           name,
           address,
           clientName,
@@ -75,10 +78,21 @@ export async function createJob(formData: FormData): Promise<CreateJobResult> {
       if (clientEmailRaw) {
         const existing = await tx.user.findUnique({ where: { email: clientEmailRaw } });
         const passwordHash = await bcrypt.hash(clientPassword, 10);
+        if (existing && existing.companyId !== builder.companyId) {
+          // Tenancy wall: an email registered to another company can never be
+          // attached to this company's project (email is globally unique).
+          throw new Error("That email is already registered elsewhere — use a different address.");
+        }
         let clientUser;
         if (!existing) {
           clientUser = await tx.user.create({
-            data: { email: clientEmailRaw, name: clientName || clientEmailRaw, role: Role.CLIENT, passwordHash },
+            data: {
+              email: clientEmailRaw,
+              name: clientName || clientEmailRaw,
+              role: Role.CLIENT,
+              passwordHash,
+              companyId: builder.companyId,
+            },
           });
         } else if (existing.role === Role.CLIENT) {
           // Existing client login: apply the password the builder just typed so it
