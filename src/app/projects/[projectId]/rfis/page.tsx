@@ -4,7 +4,7 @@ import { storage } from "@/lib/storage";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createRfi, answerRfi, closeRfi, deleteRfi, addRfiAttachments, deleteRfiAttachment } from "./actions";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 import { logView } from "@/lib/audit";
 import { fmtDateShort, fmtDateTime, isOverdue, daysOverdue } from "@/lib/dates";
 import { DateField } from "@/components/DateField";
@@ -15,7 +15,7 @@ export default async function RfisPage({ params }: { params: { projectId: string
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
 
   const rfis = await db.rfi.findMany({
     where: { projectId },
