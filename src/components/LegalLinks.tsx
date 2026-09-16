@@ -20,3 +20,20 @@ export function LegalLinks({ className = "" }: { className?: string }) {
     </nav>
   );
 }
+
+/**
+ * The same links as a page sign-off, with the hairline rule and spacing that
+ * goes with them.
+ *
+ * Every signed-in page ends with this, so the rule and the spacing are defined
+ * here once instead of being retyped at each call site — seven copies of a
+ * class string is seven chances for one page's footer to drift away from the
+ * rest.
+ */
+export function LegalFooter() {
+  return (
+    <footer className="mt-10 border-t border-stone-200 pt-4">
+      <LegalLinks />
+    </footer>
+  );
+}
