@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { Role } from "@prisma/client";
 import { TopBar } from "@/components/TopBar";
-import { getCompany } from "@/lib/company";
+import { LegalFooter } from "@/components/LegalLinks";
+import { getCompanyForUser } from "@/lib/company";
 import { storage } from "@/lib/storage";
 import { SettingsForm } from "./SettingsForm";
 
@@ -16,7 +17,7 @@ export default async function CompanySettingsPage() {
   if (!user) redirect("/login");
   if (user.role !== Role.BUILDER) redirect("/projects");
 
-  const company = await getCompany();
+  const company = await getCompanyForUser(user.id);
   const mail = emailStatus();
   const logoUrl = company.logoKey ? await (await storage()).url(company.logoKey) : null;
 
@@ -41,6 +42,7 @@ export default async function CompanySettingsPage() {
             defaultTo={user.email}
           />
         </div>
+        <LegalFooter />
       </main>
     </>
   );
