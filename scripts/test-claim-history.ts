@@ -32,7 +32,7 @@ function swapDayMonth(d: Date): Date | null {
 
 async function main() {
   const project = await db.project.create({
-    data: { name: "ZZ claim-history test", status: "ACTIVE", marginPercent: 12.5 },
+    data: { companyId: (await db.company.findFirstOrThrow({ orderBy: { createdAt: "asc" } })).id, name: "ZZ claim-history test", status: "ACTIVE", marginPercent: 12.5 },
   });
   const company = await db.company.findFirstOrThrow();
   const rates = { ...company, marginPercent: project.marginPercent ?? company.marginPercent };
