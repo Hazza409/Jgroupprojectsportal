@@ -21,12 +21,13 @@ async function main() {
   console.log(`sends  : ${s.sends}`);
   console.log(`detail : ${s.detail}\n`);
 
-  const project = await db.project.create({ data: { name: "ZZ email test", status: "ACTIVE" } });
+  const companyId = (await db.company.findFirstOrThrow({ orderBy: { createdAt: "asc" } })).id;
+  const project = await db.project.create({ data: { companyId, name: "ZZ email test", status: "ACTIVE" } });
   const client = await db.user.create({
-    data: { email: "zz-client@example.test", name: "Test Client", role: "CLIENT", passwordHash: "x" },
+    data: { email: "zz-client@example.test", name: "Test Client", role: "CLIENT", passwordHash: "x", companyId },
   });
   const builder = await db.user.create({
-    data: { email: "zz-builder@example.test", name: "Test Builder", role: "BUILDER", passwordHash: "x" },
+    data: { email: "zz-builder@example.test", name: "Test Builder", role: "BUILDER", passwordHash: "x", companyId },
   });
   await db.projectMembership.createMany({
     data: [
