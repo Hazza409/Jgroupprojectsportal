@@ -154,11 +154,11 @@ export interface ForecastGate {
  * The company is passed IN rather than looked up here: a bare
  * `company.findFirst()` picks an arbitrary row once more than one company
  * exists, which would silently read the wrong approver list and defeat the
- * gate. Callers pass the row from getCompany().
+ * gate. Callers pass the row from getProjectRates()/getProjectCompany().
  */
 export async function forecastGate(
   projectId: string,
-  company: { forecastApprovers: string | null },
+  company: { id: string; forecastApprovers: string | null },
 ): Promise<ForecastGate> {
   const project = await db.project.findUniqueOrThrow({
     where: { id: projectId },
@@ -200,7 +200,9 @@ export async function forecastGate(
   // freeze publishing with no explanation. Detect it so the cause is visible.
   const staff = required.length
     ? await db.user.findMany({
-        where: { email: { in: required, mode: "insensitive" }, role: Role.BUILDER },
+        // Tenancy: only THIS company's builders can be approvers — a same-named
+        // builder in another company must not count as matched.
+        where: { email: { in: required, mode: "insensitive" }, role: Role.BUILDER, companyId: company.id },
         select: { email: true },
       })
     : [];
