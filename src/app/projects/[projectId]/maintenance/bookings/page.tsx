@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createBooking, scheduleBooking, setBookingStatus } from "../actions";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 import { DateField } from "@/components/DateField";
 
 const fmtDateTime = (d: Date | null) =>
@@ -14,7 +14,7 @@ export default async function BookingsPage({ params }: { params: { projectId: st
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
 
   const bookings = await db.serviceBooking.findMany({ where: { projectId }, orderBy: { createdAt: "desc" } });
 
