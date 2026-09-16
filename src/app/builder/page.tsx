@@ -5,17 +5,20 @@ import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { formatCents } from "@/lib/money";
 import { TopBar } from "@/components/TopBar";
+import { LegalFooter } from "@/components/LegalLinks";
 import { DeleteJobButton } from "./DeleteJobButton";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getCompanyForUser, companyShortName } from "@/lib/company";
 
 // BUILDER index — every project. Clients never reach this (redirected away).
 export default async function BuilderHome() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== Role.BUILDER) redirect("/projects");
-  const company = await getCompany();
+  const company = await getCompanyForUser(user.id);
 
+  // Tenancy: only this company's jobs. company.id is the builder's own company.
   const projects = await db.project.findMany({
+    where: { companyId: company.id },
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { variations: true, progressClaims: true } } },
   });
@@ -64,6 +67,7 @@ export default async function BuilderHome() {
             ))}
           </div>
         )}
+        <LegalFooter />
       </main>
     </>
   );
