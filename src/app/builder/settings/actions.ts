@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import { sendTestEmail } from "@/lib/email";
 import { assertBuilder } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { getCompany } from "@/lib/company";
 import { storage } from "@/lib/storage";
 
 export interface SettingsResult {
@@ -29,8 +28,9 @@ function normaliseHex(value: string): string | null {
 }
 
 export async function updateCompany(formData: FormData): Promise<SettingsResult> {
-  await assertBuilder();
-  const company = await getCompany();
+  // assertBuilder re-reads companyId from the DB — a builder can only ever
+  // edit their OWN company's settings.
+  const { companyId } = await assertBuilder();
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { ok: false, message: "Company name is required." };
@@ -64,7 +64,7 @@ export async function updateCompany(formData: FormData): Promise<SettingsResult>
     .join(", ");
 
   await db.company.update({
-    where: { id: company.id },
+    where: { id: companyId },
     data: {
       name,
       shortName: shortName || null,
@@ -92,8 +92,8 @@ const LOGO_TYPES: Record<string, string> = {
 const LOGO_MAX_BYTES = 2 * 1024 * 1024;
 
 export async function uploadLogo(formData: FormData): Promise<SettingsResult> {
-  await assertBuilder();
-  const company = await getCompany();
+  const { companyId } = await assertBuilder();
+  const company = await db.company.findUniqueOrThrow({ where: { id: companyId } });
 
   const file = formData.get("logo");
   if (!(file instanceof File) || file.size === 0) return { ok: false, message: "Choose a logo file first." };
@@ -116,8 +116,8 @@ export async function uploadLogo(formData: FormData): Promise<SettingsResult> {
 }
 
 export async function removeLogo(): Promise<SettingsResult> {
-  await assertBuilder();
-  const company = await getCompany();
+  const { companyId } = await assertBuilder();
+  const company = await db.company.findUniqueOrThrow({ where: { id: companyId } });
   if (company.logoKey) {
     const store = await storage();
     await store.delete(company.logoKey).catch(() => {});
@@ -132,11 +132,12 @@ export async function removeLogo(): Promise<SettingsResult> {
  * discovering months later that a client never received anything.
  */
 export async function sendNotificationTest(formData: FormData): Promise<SettingsResult> {
-  await assertBuilder();
+  const { companyId } = await assertBuilder();
   const to = String(formData.get("to") ?? "").trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
     return { ok: false, message: "Enter a valid email address to send the test to." };
   }
-  const res = await sendTestEmail(to);
+  const company = await db.company.findUniqueOrThrow({ where: { id: companyId }, select: { name: true } });
+  const res = await sendTestEmail(to, company.name);
   return { ok: res.ok, message: res.message };
 }
