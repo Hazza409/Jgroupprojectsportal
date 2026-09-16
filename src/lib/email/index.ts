@@ -4,7 +4,6 @@
 // break the user action that triggered them, so helpers swallow + log errors.
 
 import { db } from "../db";
-import { getCompany } from "../company";
 
 export interface EmailMessage {
   to: string[];
@@ -42,20 +41,40 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Recipients for a project-level notification: the builder team (all builders).
- * (Could later be narrowed to PMs assigned to the specific project.)
+ * Tenancy (M2): the owning company of a project — sender name + the company
+ * whose builders may be notified. Null if the project vanished mid-request.
  */
-export async function builderRecipients(): Promise<string[]> {
-  const builders = await db.user.findMany({ where: { role: "BUILDER" }, select: { email: true } });
+async function projectCompany(projectId: string): Promise<{ id: string; name: string } | null> {
+  const p = await db.project.findUnique({
+    where: { id: projectId },
+    select: { company: { select: { id: true, name: true } } },
+  });
+  return p?.company ?? null;
+}
+
+/**
+ * Recipients for a company-level notification: that company's builders ONLY.
+ * Tenancy: never notify across the company wall.
+ */
+export async function builderRecipients(companyId: string): Promise<string[]> {
+  const builders = await db.user.findMany({
+    where: { role: "BUILDER", companyId },
+    select: { email: true },
+  });
   return builders.map((b) => b.email);
 }
 
-/** Notify the builder team. Fire-safe: logs and returns on any failure. */
-export async function notifyBuilders(subject: string, lines: string[]): Promise<void> {
+/**
+ * Notify the builder team OF THE PROJECT'S COMPANY. Fire-safe: logs and returns
+ * on any failure.
+ */
+export async function notifyBuilders(projectId: string, subject: string, lines: string[]): Promise<void> {
   try {
-    const to = await builderRecipients();
+    const company = await projectCompany(projectId);
+    if (!company) return;
+    const to = await builderRecipients(company.id);
     if (to.length === 0) return;
-    await sendLines(to, subject, lines);
+    await sendLines(to, subject, lines, company.name);
   } catch (e) {
     console.error("[email] notifyBuilders failed:", e);
   }
@@ -94,7 +113,8 @@ export async function notifyProject(
     const { clients, pms } = await projectMemberEmails(projectId, opts);
     const to = Array.from(new Set([...clients, ...pms]));
     if (to.length === 0) return;
-    await sendLines(to, subject, lines);
+    const company = await projectCompany(projectId);
+    await sendLines(to, subject, lines, company?.name ?? "");
   } catch (e) {
     console.error("[email] notifyProject failed:", e);
   }
@@ -106,15 +126,14 @@ export async function notifyProject(
  * client logins plus the architect plus the builder PM, and they must not be
  * disclosed to each other in a visible To: header.
  */
-async function sendLines(to: string[], subject: string, lines: string[]): Promise<void> {
-  const company = await getCompany();
+async function sendLines(to: string[], subject: string, lines: string[], fromName: string): Promise<void> {
   const text = lines.join("\n");
   const html = `<div style="font-family:Helvetica,Arial,sans-serif;font-size:14px;color:#1a1a1a">${lines
     .map((l) => `<p style="margin:0 0 10px">${escapeHtml(l)}</p>`)
     .join("")}</div>`;
   const driver = await email();
   for (const addr of to) {
-    await driver.send({ to: [addr], subject, html, text, fromName: company.name });
+    await driver.send({ to: [addr], subject, html, text, fromName: fromName || undefined });
   }
 }
 
@@ -142,17 +161,19 @@ export async function notifyProjectSplit(
   },
 ): Promise<void> {
   try {
+    const company = await projectCompany(projectId);
+    const fromName = company?.name ?? "";
     const { clients, pms } = await projectMemberEmails(projectId, { excludeUserId: opts.excludeUserId });
     if (opts.client && clients.length > 0) {
-      await sendLines(Array.from(new Set(clients)), opts.client.subject, opts.client.lines);
+      await sendLines(Array.from(new Set(clients)), opts.client.subject, opts.client.lines, fromName);
     }
     if (opts.builder) {
-      // The builder side goes to the whole team, not only those with a
-      // membership row: a client rejecting a claim is something J Group needs
-      // to see even if the PM who set the job up has moved on.
-      const team = await builderRecipients();
+      // The builder side goes to the whole team OF THIS COMPANY, not only those
+      // with a membership row: a client rejecting a claim is something the
+      // company needs to see even if the PM who set the job up has moved on.
+      const team = company ? await builderRecipients(company.id) : [];
       const to = Array.from(new Set([...team, ...pms]));
-      if (to.length > 0) await sendLines(to, opts.builder.subject, opts.builder.lines);
+      if (to.length > 0) await sendLines(to, opts.builder.subject, opts.builder.lines, fromName);
     }
   } catch (e) {
     console.error("[email] notifyProjectSplit failed:", e);
@@ -199,17 +220,18 @@ export function emailStatus(): {
 }
 
 /** Send one message to one address, so a builder can prove sending works. */
-export async function sendTestEmail(to: string): Promise<{ ok: boolean; message: string }> {
+export async function sendTestEmail(to: string, fromName = ""): Promise<{ ok: boolean; message: string }> {
   const status = emailStatus();
   try {
     await sendLines(
       [to],
-      "Test email from the J Group dashboard",
+      `Test email from the ${fromName || "portal"} dashboard`,
       [
         "This is a test, sent from the dashboard's notification settings.",
         `Active mail driver: ${status.driver}.`,
         "If you are reading this in your inbox, client and builder notifications will send.",
       ],
+      fromName,
     );
     // ok tracks whether a MESSAGE ACTUALLY LEFT, not whether the call threw.
     // The console driver "succeeds" at writing to a log, and reporting that as
