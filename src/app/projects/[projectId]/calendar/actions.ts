@@ -5,7 +5,7 @@ import { Role } from "@prisma/client";
 import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { notifyBuilders, notifyProject } from "@/lib/email";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 
 function refresh(projectId: string) {
   revalidatePath(`/projects/${projectId}/calendar`);
@@ -39,10 +39,10 @@ export async function createEvent(projectId: string, formData: FormData) {
   });
 
   const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
-  const company = await getCompany();
+  const company = await getProjectCompany(projectId);
   if (user.role === Role.CLIENT) {
     // Client requested a meeting → notify the J Group team.
-    await notifyBuilders(
+    await notifyBuilders(projectId, 
       `Meeting requested — ${project?.name ?? "project"}`,
       [
         `${user.name} (client) requested a site meeting on ${project?.name ?? "their project"}.`,
@@ -88,7 +88,7 @@ export async function respondToEvent(projectId: string, eventId: string, accept:
 
   // Let the J Group team know who's coming.
   const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
-  await notifyBuilders(`Meeting ${accept ? "accepted" : "declined"} — ${project?.name ?? "project"}`, [
+  await notifyBuilders(projectId, `Meeting ${accept ? "accepted" : "declined"} — ${project?.name ?? "project"}`, [
     `${user.name} (${user.role.toLowerCase()}) ${accept ? "accepted" : "declined"} the site meeting "${event.title}" on ${project?.name ?? "the project"}.`,
   ]);
   refresh(projectId);
