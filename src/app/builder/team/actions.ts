@@ -12,11 +12,11 @@ export interface StaffResult {
   message: string;
 }
 
-// Builder-only: create a project-manager login (a BUILDER user). PMs see all
-// projects and receive the team notification emails (meeting requests, variation
-// approvals). They set their own password after first sign-in (TODO: reset flow).
+// Builder-only: create a project-manager login (a BUILDER user) IN THE CREATOR'S
+// company. PMs see all of their company's projects and receive its team
+// notifications. They set their own password after first sign-in (TODO: reset flow).
 export async function createStaff(formData: FormData): Promise<StaffResult> {
-  await assertBuilder();
+  const actor = await assertBuilder();
 
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -31,7 +31,7 @@ export async function createStaff(formData: FormData): Promise<StaffResult> {
   if (existing) return { ok: false, message: "A user with that email already exists." };
 
   await db.user.create({
-    data: { name, email, role: Role.BUILDER, passwordHash: await bcrypt.hash(password, 10) },
+    data: { name, email, role: Role.BUILDER, passwordHash: await bcrypt.hash(password, 10), companyId: actor.companyId },
   });
 
   revalidatePath("/builder/team");
