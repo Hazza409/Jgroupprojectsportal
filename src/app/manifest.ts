@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getDefaultCompany, companyShortName } from "@/lib/company";
 
 // Company name comes from settings — serve fresh, never bake at build time.
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
   let name = "J Group Projects";
   let shortName = "J Group";
   try {
-    const company = await getCompany();
+    const company = await getDefaultCompany();
     name = company.name;
     shortName = companyShortName(company);
   } catch {
