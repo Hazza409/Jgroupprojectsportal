@@ -3,7 +3,7 @@ import { getSessionUser } from "@/auth";
 import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { formatCents } from "@/lib/money";
-import { getCompany } from "@/lib/company";
+import { getProjectCompany } from "@/lib/company";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 import { PrintButton } from "./PrintButton";
 
@@ -38,7 +38,7 @@ export default async function DecisionRegisterPage({ params }: { params: { proje
   if (!project) notFound();
   if (user.role === "CLIENT" && project.clientView === "HANDOVER") notFound();
 
-  const company = await getCompany();
+  const company = await getProjectCompany(projectId);
   const records = await db.decisionRecord.findMany({
     where: { projectId },
     orderBy: { occurredAt: "asc" },
