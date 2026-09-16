@@ -4,7 +4,7 @@ import { storage } from "@/lib/storage";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { LightboxImage } from "@/components/LightboxImage";
 import { createUpdate, addUpdatePhotos, deleteUpdatePhoto, deleteUpdate, acknowledgeUpdate } from "./actions";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 import { ACKNOWLEDGEMENT_STATEMENT, logView } from "@/lib/audit";
 import { fmtDate, fmtDateTime } from "@/lib/dates";
 
@@ -14,7 +14,7 @@ export default async function UpdatesPage({ params }: { params: { projectId: str
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
 
   const updates = await db.projectUpdate.findMany({
     where: { projectId },
