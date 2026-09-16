@@ -10,7 +10,7 @@ import { db } from "../src/lib/db";
 
 async function main() {
   const project = await db.project.create({
-    data: { name: "ZZ delete-variation test", status: "ACTIVE" },
+    data: { companyId: (await db.company.findFirstOrThrow({ orderBy: { createdAt: "asc" } })).id, name: "ZZ delete-variation test", status: "ACTIVE" },
   });
 
   const v = await db.variation.create({
