@@ -33,9 +33,16 @@ const NAME = "Builder Admin";
       console.log(`[ensure-admin] ${count} user(s) already present — leaving everything as-is.`);
       return;
     }
+    // Tenancy (M2): every user needs a company. Migrations run before start, so
+    // the seeded company row exists; create a default one only if it somehow doesn't.
+    let company = await db.company.findFirst({ orderBy: { createdAt: "asc" } });
+    if (!company) {
+      company = await db.company.create({ data: { name: "My Building Company" } });
+      console.log("[ensure-admin] no company row found — created a default one.");
+    }
     const passwordHash = await bcrypt.hash(PASSWORD, 10);
     await db.user.create({
-      data: { email: EMAIL, name: NAME, role: "BUILDER", passwordHash },
+      data: { email: EMAIL, name: NAME, role: "BUILDER", passwordHash, companyId: company.id },
     });
     console.log(`[ensure-admin] empty database — created initial builder login: ${EMAIL} / ${PASSWORD}`);
   } catch (e) {
