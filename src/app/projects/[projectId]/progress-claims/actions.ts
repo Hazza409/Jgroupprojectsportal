@@ -9,7 +9,7 @@ import { storage, buildKey } from "@/lib/storage";
 import { dollarsToCents, formatCents } from "@/lib/money";
 import { notifyBuilders, notifyProject } from "@/lib/email";
 import { listReconTabs, parseReconciliationBuffer } from "@/lib/excel/parseReconciliation";
-import { getCompany, companyShortName, getProjectRates } from "@/lib/company";
+import { getProjectCompany, companyShortName, getProjectRates } from "@/lib/company";
 import { fmtDateShort } from "@/lib/dates";
 import { materializeClaimActuals, matchCostCodeId, projectCodeRefs, claimHeadlineCents } from "@/lib/claims";
 import { recordDecision, contentFingerprint, hasAcknowledged, AUTHORITY_STATEMENT, ACKNOWLEDGEMENT_STATEMENT } from "@/lib/audit";
@@ -360,7 +360,7 @@ export async function submitClaim(projectId: string, claimId: string) {
       projectId,
       `Progress claim for review — ${claim.project.name}`,
       [
-        `${companyShortName(await getCompany())} has submitted Progress Claim #${claim.claimNumber} for your review on ${claim.project.name}.`,
+        `${companyShortName(await getProjectCompany(projectId))} has submitted Progress Claim #${claim.claimNumber} for your review on ${claim.project.name}.`,
         `Claim total: ${formatCents(total)}`,
         `Sign in to review and approve it.`,
       ],
@@ -424,10 +424,10 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
 
     // Headline = recon total (inc GST) when built from a sheet, else grossed line sum.
     const total = claimHeadlineCents(claim, await getProjectRates(projectId));
-    await notifyBuilders(`Progress claim approved — ${claim.project.name}`, [
+    await notifyBuilders(projectId, `Progress claim approved — ${claim.project.name}`, [
       `${user.name} (${user.role.toLowerCase()}) approved Claim #${claim.claimNumber} on ${claim.project.name}.`,
       `Approved amount: ${formatCents(total)}`,
-      `Open the ${companyShortName(await getCompany())} dashboard — the Xero invoice push is a separate, manual step.`,
+      `Open the ${companyShortName(await getProjectCompany(projectId))} dashboard — the Xero invoice push is a separate, manual step.`,
     ]);
   } else {
     // A rejection told nobody. The client could decline a claim worth
@@ -435,7 +435,7 @@ export async function decideClaim(projectId: string, claimId: string, approve: b
     // had reason to reload — the single most important thing to be told about
     // a claim, and it was the one event that sent nothing.
     const total = claimHeadlineCents(claim, await getProjectRates(projectId));
-    await notifyBuilders(`Progress claim REJECTED — ${claim.project.name}`, [
+    await notifyBuilders(projectId, `Progress claim REJECTED — ${claim.project.name}`, [
       `${user.name} (${user.role.toLowerCase()}) rejected Claim #${claim.claimNumber} on ${claim.project.name}.`,
       `The claim was for ${formatCents(total)} (incl margin & GST).`,
       `It stays on the job as rejected. Speak to the client before re-issuing.`,
