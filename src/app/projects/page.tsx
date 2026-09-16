@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { accessibleProjectIds } from "@/lib/scope";
 import { formatCents } from "@/lib/money";
 import { TopBar } from "@/components/TopBar";
+import { LegalFooter } from "@/components/LegalLinks";
 
 // Project list scoped to the current user. Clients see ONLY their memberships;
 // builders see all (but normally land on /builder).
@@ -43,6 +44,10 @@ export default async function ProjectsIndex() {
             ))}
           </div>
         )}
+        {/* The first page a client lands on after signing in, and the only one
+            they see if they have more than one job — so it needs the notice
+            too, not just the project tabs. */}
+        <LegalFooter />
       </main>
     </>
   );
