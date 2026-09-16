@@ -1,14 +1,22 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-import { getCompany, companyShortName, brandColorCss } from "@/lib/company";
+import { getDefaultCompany, getCompanyForUser, companyShortName, brandColorCss } from "@/lib/company";
+import { getSessionUser } from "@/auth";
 
 // Branding comes from Company settings (DB), so nothing may be baked into
 // static HTML at build time — the whole app renders per-request.
 export const dynamic = "force-dynamic";
 
+// A signed-in user sees their own company's branding; anonymous requests fall
+// back to the platform default (the oldest company — J Group).
+async function currentCompany() {
+  const user = await getSessionUser();
+  return user ? getCompanyForUser(user.id) : getDefaultCompany();
+}
+
 export async function generateMetadata(): Promise<Metadata> {
-  const company = await getCompany();
+  const company = await currentCompany();
   return {
     title: `${company.name} — Dashboard`,
     description: `Client & builder dashboard for ${company.name}.`,
@@ -28,7 +36,7 @@ export const viewport: Viewport = {
 const themeScript = `(function(){try{var t=localStorage.getItem('theme');if(t==='light'){document.documentElement.classList.remove('dark');document.documentElement.classList.add('light');}}catch(e){}})();`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const company = await getCompany();
+  const company = await currentCompany();
   const brandCss = brandColorCss(company);
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
