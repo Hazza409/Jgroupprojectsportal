@@ -24,7 +24,7 @@ async function main() {
   // company default stays whatever it is, so this proves the per-project rate
   // is the one that reaches the figures.
   const project = await db.project.create({
-    data: { name: "ZZ Opening-position test", address: "scratch", status: "ACTIVE", marginPercent: 12.5 },
+    data: { companyId: (await db.company.findFirstOrThrow({ orderBy: { createdAt: "asc" } })).id, name: "ZZ Opening-position test", address: "scratch", status: "ACTIVE", marginPercent: 12.5 },
   });
   // getProjectRates() memoises with React's cache(), which only exists inside
   // a Next render, so resolve the same way it does — company default with the
