@@ -6,7 +6,7 @@ import { ClientAccessCard } from "@/components/ClientAccessCard";
 import { ForecastCard } from "@/components/ForecastCard";
 import { ClientActivityCard } from "@/components/ClientActivityCard";
 import { JobDetailsCard } from "@/components/JobDetailsCard";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 import { fmtDate, fmtDateTime, toDateInputValue } from "@/lib/dates";
 import { forecastGate } from "@/lib/forecast";
 import { formatCents, centsToNumber } from "@/lib/money";
@@ -16,7 +16,7 @@ export default async function ProjectSettingsPage({ params }: { params: { projec
   const user = await assertProjectAccess(params.projectId);
   if (user.role !== "BUILDER") redirect(`/projects/${params.projectId}`);
   const projectId = params.projectId;
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
 
   const clientMembers = (
     await db.projectMembership.findMany({
