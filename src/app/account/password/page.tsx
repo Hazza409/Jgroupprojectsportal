@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { TopBar } from "@/components/TopBar";
+import { LegalFooter } from "@/components/LegalLinks";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { ChangePasswordForm } from "./ChangePasswordForm";
 
@@ -26,6 +27,7 @@ export default async function ChangePasswordPage() {
           <ModuleHeader title="Change password" description="Update the password you use to sign in." />
         </div>
         <ChangePasswordForm />
+        <LegalFooter />
       </div>
     </>
   );
