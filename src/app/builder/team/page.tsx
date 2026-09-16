@@ -4,8 +4,9 @@ import { getSessionUser } from "@/auth";
 import { Role } from "@prisma/client";
 import { db } from "@/lib/db";
 import { TopBar } from "@/components/TopBar";
+import { LegalFooter } from "@/components/LegalLinks";
 import { StaffForm } from "./StaffForm";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getCompanyForUser, companyShortName } from "@/lib/company";
 
 // Builder-only: manage J Group staff (project-manager logins). All builders see
 // every project and receive the team notification emails.
@@ -13,10 +14,11 @@ export default async function TeamPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== Role.BUILDER) redirect("/projects");
-  const company = await getCompany();
+  const company = await getCompanyForUser(user.id);
 
+  // Tenancy: only this company's builders.
   const staff = await db.user.findMany({
-    where: { role: Role.BUILDER },
+    where: { role: Role.BUILDER, companyId: company.id },
     orderBy: { createdAt: "asc" },
     select: { id: true, name: true, email: true, createdAt: true },
   });
@@ -65,6 +67,7 @@ export default async function TeamPage() {
             </tbody>
           </table>
         </div>
+        <LegalFooter />
       </main>
     </>
   );
