@@ -2,11 +2,11 @@ import Link from "next/link";
 import { SignOutButton } from "./SignOutButton";
 import { CompanyMark } from "./CompanyMark";
 import { ThemeToggle } from "./ThemeToggle";
-import { getCompany } from "@/lib/company";
+import { getCompanyForUser } from "@/lib/company";
 import type { SessionUser } from "@/auth";
 
 export async function TopBar({ user }: { user: SessionUser }) {
-  const company = await getCompany();
+  const company = await getCompanyForUser(user.id);
   return (
     <header className="border-b border-stone-200 bg-chrome">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
