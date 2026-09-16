@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
-import { getCompany } from "@/lib/company";
+import { getProjectCompany } from "@/lib/company";
 import { PrintButton } from "./PrintButton";
 
 const fmtDate = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "long" }).format(d) : "—");
@@ -21,7 +21,7 @@ export default async function QaPrintPage({ params }: { params: { projectId: str
   // Q&A is a construction module — hidden from a client on the Handover view.
   if (user.role === "CLIENT" && project.clientView === "HANDOVER") notFound();
 
-  const company = await getCompany();
+  const company = await getProjectCompany(projectId);
   const rfis = await db.rfi.findMany({
     where: { projectId },
     orderBy: { number: "asc" },
