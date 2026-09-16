@@ -6,7 +6,7 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { notifyProject } from "@/lib/email";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 import { recordDecision, hasAcknowledged, ACKNOWLEDGEMENT_STATEMENT } from "@/lib/audit";
 import { applyHouseStyle, houseStyleField } from "@/lib/houseStyle";
 import { DecisionAction, DecisionSubject } from "@prisma/client";
@@ -64,7 +64,7 @@ export async function createUpdate(projectId: string, formData: FormData) {
     projectId,
     `New site update — ${project?.name ?? "your project"}`,
     [
-      `${companyShortName(await getCompany())} has posted a new site update on ${project?.name ?? "your project"}.`,
+      `${companyShortName(await getProjectCompany(projectId))} has posted a new site update on ${project?.name ?? "your project"}.`,
       `${title}`,
       `Sign in to read the full summary and photos.`,
     ],
