@@ -3,15 +3,16 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/auth";
 import { Role } from "@prisma/client";
 import { TopBar } from "@/components/TopBar";
+import { LegalFooter } from "@/components/LegalLinks";
 import { CreateJobForm } from "./CreateJobForm";
-import { getCompany } from "@/lib/company";
+import { getCompanyForUser } from "@/lib/company";
 
 // Builder-only: create a new job (project), optionally provisioning client access.
 export default async function NewJobPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   if (user.role !== Role.BUILDER) redirect("/projects");
-  const company = await getCompany();
+  const company = await getCompanyForUser(user.id);
 
   return (
     <>
@@ -23,6 +24,7 @@ export default async function NewJobPage() {
           <p className="text-sm text-stone-500">Set up a new project and, if you like, the client&apos;s login.</p>
         </div>
         <CreateJobForm companyMarginPercent={company.marginPercent} />
+        <LegalFooter />
       </main>
     </>
   );
