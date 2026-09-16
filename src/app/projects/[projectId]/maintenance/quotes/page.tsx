@@ -5,13 +5,13 @@ import { formatCents } from "@/lib/money";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { createQuoteRequest, respondQuote, decideQuote } from "../actions";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 
 export default async function QuoteRequestsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
 
   const quotes = await db.quoteRequest.findMany({ where: { projectId }, orderBy: { createdAt: "desc" } });
 
