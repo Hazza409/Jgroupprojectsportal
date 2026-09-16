@@ -37,11 +37,13 @@ function scheduleDates(index: number, total: number, durationDays: number) {
 
 async function main() {
   await db.project.deleteMany({ where: { name: "8 Bower Street, Manly" } });
+  const seedCompany = await db.company.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
 
-  const builder = await db.user.findFirst({ where: { role: Role.BUILDER } });
+  const builder = await db.user.findFirst({ where: { role: Role.BUILDER, companyId: seedCompany.id } });
 
   const project = await db.project.create({
     data: {
+      companyId: seedCompany.id,
       name: "8 Bower Street, Manly",
       address: "8 Bower Street, Manly NSW 2095",
       clientName: "David & Anna Duckworth",
@@ -62,6 +64,7 @@ async function main() {
       name: "David Duckworth",
       role: Role.CLIENT,
       passwordHash: await bcrypt.hash("client123", 10),
+      companyId: seedCompany.id,
     },
   });
   await db.projectMembership.create({
