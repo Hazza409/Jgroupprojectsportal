@@ -4,7 +4,7 @@ import { HandoverDocKind } from "@prisma/client";
 import { assertProjectAccess } from "@/lib/scope";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { DocStore } from "@/components/DocStore";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 
 // Maps a URL slug → HandoverDocKind + display copy. (Warranties has its own page.)
 const STORES: Record<string, { kind: HandoverDocKind; title: string; desc: string }> = {
@@ -18,7 +18,7 @@ export default async function HandoverStorePage({ params }: { params: { projectI
   const user = await assertProjectAccess(params.projectId);
   const cfg = STORES[params.store];
   if (!cfg) notFound();
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
   const title = cfg.kind === "JGROUP" ? `${companyShortName(company)} Documents` : cfg.title;
 
   return (
