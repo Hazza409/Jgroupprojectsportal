@@ -702,7 +702,7 @@ export async function decideVariation(projectId: string, variationId: string, ap
       include: { project: { select: { name: true } } },
     });
     if (v) {
-      await notifyBuilders(
+      await notifyBuilders(projectId, 
         `Variation approved — ${v.project.name}`,
         [
           `${user.name} (${user.role.toLowerCase()}) approved a variation on ${v.project.name}.`,
@@ -720,7 +720,7 @@ export async function decideVariation(projectId: string, variationId: string, ap
       include: { project: { select: { name: true } } },
     });
     if (v) {
-      await notifyBuilders(`Variation REJECTED — ${v.project.name}`, [
+      await notifyBuilders(projectId, `Variation REJECTED — ${v.project.name}`, [
         `${user.name} (${user.role.toLowerCase()}) rejected a variation on ${v.project.name}.`,
         `VO #${v.variationNumber}: ${v.title}`,
         `It was for ${formatCents(inclMarginGst(v.totalCents, company))} (incl margin & GST).`,
