@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getCompany } from "@/lib/company";
+import { getDefaultCompany } from "@/lib/company";
 import { LEGAL_DOCS, LEGAL_ORDER, type LegalDocSlug } from "@/lib/legal";
 
 /**
@@ -23,14 +23,14 @@ export function generateStaticParams() {
 export async function generateMetadata({ params }: { params: { doc: string } }): Promise<Metadata> {
   const d = LEGAL_DOCS[params.doc as LegalDocSlug];
   if (!d) return {};
-  const company = await getCompany();
+  const company = await getDefaultCompany();
   return { title: `${d.title} — ${company.name}` };
 }
 
 export default async function LegalPage({ params }: { params: { doc: string } }) {
   const doc = LEGAL_DOCS[params.doc as LegalDocSlug];
   if (!doc) notFound();
-  const company = await getCompany();
+  const company = await getDefaultCompany();
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
