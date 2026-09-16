@@ -10,12 +10,16 @@ import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
 
+// company_jgroup is seeded by the M1 company_settings migration; `prisma migrate
+// reset` runs migrations before this seed, so the row exists.
+const COMPANY_ID = "company_jgroup";
+
 async function user(email: string, name: string, role: Role, password: string) {
   const passwordHash = await bcrypt.hash(password, 10);
   return db.user.upsert({
     where: { email },
     update: { name, role, passwordHash },
-    create: { email, name, role, passwordHash },
+    create: { email, name, role, passwordHash, companyId: COMPANY_ID },
   });
 }
 
@@ -28,6 +32,7 @@ async function main() {
   // ── Project A (fully populated) ───────────────────────────
   const projectA = await db.project.create({
     data: {
+      companyId: COMPANY_ID,
       name: "Hawthorn Residence",
       address: "12 Riverview Tce, Hawthorn VIC",
       clientName: "Alex Client",
@@ -142,6 +147,7 @@ async function main() {
   // ── Project B (second client, isolation check) ────────────
   await db.project.create({
     data: {
+      companyId: COMPANY_ID,
       name: "Toorak Townhouse",
       address: "5 Linden St, Toorak VIC",
       clientName: "Bailey Client",
