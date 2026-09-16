@@ -52,11 +52,20 @@ export async function addClientToProject(projectId: string, formData: FormData):
   const pwCheck = validatePassword(password);
   if (!pwCheck.ok) return { ok: false, message: pwCheck.message! };
 
+  // Tenancy: new client logins join THIS project's company; an email already
+  // registered to another company can never be attached here.
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { companyId: true },
+  });
   const existing = await db.user.findUnique({ where: { email } });
+  if (existing && existing.companyId !== project.companyId) {
+    return { ok: false, message: "That email is already registered elsewhere — use a different address." };
+  }
   let userId: string;
   if (!existing) {
     const u = await db.user.create({
-      data: { email, name, role: Role.CLIENT, passwordHash: await bcrypt.hash(password, 10) },
+      data: { email, name, role: Role.CLIENT, passwordHash: await bcrypt.hash(password, 10), companyId: project.companyId },
     });
     userId = u.id;
   } else if (existing.role === Role.CLIENT) {
