@@ -6,7 +6,8 @@ import { db } from "@/lib/db";
 import { TopBar } from "@/components/TopBar";
 import { ProjectNav } from "@/components/ProjectNav";
 import { CompanyMark } from "@/components/CompanyMark";
-import { getCompany, companyShortName } from "@/lib/company";
+import { LegalFooter } from "@/components/LegalLinks";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 
 // Module slugs grouped by the client-view they belong to. Used to enforce the
 // builder's client-view switch server-side (the nav hides them too, but the UI
@@ -64,7 +65,7 @@ export default async function ProjectLayout({
   }
 
   const viewLabel = project.clientView === "HANDOVER" ? "Handover & Maintenance" : "Construction";
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
 
   return (
     <>
@@ -104,6 +105,18 @@ export default async function ProjectLayout({
           </aside>
           <section className="min-w-0">{children}</section>
         </div>
+        {/*
+          The portal notice has to be reachable from wherever the client
+          actually is. Before this it was linked only from the landing and
+          sign-in pages — both of which a client passes through once and never
+          sees again — plus two inline links on Budget and Schedule. A client
+          who lives on Progress Claims had no route to it at all.
+
+          Page-level rather than inside the content column: it belongs to the
+          page, not to whichever tab is open, and it must not scroll away
+          inside a wide table's own overflow container.
+        */}
+        <LegalFooter />
       </div>
     </>
   );
