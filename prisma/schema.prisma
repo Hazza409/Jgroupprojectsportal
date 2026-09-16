@@ -231,6 +231,12 @@ model Company {
   forecastApprovers String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Tenancy (SAAS-PLAN M2): every user and project belongs to exactly one
+  // company. onDelete: Restrict on the far side — a tenant's data can never be
+  // cascade-deleted by removing a company (that is a platform-owner op, M5).
+  users    User[]
+  projects Project[]
 }
 
 // ─────────────────────────── Identity ────────────────────────
@@ -242,6 +248,10 @@ model User {
   // bcrypt hash. Never store plaintext.
   passwordHash String
   role         Role     @default(CLIENT)
+  // Tenancy anchor (M2): the company this login belongs to. email is globally
+  // unique, so one email = one company (cross-company invites are an M3 concern).
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   // Brute-force protection: lock the account for a cooldown after repeated
   // failed logins (see src/auth.ts). Reset to 0 on a successful sign-in.
   failedLoginAttempts Int       @default(0)
@@ -256,6 +266,8 @@ model User {
   submittedClaims ProgressClaim[]     @relation("ClaimSubmitter")
   eventResponses  CalendarEventResponse[]
   termsAcceptances TermsAcceptance[]
+
+  @@index([companyId])
 }
 
 // One person's acceptance of ONE version of the terms of use.
@@ -301,6 +313,10 @@ model ProjectMembership {
 
 model Project {
   id            String   @id @default(cuid())
+  // Tenancy anchor (M2): the owning company. Every access check resolves
+  // through this — see src/lib/scope.ts.
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   name          String
   // Free-text site address; high-end residential = one home per project.
   address       String?
@@ -384,6 +400,7 @@ model Project {
   subcontractors    SubcontractorContact[]
 
   @@index([status])
+  @@index([companyId])
 }
 
 // ─────────────────────────── Cost codes ──────────────────────
