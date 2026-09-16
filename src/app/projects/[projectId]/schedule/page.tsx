@@ -5,13 +5,13 @@ import { ModuleHeader } from "@/components/ModuleHeader";
 import { ScheduleView } from "@/components/ScheduleView";
 import { ScheduleUploadForm } from "./ScheduleUploadForm";
 import { AddTaskForm } from "./AddTaskForm";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 
 export default async function SchedulePage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
 
   const [items, project] = await Promise.all([
     db.scheduleItem.findMany({ where: { projectId }, orderBy: { sortOrder: "asc" } }),
