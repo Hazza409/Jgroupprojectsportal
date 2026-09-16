@@ -23,6 +23,7 @@ async function putFile(projectId: string, category: string, name: string, body: 
 
 async function main() {
   await db.project.deleteMany({ where: { name: PROJECT } });
+  const seedCompany = await db.company.findFirstOrThrow({ orderBy: { createdAt: "asc" } });
 
   // ── Builder + a second project manager (Team feature) ──
   const builder = await db.user.findFirst({ where: { role: Role.BUILDER, email: "builder@jgroup.test" } });
@@ -30,13 +31,14 @@ async function main() {
   await db.user.upsert({
     where: { email: "priya@jgroup.test" },
     update: {},
-    create: { email: "priya@jgroup.test", name: "Priya Shah", role: Role.BUILDER, passwordHash: await bcrypt.hash("manager123", 10) },
+    create: { email: "priya@jgroup.test", name: "Priya Shah", role: Role.BUILDER, passwordHash: await bcrypt.hash("manager123", 10), companyId: seedCompany.id },
   });
 
   // ── Project (contract value shown inc margin & GST) ──
   const estimateBase = c(1_623_000);
   const project = await db.project.create({
     data: {
+      companyId: seedCompany.id,
       name: PROJECT,
       address: "12 Ocean View Pde, Freshwater NSW 2096",
       clientName: "Sarah & Tom Whitfield",
@@ -51,7 +53,7 @@ async function main() {
   const client = await db.user.upsert({
     where: { email: "whitfield@example.test" },
     update: {},
-    create: { email: "whitfield@example.test", name: "Sarah Whitfield", role: Role.CLIENT, passwordHash: await bcrypt.hash("client123", 10) },
+    create: { email: "whitfield@example.test", name: "Sarah Whitfield", role: Role.CLIENT, passwordHash: await bcrypt.hash("client123", 10), companyId: seedCompany.id },
   });
   await db.projectMembership.create({ data: { userId: client.id, projectId: pid, role: Role.CLIENT } });
 
