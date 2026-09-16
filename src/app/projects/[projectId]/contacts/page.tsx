@@ -2,13 +2,13 @@ import { assertProjectAccess } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { createContact, deleteContact } from "./actions";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 
 export default async function ContactsPage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const isBuilder = user.role === "BUILDER";
-  const company = await getCompany();
+  const company = await getProjectCompany(params.projectId);
 
   const contacts = await db.projectContact.findMany({
     where: { projectId },
