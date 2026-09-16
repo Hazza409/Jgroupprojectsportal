@@ -6,7 +6,7 @@ import { assertProjectAccess, AccessError } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { storage, buildKey } from "@/lib/storage";
 import { notifyBuilders, notifyProject } from "@/lib/email";
-import { getCompany, companyShortName } from "@/lib/company";
+import { getProjectCompany, companyShortName } from "@/lib/company";
 import { recordDecision } from "@/lib/audit";
 import { DecisionAction, DecisionSubject } from "@prisma/client";
 
@@ -71,7 +71,7 @@ export async function createRfi(projectId: string, formData: FormData) {
     projectId,
     `New ${noun} — ${rfi.project.name}`,
     [
-      `${companyShortName(await getCompany())} has raised a ${noun} (#${rfi.number}) on ${rfi.project.name}.`,
+      `${companyShortName(await getProjectCompany(projectId))} has raised a ${noun} (#${rfi.number}) on ${rfi.project.name}.`,
       `${subject}`,
       rfi.dueDate
         ? `Response needed by ${new Intl.DateTimeFormat("en-AU", { dateStyle: "medium" }).format(rfi.dueDate)}.`
@@ -144,7 +144,7 @@ export async function answerRfi(projectId: string, rfiId: string, formData: Form
   // unseen until someone happened to reopen the page.
   const project = await db.project.findUnique({ where: { id: projectId }, select: { name: true } });
   const noun = rfi.kind === RfiKind.DECISION ? "Decision" : "Question";
-  await notifyBuilders(`${noun} answered — ${project?.name ?? "project"}`, [
+  await notifyBuilders(projectId, `${noun} answered — ${project?.name ?? "project"}`, [
     `${user.name} answered ${noun.toLowerCase()} #${rfi.number} on ${project?.name ?? "the project"}.`,
     `${rfi.subject}`,
     `Answer: ${answer}`,
