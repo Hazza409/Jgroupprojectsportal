@@ -1,11 +1,11 @@
-import { getCompany } from "@/lib/company";
+import { getDefaultCompany } from "@/lib/company";
 import { LegalLinks } from "@/components/LegalLinks";
 import { LoginForm } from "./LoginForm";
 
 // Server shell: company branding from settings; the form itself is a client
 // component (LoginForm).
 export default async function LoginPage() {
-  const company = await getCompany();
+  const company = await getDefaultCompany();
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="w-full max-w-sm">
