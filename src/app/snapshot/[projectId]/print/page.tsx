@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { formatCents, inclMarginGst } from "@/lib/money";
 import { getProjectRates } from "@/lib/company";
 import { computeCostToComplete, projectDrawdown } from "@/lib/claims";
+import { PRINT_NOTICES } from "@/lib/legal";
 import { PrintButton } from "./PrintButton";
 
 const fmtDate = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "long" }).format(d) : "—");
@@ -110,10 +111,20 @@ export default async function SnapshotPage({ params }: { params: { projectId: st
           </section>
         )}
 
-        <p className="mt-8 text-[11px] text-neutral-400">
-          All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
-          Figures reflect the approved cost plan and approved variations; forecast final cost is confirmed separately.
-        </p>
+        {/*
+          This sheet gets attached to a claim email and read by people who
+          never log in — so the "not a fixed price" position has to be on the
+          paper, not only on the budget page they never see. Wording lives in
+          src/lib/legal.ts so it can't drift from the portal notice.
+        */}
+        <div className="mt-8 border-t border-neutral-200 pt-3 text-[10px] leading-relaxed text-neutral-500">
+          <p>
+            All amounts include builder&apos;s margin ({company.marginPercent.toFixed(1)}%) and GST ({company.gstPercent.toFixed(0)}%).
+            Figures reflect the approved cost plan and approved variations; forecast final cost is confirmed separately.
+          </p>
+          <p className="mt-1.5">{PRINT_NOTICES.snapshot}</p>
+          <p className="mt-1.5">{PRINT_NOTICES.contract}</p>
+        </div>
       </div>
     </div>
   );
