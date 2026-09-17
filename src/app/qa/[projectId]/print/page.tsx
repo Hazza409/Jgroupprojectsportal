@@ -3,6 +3,7 @@ import { getSessionUser } from "@/auth";
 import { canAccessProject } from "@/lib/scope";
 import { db } from "@/lib/db";
 import { getProjectCompany } from "@/lib/company";
+import { PRINT_NOTICES } from "@/lib/legal";
 import { PrintButton } from "./PrintButton";
 
 const fmtDate = (d: Date | null) => (d ? new Intl.DateTimeFormat("en-AU", { dateStyle: "long" }).format(d) : "—");
@@ -95,6 +96,16 @@ export default async function QaPrintPage({ params }: { params: { projectId: str
             })}
           </div>
         )}
+
+        {/*
+          This document carried no footnote at all — it was the only one of the
+          three printable sheets that left the portal saying nothing about what
+          it is or what governs it.
+        */}
+        <div className="mt-8 border-t border-neutral-200 pt-3 text-[10px] leading-relaxed text-neutral-500">
+          <p>{PRINT_NOTICES.qa}</p>
+          <p className="mt-1.5">{PRINT_NOTICES.contract}</p>
+        </div>
       </div>
     </div>
   );
