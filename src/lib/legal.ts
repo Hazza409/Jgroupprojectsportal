@@ -381,6 +381,38 @@ export const LEGAL_DOCS: Record<LegalDocSlug, LegalDoc> = {
 
 export const LEGAL_ORDER: LegalDocSlug[] = ["notice", "terms", "privacy", "cookies"];
 
+/**
+ * Footnotes for the documents that leave the portal — the project snapshot,
+ * the decision register and the questions & answers sheet.
+ *
+ * These are the pages most likely to be printed, attached to an email and read
+ * months later by someone who never had a login and never saw the portal
+ * notice. A disclaimer that lives only behind the sign-in wall does nothing for
+ * that reader, so the load-bearing sentence has to travel on the document.
+ *
+ * Kept here beside NOTICE rather than typed into each page, so the position
+ * stated to a client on paper can't drift from the one stated on screen.
+ */
+export const PRINT_NOTICES = {
+  /** Goes on every printed document, without exception. */
+  contract:
+    "Nothing in this document varies, replaces or waives any term of the building contract. Where this " +
+    "document and the contract differ, the contract prevails.",
+
+  /** Money. The one a reader is most likely to mistake for a commitment. */
+  snapshot:
+    "Each cost line is an estimate, reforecast against actual cost as the build progresses. The approved " +
+    "budget is the original estimate plus approved variations only — it is not a fixed price and not a cap " +
+    "on final cost. Figures are correct as at the date shown and continue to change as invoices come in.",
+
+  register:
+    "This register is complete as at the date and time shown. Anything recorded afterwards does not appear.",
+
+  qa:
+    "This sheet lists the questions and decisions recorded in the portal as at the date shown. It is not a " +
+    "complete record of everything discussed on the project, and it is not a certification of any works.",
+} as const;
+
 /** Whether a client should be asked to accept the terms at all. */
 export function termsInForce(): boolean {
   return TERMS.inForce;
