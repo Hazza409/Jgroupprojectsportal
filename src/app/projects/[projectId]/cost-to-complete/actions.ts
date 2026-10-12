@@ -382,6 +382,35 @@ export async function importOpeningPosition(projectId: string, formData: FormDat
  * ("Swimming Pool" vs a "Pools" code) is closed permanently — later imports
  * match on the alias without asking again.
  */
+/**
+ * Release every claim line carrying this source name, then re-post the claims.
+ *
+ * Claim lines are stored under the reconciliation sheet's own wording
+ * ("External Labour Hire"), and an alias is the authoritative answer for that
+ * wording — so every line under the name is released and re-matched, not only
+ * the ones that never matched anything. Without the release a line already
+ * sitting on the wrong code would stay there, because relinkClaimLines only
+ * reconsiders lines with no code at all.
+ *
+ * Releasing first also makes unmapping work: the lines go back to null and the
+ * re-post falls through to ordinary name matching, or leaves them Unallocated.
+ */
+async function releaseClaimLinesNamed(projectId: string, alias: string): Promise<number> {
+  const lines = await db.claimLineItem.findMany({
+    where: { claim: { projectId } },
+    select: { id: true, description: true },
+  });
+  const hits = lines.filter((l) => normalizeCostName(l.description ?? "") === alias);
+  if (hits.length === 0) return 0;
+
+  await db.claimLineItem.updateMany({
+    where: { id: { in: hits.map((l) => l.id) } },
+    data: { costCodeId: null },
+  });
+  await rematerializeProjectClaims(projectId);
+  return hits.length;
+}
+
 export async function setCostCodeAlias(projectId: string, formData: FormData): Promise<SyncResult> {
   const user = await assertProjectAccess(projectId);
   if (user.role !== Role.BUILDER) throw new AccessError("Only builders map cost codes");
@@ -401,7 +430,9 @@ export async function setCostCodeAlias(projectId: string, formData: FormData): P
       where: { projectId, xeroSourceId: `opening:${alias}` },
       data: { costCodeId: null },
     });
+    await releaseClaimLinesNamed(projectId, alias);
     revalidatePath(`/projects/${projectId}/budget`);
+    revalidatePath(`/projects/${projectId}`);
     return { ok: true, message: `Unmapped "${sourceLabel}" — its costs show as Unallocated again.` };
   }
 
@@ -421,16 +452,23 @@ export async function setCostCodeAlias(projectId: string, formData: FormData): P
     where: { projectId, xeroSourceId: `opening:${alias}` },
     data: { costCodeId: cc.id },
   });
+  // Claims carry their own copy of the same wording, so they need moving too —
+  // on a job brought in mid-build that is where nearly all the money is.
+  const claimLines = await releaseClaimLinesNamed(projectId, alias);
 
   revalidatePath(`/projects/${projectId}/budget`);
   revalidatePath(`/projects/${projectId}/cost-to-complete`);
   revalidatePath(`/projects/${projectId}/overruns`);
   revalidatePath(`/projects/${projectId}`);
 
+  const parts: string[] = [];
+  if (moved.count) parts.push(`${moved.count} carried-in line${moved.count === 1 ? "" : "s"}`);
+  if (claimLines) parts.push(`${claimLines} claim line${claimLines === 1 ? "" : "s"}`);
+
   return {
     ok: true,
     message:
       `"${sourceLabel}" now maps to ${cc.code} ${cc.name}` +
-      `${moved.count ? ` — ${moved.count} carried-in line moved off Unallocated.` : "."}`,
+      (parts.length ? ` — ${parts.join(" and ")} moved off Unallocated.` : "."),
   };
 }

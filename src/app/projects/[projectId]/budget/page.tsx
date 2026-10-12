@@ -12,6 +12,7 @@ import { XeroControls } from "../cost-to-complete/XeroControls";
 import { CurrentCostsImport } from "../cost-to-complete/CurrentCostsImport";
 import { OpeningPositionImport } from "../cost-to-complete/OpeningPositionImport";
 import { rematchClaimCosts } from "../cost-to-complete/actions";
+import { UnallocatedMapper, type UnallocatedGroup } from "./UnallocatedMapper";
 
 /**
  * Budget — THE money page. The old Cost to Complete tab is folded in here
@@ -39,7 +40,7 @@ export default async function BudgetPage({
   const isBuilder = user.role === "BUILDER";
   const company = await getProjectRates(projectId);
 
-  const [ctc, xeroConnected, xeroConn, pendingClaims, unallocatedSources] = await Promise.all([
+  const [ctc, xeroConnected, xeroConn, pendingClaims, unallocatedSources, costCodes] = await Promise.all([
     computeCostToComplete(projectId, company),
     isBuilder ? isConnected(projectId) : Promise.resolve(false),
     isBuilder
@@ -66,6 +67,14 @@ export default async function BudgetPage({
           select: { id: true, description: true, amountCents: true, xeroSourceId: true },
         })
       : Promise.resolve([]),
+    // The dropdown's options. Builder-only: a client never maps anything.
+    isBuilder
+      ? db.costCode.findMany({
+          where: { projectId },
+          orderBy: { code: "asc" },
+          select: { id: true, code: true, name: true },
+        })
+      : Promise.resolve([]),
     logView(projectId, user, `/projects/${projectId}/budget`, "Budget"),
   ]);
 
@@ -75,6 +84,38 @@ export default async function BudgetPage({
   const pendingTotal = pending.reduce((a, c) => a + c.headline, 0);
   const unmatchedNames = unallocatedSources.filter((a) => !a.xeroSourceId?.endsWith(":remainder"));
   const unitemised = unallocatedSources.filter((a) => a.xeroSourceId?.endsWith(":remainder"));
+
+  // Group unallocated spend by the SOURCE NAME, not by the row.
+  //
+  // A claim's cost rows are described "Claim #4 — External Labour Hire", but
+  // the alias is keyed on the reconciliation's wording alone — and that same
+  // wording usually recurs across months. Mapping it is one decision, so the
+  // page shows one row per name with the months it came from.
+  const CLAIM_PREFIX = /^Claim #(\d+)\s*[—-]\s*/;
+  const groupedUnmatched = new Map<string, { label: string; cents: number; claims: number[] }>();
+  for (const u of unmatchedNames) {
+    const raw = u.description ?? "";
+    const claimNo = CLAIM_PREFIX.exec(raw)?.[1];
+    const label = raw.replace(CLAIM_PREFIX, "").trim();
+    if (!label) continue;
+    const key = label.toLowerCase();
+    const g = groupedUnmatched.get(key) ?? { label, cents: 0, claims: [] };
+    g.cents += u.amountCents;
+    if (claimNo && !g.claims.includes(Number(claimNo))) g.claims.push(Number(claimNo));
+    groupedUnmatched.set(key, g);
+  }
+  const unmatchedGroups: UnallocatedGroup[] = [...groupedUnmatched.values()]
+    .sort((a, b) => b.cents - a.cents)
+    .map((g) => {
+      const ns = g.claims.sort((a, b) => a - b).map((n) => `#${n}`);
+      const where =
+        ns.length === 0
+          ? ""
+          : ns.length === 1
+            ? `claim ${ns[0]}`
+            : `claims ${ns.slice(0, -1).join(", ")} and ${ns[ns.length - 1]}`;
+      return { label: g.label, amount: formatCents(inclMarginGst(g.cents, company)), where };
+    });
 
   // A published line forecast ADJUSTS the line's working budget: the Used bar
   // reads against what the line is now expected to finish at. No forecast →
@@ -467,21 +508,12 @@ export default async function BudgetPage({
           {isBuilder && unmatchedNames.length > 0 && (
             <div className="mt-3">
               <p className="text-xs font-medium uppercase tracking-wide text-stone-400">No matching cost code</p>
-              <p className="mt-1 text-sm text-stone-500">
-                These lines parsed, but their names match no cost code on this job. Rename at either end so
-                they agree, then press <strong>Re-match claim costs</strong> above.
-              </p>
-              <ul className="mt-2 space-y-1">
-                {unmatchedNames.slice(0, 15).map((u) => (
-                  <li key={u.id} className="flex justify-between gap-3 text-sm">
-                    <span>{u.description}</span>
-                    <span className="tabular-nums">{formatCents(inclMarginGst(u.amountCents, company))}</span>
-                  </li>
-                ))}
-              </ul>
-              {unmatchedNames.length > 15 && (
-                <p className="mt-1 text-xs text-stone-400">+ {unmatchedNames.length - 15} more</p>
-              )}
+              {/* Was a read-only list telling the builder to go and rename
+                  something at one end or the other. The names are usually both
+                  right — the reconciliation calls a thing what the trade calls
+                  it, the estimate calls it what the client is buying — so the
+                  fix belongs here, as a mapping, not in the source documents. */}
+              <UnallocatedMapper projectId={projectId} groups={unmatchedGroups} codes={costCodes} />
             </div>
           )}
         </div>
