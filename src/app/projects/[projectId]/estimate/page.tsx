@@ -6,19 +6,28 @@ import Link from "next/link";
 import { ModuleHeader } from "@/components/ModuleHeader";
 import { UploadForm } from "./UploadForm";
 import { AddLineForm } from "./AddLineForm";
+import { EstimateLineRow } from "./EstimateLineRow";
 
 export default async function EstimatePage({ params }: { params: { projectId: string } }) {
   const user = await assertProjectAccess(params.projectId);
   const projectId = params.projectId;
   const company = await getProjectRates(projectId);
 
-  const [lines, lastImport] = await Promise.all([
+  const isBuilder = user.role === "BUILDER";
+  const [lines, lastImport, costCodes] = await Promise.all([
     db.estimateLineItem.findMany({
       where: { projectId },
       include: { costCode: true },
       orderBy: { sortOrder: "asc" },
     }),
     db.estimateImport.findFirst({ where: { projectId }, orderBy: { createdAt: "desc" } }),
+    isBuilder
+      ? db.costCode.findMany({
+          where: { projectId },
+          orderBy: { code: "asc" },
+          select: { id: true, code: true, name: true },
+        })
+      : Promise.resolve([]),
   ]);
 
   const total = sumCents(lines.map((l) => l.totalCents));
@@ -82,15 +91,24 @@ export default async function EstimatePage({ params }: { params: { projectId: st
             </thead>
             <tbody className="divide-y divide-stone-100 align-top">
               {lines.map((l) => (
-                <tr key={l.id}>
-                  <td className="px-2 py-2 font-mono text-xs break-words">{l.costCode?.code ?? "—"}</td>
-                  <td className="px-2 py-2 break-words">{l.costCode?.name ?? "—"}</td>
-                  <td className="px-2 py-2 break-words">{l.description}</td>
-                  <td className="px-2 py-2 text-right tabular-nums">{l.quantity}</td>
-                  <td className="px-2 py-2 break-words">{l.unit ?? "—"}</td>
-                  <td className="px-2 py-2 text-right tabular-nums whitespace-nowrap">{formatCents(l.unitCostCents)}</td>
-                  <td className="px-2 py-2 text-right font-medium tabular-nums whitespace-nowrap">{formatCents(l.totalCents)}</td>
-                </tr>
+                <EstimateLineRow
+                  key={l.id}
+                  projectId={projectId}
+                  canEdit={isBuilder}
+                  codes={costCodes}
+                  line={{
+                    id: l.id,
+                    description: l.description,
+                    quantity: l.quantity,
+                    unit: l.unit,
+                    unitCostDollars: (l.unitCostCents / 100).toFixed(2),
+                    unitCostLabel: formatCents(l.unitCostCents),
+                    totalLabel: formatCents(l.totalCents),
+                    costCodeId: l.costCodeId,
+                    codeLabel: l.costCode?.code ?? "—",
+                    codeNameLabel: l.costCode?.name ?? "—",
+                  }}
+                />
               ))}
             </tbody>
             <tfoot className="border-t border-stone-200 bg-stone-50">
