@@ -287,6 +287,80 @@ export async function reopenClaim(projectId: string, claimId: string) {
   refresh(projectId, claimId);
 }
 
+/**
+ * Reopen an APPROVED claim so it can be corrected — and leave a trail saying so.
+ *
+ * Approved claims are otherwise immutable, which is right: they are the figures
+ * a client signed off on. But a job brought in mid-build carries its history in
+ * as approved without anyone having approved anything, and when the source
+ * reconciliation is corrected afterwards there was no way to make the portal
+ * agree with it. The claim stated one number, the sheet another, and the only
+ * options were to leave them disagreeing or to edit the database by hand.
+ *
+ * So this exists, and it is deliberately awkward: it demands a written reason,
+ * and it records a WITHDRAWN entry naming who did it and what the claim was
+ * worth at the time. The Decision Register is append-only, so the original
+ * approval survives alongside it — an unwind that leaves evidence, rather than
+ * an edit that leaves none.
+ *
+ * The claim's cost postings go with it. Spend is only ever materialised for an
+ * APPROVED claim, so leaving the rows behind would keep a draft's money in the
+ * cost feed and then double-count it when the corrected claim is approved.
+ */
+export async function reopenApprovedClaim(
+  projectId: string,
+  claimId: string,
+  formData: FormData,
+): Promise<ReconImportResult> {
+  const user = await builderOnly(projectId);
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (!reason) {
+    return { ok: false, message: "Give a reason for reopening — it goes on the Decision Register." };
+  }
+
+  const claim = await db.progressClaim.findFirst({
+    where: { id: claimId, projectId, status: ClaimStatus.APPROVED },
+    select: { id: true, claimNumber: true, periodLabel: true, totalCents: true },
+  });
+  if (!claim) {
+    return { ok: false, message: "That claim isn't approved — use the normal reopen instead." };
+  }
+
+  const removed = await db.costActual.deleteMany({
+    where: { projectId, xeroSourceId: { startsWith: `claim:${claim.id}:` } },
+  });
+
+  await db.progressClaim.update({
+    where: { id: claim.id },
+    data: { status: ClaimStatus.DRAFT, approvedAt: null, submittedAt: null },
+  });
+
+  await recordDecision({
+    projectId,
+    subjectType: DecisionSubject.CLAIM,
+    subjectId: claim.id,
+    subjectRef: `Progress Claim #${claim.claimNumber}`,
+    subjectTitle: claim.periodLabel ?? undefined,
+    action: DecisionAction.WITHDRAWN,
+    actor: user,
+    amountCents: claim.totalCents,
+    detail:
+      `Approved claim reopened for correction by ${user.name}, taking it back to draft at ` +
+      `${formatCents(claim.totalCents)}. Reason: ${reason}`,
+  });
+
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}`);
+  refresh(projectId, claimId);
+
+  return {
+    ok: true,
+    message:
+      `Claim #${claim.claimNumber} is back in draft and its ${removed.count} cost posting(s) have been ` +
+      `withdrawn. Rebuild it from the reconciliation sheet, then record it as approved again.`,
+  };
+}
+
 // Builder deletes a claim outright (e.g. raised in error). Approved claims are
 // protected — they're the financial record the client signed off on.
 export async function deleteClaim(projectId: string, claimId: string) {

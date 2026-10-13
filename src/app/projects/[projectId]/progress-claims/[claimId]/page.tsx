@@ -11,6 +11,7 @@ import { ClaimLineForm } from "./ClaimLineForm";
 import { ReconUploadForm } from "./ReconUploadForm";
 import { InvoiceUploadForm } from "./InvoiceUploadForm";
 import { DeleteClaimButton } from "./DeleteClaimButton";
+import { ReopenApprovedButton } from "./ReopenApprovedButton";
 import { MarkApprovedButton } from "./MarkApprovedButton";
 import {
   generateClaimLines,
@@ -184,6 +185,13 @@ export default async function ClaimDetailPage({
             )}
             {isBuilder && claim.status !== "APPROVED" && (
               <DeleteClaimButton projectId={projectId} claimId={claimId} claimNumber={claim.claimNumber} />
+            )}
+            {/* A job carried in mid-build arrives as approved without anyone
+                having approved anything. When the source sheet is corrected
+                afterwards, this is the only way to make the claim agree with
+                it — and it records the reversal rather than hiding it. */}
+            {isBuilder && isApproved && (
+              <ReopenApprovedButton projectId={projectId} claimId={claimId} claimNumber={claim.claimNumber} />
             )}
           </div>
         </div>
