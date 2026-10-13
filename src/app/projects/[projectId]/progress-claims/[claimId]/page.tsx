@@ -357,7 +357,12 @@ export default async function ClaimDetailPage({
       {isBuilder && isDraft && (
         <div className="card">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-stone-500">Reconciliation sheet</h3>
-          <ReconUploadForm projectId={projectId} claimId={claimId} hasSheet={!!claim.reconSheetKey} />
+          <ReconUploadForm
+            projectId={projectId}
+            claimId={claimId}
+            hasSheet={!!claim.reconSheetKey}
+            claimNumber={claim.claimNumber}
+          />
           {reconUrl && (
             <p className="mt-3 text-xs text-stone-400">
               Source: <a href={reconUrl} target="_blank" rel="noreferrer" className="underline">{claim.reconSheetName ?? "reconciliation sheet"}</a>

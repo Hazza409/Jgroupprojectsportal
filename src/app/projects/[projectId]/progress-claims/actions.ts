@@ -116,6 +116,25 @@ export async function deleteClaimLine(projectId: string, claimId: string, lineId
 // Builder uploads the reconciliation sheet — the SOURCE OF TRUTH for the claim.
 // Parses it and (replace mode) rebuilds the claim's line items, supplier backup,
 // and summary (labour + costs + margin + GST) to match the sheet exactly.
+/** The invoice tabs in an uploaded workbook, so the builder can say which one. */
+export async function listClaimReconTabs(
+  projectId: string,
+  formData: FormData,
+): Promise<ReconImportResult & { tabs?: { name: string; invoiceNumber: number }[] }> {
+  await builderOnly(projectId);
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, message: "No file uploaded." };
+  if (!/\.xlsx?$/i.test(file.name)) return { ok: false, message: "Please upload the reconciliation .xlsx file." };
+
+  const tabs = listReconTabs(Buffer.from(await file.arrayBuffer())).filter(
+    (t): t is { name: string; invoiceNumber: number } => t.invoiceNumber !== null,
+  );
+  if (tabs.length === 0) {
+    return { ok: false, message: 'No invoice tabs found (expected tabs like "Invoice 5 - Sep-26").' };
+  }
+  return { ok: true, message: `${tabs.length} invoice tab(s) found.`, tabs };
+}
+
 export async function importReconSheet(
   projectId: string,
   claimId: string,
@@ -132,7 +151,30 @@ export async function importReconSheet(
 
   const buf = Buffer.from(await file.arrayBuffer());
   const reconCompany = await getProjectRates(projectId);
-  const parsed = parseReconciliationBuffer(buf, reconCompany.marginPercent, reconCompany.gstPercent);
+
+  // WHICH TAB. A running workbook holds every month of the job, and with no
+  // tab named the parser falls back to the highest invoice number — so
+  // rebuilding claim #5 from the full workbook silently built it out of
+  // claim #6's figures. Rather than guess, a multi-tab workbook must say.
+  const tab = String(formData.get("tab") ?? "").trim();
+  if (!tab) {
+    const numbered = listReconTabs(buf).filter((t) => t.invoiceNumber !== null);
+    if (numbered.length > 1) {
+      return {
+        ok: false,
+        message:
+          `That workbook holds ${numbered.length} invoice tabs. Choose which one builds this claim — ` +
+          `without it the newest month would be used, which is rarely what you want.`,
+      };
+    }
+  }
+
+  const parsed = parseReconciliationBuffer(
+    buf,
+    reconCompany.marginPercent,
+    reconCompany.gstPercent,
+    tab || undefined,
+  );
   if (parsed.budgetOverview.length === 0 && parsed.supplierLines.length === 0) {
     return { ok: false, message: parsed.warnings[0] ?? "Could not read the reconciliation sheet." };
   }
