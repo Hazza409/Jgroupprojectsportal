@@ -162,3 +162,114 @@ export async function addEstimateLine(projectId: string, formData: FormData): Pr
   revalidatePath(`/projects/${projectId}/estimate`);
   return { ok: true, message: `Added "${description}".` };
 }
+
+/** Every cost code on the job — the options when re-pointing a line. */
+export async function listProjectCostCodes(projectId: string) {
+  await assertProjectAccess(projectId);
+  return db.costCode.findMany({
+    where: { projectId },
+    orderBy: { code: "asc" },
+    select: { id: true, code: true, name: true },
+  });
+}
+
+/**
+ * Edit one estimate line in place.
+ *
+ * Until now the only way to change a single figure was to re-import the whole
+ * spreadsheet with "replace" ticked — which meant every correction, however
+ * small, went through a file. Fine when the estimate came from a workbook;
+ * useless when a line was added by hand or a rate needs nudging.
+ *
+ * Changing the cost code is the useful part: it is how spend gets re-pointed
+ * without touching the source documents at either end.
+ */
+export async function updateEstimateLine(
+  projectId: string,
+  lineId: string,
+  formData: FormData,
+): Promise<ImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit the estimate");
+
+  const existing = await db.estimateLineItem.findFirst({
+    where: { id: lineId, projectId },
+    select: { id: true },
+  });
+  if (!existing) return { ok: false, message: "That line isn't on this job." };
+
+  const description = String(formData.get("description") ?? "").trim();
+  if (!description) return { ok: false, message: "Description is required." };
+
+  const quantity = Number(formData.get("quantity") ?? 1) || 1;
+  const unit = String(formData.get("unit") ?? "").trim() || null;
+  const unitCostCents = dollarsToCents(String(formData.get("unitCost") ?? "0"));
+
+  // An empty cost code is allowed and means "unallocated" — the same thing an
+  // imported line with a blank Cost Code column means.
+  const costCodeId = String(formData.get("costCodeId") ?? "").trim() || null;
+  if (costCodeId) {
+    const cc = await db.costCode.findFirst({ where: { id: costCodeId, projectId }, select: { id: true } });
+    if (!cc) return { ok: false, message: "That cost code isn't on this job." };
+  }
+
+  await db.estimateLineItem.update({
+    where: { id: lineId },
+    data: {
+      description,
+      quantity,
+      unit,
+      unitCostCents,
+      totalCents: lineTotalCents(quantity, unitCostCents),
+      costCodeId,
+    },
+  });
+
+  revalidatePath(`/projects/${projectId}/estimate`);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true, message: `Updated "${description}".` };
+}
+
+/**
+ * Delete one estimate line, and tidy up behind it.
+ *
+ * A cost code left with no estimate lines still shows as an empty row on the
+ * Budget page forever, because nothing ever removes a code. So if this was the
+ * last line on its code, the code goes too — but only when nothing else is
+ * holding on to it: no spend posted, no variation pointing at it, and no alias
+ * mapping a reconciliation name onto it. Any of those and the code stays,
+ * because deleting it would strand real money.
+ */
+export async function deleteEstimateLine(projectId: string, lineId: string): Promise<ImportResult> {
+  const user = await assertProjectAccess(projectId);
+  if (user.role !== Role.BUILDER) throw new AccessError("Only builders edit the estimate");
+
+  const line = await db.estimateLineItem.findFirst({
+    where: { id: lineId, projectId },
+    select: { id: true, description: true, costCodeId: true },
+  });
+  if (!line) return { ok: false, message: "That line isn't on this job." };
+
+  await db.estimateLineItem.delete({ where: { id: line.id } });
+
+  let tidied = "";
+  if (line.costCodeId) {
+    const [lines, actuals, variations, variationLines, aliases] = await Promise.all([
+      db.estimateLineItem.count({ where: { costCodeId: line.costCodeId } }),
+      db.costActual.count({ where: { costCodeId: line.costCodeId } }),
+      db.variation.count({ where: { costCodeId: line.costCodeId } }),
+      db.variationLineItem.count({ where: { costCodeId: line.costCodeId } }),
+      db.costCodeAlias.count({ where: { costCodeId: line.costCodeId } }),
+    ]);
+    if (lines === 0 && actuals === 0 && variations === 0 && variationLines === 0 && aliases === 0) {
+      const cc = await db.costCode.delete({ where: { id: line.costCodeId } });
+      tidied = ` Cost code ${cc.code} ${cc.name} had nothing left on it and was removed.`;
+    }
+  }
+
+  revalidatePath(`/projects/${projectId}/estimate`);
+  revalidatePath(`/projects/${projectId}/budget`);
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true, message: `Deleted "${line.description}".${tidied}` };
+}
